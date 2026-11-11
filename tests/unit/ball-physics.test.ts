@@ -13,6 +13,7 @@ const still = (): BallMatchState => ({
   velocity: { xMps: 0, yMps: 0, zMps: 0 },
   outsidePitch: false,
   controllerId: null,
+  controlOffset: null,
   lastTouchPlayerId: null,
 })
 const run = (ball: BallMatchState, steps: number): BallMatchState => {

@@ -79,7 +79,7 @@ export function createInitialMatchState(input: unknown): {
       heightM: 0.11,
       outsidePitch: false,
       velocity: { xMps: 0, yMps: 0, zMps: 0 },
-      controllerId: null, lastTouchPlayerId: null,
+      controllerId: null, controlOffset: null, lastTouchPlayerId: null,
     },
     randomStreams: streams,
     pendingCommands: [],
