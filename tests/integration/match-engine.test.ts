@@ -86,7 +86,7 @@ describe('Phase 0D 11v11 foundation state', () => {
       patch(copy)
       expect(() => restoreFoundationMatch(copy)).toThrow()
     }
-    mutate((copy) => { copy.state.schemaVersion = 2 })
+    mutate((copy) => { copy.state.schemaVersion = 999 })
     mutate((copy) => { copy.state.players.pop() })
     mutate((copy) => { copy.state.teams[0].score = 99 })
     mutate((copy) => { delete copy.state.randomStreams['ball/contact'] })
