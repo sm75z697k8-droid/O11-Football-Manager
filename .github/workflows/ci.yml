@@ -20,12 +20,7 @@ jobs:
           node-version: '22'
       - name: Install dependencies
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci --no-audit --no-fund
-          else
-            echo "Initial bootstrap: installing pinned dependencies; lockfile workflow will commit the lock."
-            npm install --no-audit --no-fund
-          fi
+          npm ci --no-audit --no-fund
       - name: Typecheck
         run: npm run typecheck
       - name: Unit tests
