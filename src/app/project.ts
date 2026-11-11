@@ -1,6 +1,6 @@
-/** Phase 0A project metadata. No match simulation is implemented yet. */
+/** O11 project metadata. No match simulation is implemented yet. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = '0B' as const
+export const PROJECT_PHASE = '0C' as const
 export const ENGINE_STATUS = 'not-implemented' as const
 
 export const FOUNDATION_STAGES = [
