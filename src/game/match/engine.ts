@@ -15,7 +15,7 @@ import { createInitialMatchState } from './setup'
 import {
   FOUNDATION_ENGINE_VERSION, MATCH_RANDOM_STREAM_IDS, MATCH_STATE_SCHEMA_VERSION,
 } from './state'
-import type { MatchState, PressingIntensity, PlayerMatchState } from './state'
+import type { MatchState, PressingIntensity } from './state'
 
 export const MATCH_CHECKPOINT_VERSION = 2 as const
 export const MAX_ADVANCE_STEPS_PER_CALL = 10_000 as const
@@ -154,12 +154,12 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   for (let i = 0; i < currentPlayers.length; i += 1) {
     const player = currentPlayers[i]
     const original = baseline.players[i]
-    if (!object(player)) throw new Error('Invalid player state')
+    if (!player || typeof player !== 'object') throw new Error('Invalid player state')
 
     const { position, velocity, orientationRad, intention, ...metadata } = player
     const {
       position: _initialPosition, velocity: _initialVelocity,
-      orientationRad: _initialOrientation, intention: _initialIntention, ...expected,
+      orientationRad: _initialOrientation, intention: _initialIntention, ...expected
     } = original
     void _initialPosition
     void _initialVelocity
