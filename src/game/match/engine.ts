@@ -1,7 +1,6 @@
 import { advanceSimulationClock, MAX_SIMULATION_TICK, restoreSimulationClock } from '../core/clock'
 import { restoreRandomStream } from '../core/rng'
 import type { MatchSetup } from '../model/match'
-import type { Point2 } from '../model/pitch'
 import { deriveMotionLimits, advancePlayerLocomotion, insidePitch } from '../physics/locomotion'
 import { assertValidMatchSetup } from '../../data/validate'
 import {
@@ -178,7 +177,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     }
     const definition = setup.players.find((p) => p.id === player.playerId)
     if (!definition || !insidePitch(position, setup.pitch) ||
-        !object(velocity) || !Number.isFinite(velocity.xMps) ||
+        (!velocity || typeof velocity !== 'object' || Array.isArray(velocity)) || !Number.isFinite(velocity.xMps) ||
         !Number.isFinite(velocity.yMps) ||
         !Number.isFinite(orientationRad) ||
         orientationRad < -Math.PI - 1e-10 || orientationRad > Math.PI + 1e-10) {
@@ -188,15 +187,15 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     if (Math.hypot(velocity.xMps, velocity.yMps) > limits.maxSpeedMps + 1e-8) {
       throw new Error('Player exceeds their maximum physical speed')
     }
-    if (!object(intention) || !Number.isSafeInteger(intention.sinceTick) ||
+    if ((!intention || typeof intention !== 'object' || Array.isArray(intention)) || !Number.isSafeInteger(intention.sinceTick) ||
         intention.sinceTick < motion.appliedTick ||
         intention.sinceTick > state.clock.tick) {
       throw new Error('Invalid player locomotion intention')
     }
     if (intention.kind === 'moveToPoint') {
       if (intention.sinceTick !== motion.appliedTick ||
-          !object(intention.target) ||
-          !insidePitch(intention.target as unknown as Point2, setup.pitch) ||
+          (!intention.target || typeof intention.target !== 'object' || Array.isArray(intention.target)) ||
+          !insidePitch(intention.target, setup.pitch) ||
           JSON.stringify(intention.target) !== JSON.stringify(motion.target)) {
         throw new Error('Movement target differs from the latest applied instruction')
       }
