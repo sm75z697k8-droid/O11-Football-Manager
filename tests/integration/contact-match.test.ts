@@ -281,6 +281,18 @@ describe('Phase 3 authentic geometric player-ball interactions', () => {
     mutate((cp) => { cp.state.schemaVersion = 3 })
   })
 
+  it('rejects forged team affiliation in a restored contact command', () => {
+    const { engine } = capturedFixture()
+    const snapshot = structuredClone(engine.checkpoint())
+    const touch = snapshot.state.appliedCommands.find((c) =>
+      c.type === 'attemptFirstTouch')
+    expect(touch).toBeDefined()
+    if (touch) {
+      (touch as { teamId: string }).teamId = 'club_vale'
+    }
+    expect(() => restoreFoundationMatch(snapshot)).toThrow()
+  })
+
   it('leaves pitch time and scores untouched after any number of contact attempts', () => {
     const { engine, striker } = capturedFixture()
     engine.submitCommand(kick(striker.playerId))

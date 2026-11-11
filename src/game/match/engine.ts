@@ -120,7 +120,9 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         command.requestedTick < 0 || command.requestedTick > state.clock.tick ||
         command.targetTick > MAX_SIMULATION_TICK ||
         !setup.clubs.some((club) => club.id === command.teamId) ||
-        (command.type === 'setMovementTarget' && !setup.players.some(
+        ((command.type === 'setMovementTarget' ||
+          command.type === 'attemptFirstTouch' ||
+          command.type === 'attemptKick') && !setup.players.some(
           (p) => p.id === command.playerId && p.clubId === command.teamId)) ||
         seen.has(command.commandId)) {
       throw new Error('Invalid checkpoint command chronology')
