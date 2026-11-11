@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="O11 emblem">
+  <rect width="64" height="64" rx="14" fill="#142c23"/>
+  <rect x="5" y="5" width="54" height="54" rx="11" fill="none" stroke="#70c99a" stroke-width="1.5" opacity=".6"/>
+  <path d="M15 36c0-10 6-17 16-17s16 7 16 17-6 17-16 17-16-7-16-17Z" fill="none" stroke="#abedc3" stroke-width="5" transform="translate(0 -4) scale(.88) translate(4 4)"/>
+  <path d="M40 17v30M48 17v30" stroke="#abedc3" stroke-width="4" stroke-linecap="round"/>
+</svg>
