@@ -55,7 +55,7 @@ export default function App() {
               <span className="stage-number">{stage.id}</span>
               <div className="stage-copy"><strong>{stage.title}</strong><small>{stage.summary}</small></div>
               <span className={stage.id === PROJECT_PHASE ? 'stage-state stage-current' : 'stage-state'}>
-                {stage.id === PROJECT_PHASE ? 'CURRENT PHASE' : ['0A', '0B', '0C'].includes(stage.id) ? 'COMPLETE' : 'PLANNED'}
+                {stage.id === PROJECT_PHASE ? 'CURRENT PHASE' : ['0A', '0B', '0C', '0D'].includes(stage.id) ? 'COMPLETE' : 'PLANNED'}
               </span>
             </li>
           ))}

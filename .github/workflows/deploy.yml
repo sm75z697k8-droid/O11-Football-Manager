@@ -59,23 +59,7 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
-      - name: Verify live site serves compiled JavaScript
+      - name: Verify live site serves compiled JavaScript and CSS
         env:
           SITE_URL: ${{ steps.deployment.outputs.page_url }}
-        run: |
-          set -euo pipefail
-          if [ -z "${SITE_URL}" ]; then
-            echo "::error::Deployment did not return a Pages URL."
-            exit 1
-          fi
-          for attempt in 1 2 3 4 5 6 7 8; do
-            html="$(curl --fail --silent --show-error --location --max-time 15 --header 'Cache-Control: no-cache' "${SITE_URL}?o11_build=${GITHUB_SHA}" || true)"
-            if printf '%s' "${html}" | grep -q '/O11-Football-Manager/assets/'; then
-              echo "Compiled Vite assets are referenced by the published HTML."
-              exit 0
-            fi
-            echo "Attempt ${attempt}: live HTML not yet serving compiled assets."
-            sleep 8
-          done
-          echo "::error::GitHub Pages is not serving the compiled Vite output. Check Pages > Source and use GitHub Actions."
-          exit 1
+        run: node scripts/verify-pages.mjs

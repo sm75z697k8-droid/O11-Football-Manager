@@ -1,6 +1,6 @@
 /** O11 project metadata. Match state exists, but football gameplay is not yet implemented. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = '0D' as const
+export const PROJECT_PHASE = '0E' as const
 export const ENGINE_STATUS = 'foundation-only' as const
 
 export const FOUNDATION_STAGES = [

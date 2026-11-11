@@ -4,7 +4,7 @@ import { ENGINE_STATUS, FOUNDATION_STAGES, PROJECT_NAME, PROJECT_PHASE } from '.
 describe('Phase 0A project foundation', () => {
   it('keeps the match engine clearly marked as foundation-only', () => {
     expect(PROJECT_NAME).toBe('O11 Football Manager')
-    expect(PROJECT_PHASE).toBe('0D')
+    expect(PROJECT_PHASE).toBe('0E')
     expect(ENGINE_STATUS).toBe('foundation-only')
   })
 
