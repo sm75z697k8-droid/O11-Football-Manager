@@ -113,7 +113,7 @@ export class SeededRandomStream {
       words.every((word: number) => word === 0)) {
       throw new RangeError('Invalid xoshiro128** internal state')
     }
-    if (!Number.isSafeInteger(record.drawCount) || (record.drawCount as number) < 0) {
+    if (typeof record.drawCount !== 'number' || !Number.isSafeInteger(record.drawCount) || record.drawCount < 0) {
       throw new RangeError('Invalid RNG draw count')
     }
     // Copy state: external mutation of a checkpoint cannot change the stream.

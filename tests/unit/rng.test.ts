@@ -59,7 +59,7 @@ describe('versioned seeded xoshiro128** streams', () => {
     const original = createRandomStream(8, 'sample')
     const twin = createRandomStream(8, 'sample')
     const cp = original.checkpoint()
-    ;(cp.words as number[])[0] = 7
+    ;(cp.words as unknown as number[])[0] = 7
     expect(original.nextUint32()).toBe(twin.nextUint32())
   })
 
