@@ -84,6 +84,7 @@ export function createInitialMatchState(input: unknown): {
     randomStreams: streams,
     pendingCommands: [],
     appliedCommands: [],
+    contactEvents: [],
     nextCommandSequence: 1,
   }
   return { setup: fixture, state }

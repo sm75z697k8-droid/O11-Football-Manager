@@ -59,6 +59,9 @@ export function launchDiagnosticBall(
     velocity: {
       xMps: velocity.xMps, yMps: velocity.yMps, zMps: velocity.zMps,
     },
+    controllerId: null,
+    controlOffset: null,
+    lastTouchPlayerId: null,
   }
 }
 

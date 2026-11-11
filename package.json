@@ -17,7 +17,8 @@
     "verify:build": "node scripts/verify-build.mjs",
     "benchmark:foundation": "vitest run tests/performance/foundation-baseline.test.ts",
     "benchmark:motion": "vitest run tests/performance/player-motion-baseline.test.ts",
-    "benchmark:ball": "vitest run tests/performance/ball-physics-baseline.test.ts"
+    "benchmark:ball": "vitest run tests/performance/ball-physics-baseline.test.ts",
+    "benchmark:contact": "vitest run tests/performance/player-ball-contact-baseline.test.ts"
   },
   "dependencies": {
     "react": "19.3.1",

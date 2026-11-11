@@ -26,8 +26,25 @@ export interface DiagnosticBallLaunchRequest {
   readonly type: 'diagnosticBallLaunch'
   readonly velocity: BallVelocity
 }
+/** Contact requests are scheduled; actual reach/success is evaluated at execution. */
+export interface AttemptFirstTouchRequest {
+  readonly commandId: string
+  readonly teamId: string
+  readonly type: 'attemptFirstTouch'
+  readonly playerId: string
+}
+export interface AttemptKickRequest {
+  readonly commandId: string
+  readonly teamId: string
+  readonly type: 'attemptKick'
+  readonly playerId: string
+  readonly target: Point2
+  readonly power: number
+  readonly lift: number
+}
 export type MatchCommandRequest =
-  | SetPressingCommandRequest | SetMovementTargetRequest | DiagnosticBallLaunchRequest
+  | SetPressingCommandRequest | SetMovementTargetRequest
+  | DiagnosticBallLaunchRequest | AttemptFirstTouchRequest | AttemptKickRequest
 export type ScheduledMatchCommand = MatchCommandRequest & {
   readonly requestedTick: number
   readonly targetTick: number
@@ -42,6 +59,8 @@ const INTENSITIES: readonly PressingIntensity[] = ['low', 'standard', 'high']
 const PRESSING_FIELDS = ['commandId', 'teamId', 'type', 'intensity']
 const MOVEMENT_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target']
 const BALL_LAUNCH_FIELDS = ['commandId', 'teamId', 'type', 'velocity']
+const FIRST_TOUCH_FIELDS = ['commandId', 'teamId', 'type', 'playerId']
+const KICK_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target', 'power', 'lift']
 
 export function parseMatchCommandRequest(
   input: unknown, pitch: PitchDefinition,
@@ -93,6 +112,38 @@ export function parseMatchCommandRequest(
       velocity: { xMps: v.xMps, yMps: v.yMps, zMps: v.zMps },
     } }
   }
+  if (value.type === 'attemptFirstTouch') {
+    if (Object.keys(value).some((k) => !FIRST_TOUCH_FIELDS.includes(k)) ||
+        typeof value.playerId !== 'string' || !value.playerId.trim()) {
+      return { reason: 'Invalid first-touch attempt', commandId }
+    }
+    return { request: {
+      commandId, teamId: value.teamId, type: 'attemptFirstTouch',
+      playerId: value.playerId,
+    } }
+  }
+  if (value.type === 'attemptKick') {
+    const point = value.target
+    if (Object.keys(value).some((k) => !KICK_FIELDS.includes(k)) ||
+        typeof value.playerId !== 'string' || !value.playerId.trim() ||
+        !point || typeof point !== 'object' || Array.isArray(point) ||
+        Object.keys(point).some((k) => k !== 'xM' && k !== 'yM') ||
+        !insidePitch(point as Point2, pitch) ||
+        typeof value.power !== 'number' || !Number.isFinite(value.power) ||
+        value.power < 0.05 || value.power > 1 ||
+        typeof value.lift !== 'number' || !Number.isFinite(value.lift) ||
+        value.lift < 0 || value.lift > 1) {
+      return { reason: 'Invalid kick attempt', commandId }
+    }
+    const p = point as Point2
+    return { request: {
+      commandId, teamId: value.teamId, type: 'attemptKick',
+      playerId: value.playerId,
+      target: { xM: p.xM, yM: p.yM },
+      power: value.power,
+      lift: value.lift,
+    } }
+  }
   return { reason: 'Unsupported command type', commandId }
 }
 
@@ -109,7 +160,8 @@ export function scheduleMatchCommand(
     state, receipt: { accepted: false as const, commandId: req.commandId, reason },
   })
   if (!state.teams.some((team) => team.clubId === req.teamId)) return reject('Unknown match team')
-  if (req.type === 'setMovementTarget' &&
+  if ((req.type === 'setMovementTarget' ||
+       req.type === 'attemptFirstTouch' || req.type === 'attemptKick') &&
       !state.players.some((p) => p.playerId === req.playerId && p.clubId === req.teamId)) {
     return reject('Player does not belong to the specified team')
   }
@@ -151,9 +203,11 @@ export function applyDueMatchCommands(state: MatchState): MatchState {
         ? { ...p, intention: { kind: 'moveToPoint' as const,
           sinceTick: state.clock.tick, target: { ...command.target } } }
         : p)
-    } else {
+    } else if (command.type === 'diagnosticBallLaunch') {
       ball = launchDiagnosticBall(ball, command.velocity)
     }
+    // Contact requests are recorded here and resolved AFTER physics. They do
+    // not forge a touch when scheduled or when a player is out of reach.
   }
   const applied: AppliedMatchCommand[] = due.map((command) => ({
     ...command, appliedTick: state.clock.tick,

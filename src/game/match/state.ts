@@ -5,8 +5,8 @@ import type { ClubId, PlayerId } from '../model/player'
 import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
-export const MATCH_STATE_SCHEMA_VERSION = 3 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-ball-motion-p2-v1' as const
+export const MATCH_STATE_SCHEMA_VERSION = 4 as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-player-contact-p3-v1' as const
 
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
@@ -14,7 +14,6 @@ export const MATCH_RANDOM_STREAM_IDS = [
 ] as const
 export type MatchRandomStreamId = (typeof MATCH_RANDOM_STREAM_IDS)[number]
 export type PressingIntensity = 'low' | 'standard' | 'high'
-
 export interface Velocity2 { readonly xMps: number; readonly yMps: number }
 export type PlayerIntention =
   | { readonly kind: 'holdFormation'; readonly sinceTick: number }
@@ -37,21 +36,34 @@ export interface TeamMatchState {
   readonly clubId: ClubId
   readonly attackingDirection: 1 | -1
   readonly score: number
-  /** Pressing is a stored preference; no tactical AI is implemented. */
   readonly pressingIntensity: PressingIntensity
 }
 export interface BallMatchState {
   readonly position: Point2
-  /** Height of the ball's CENTRE above the ground. */
   readonly heightM: number
   readonly velocity: Velocity2 & { readonly zMps: number }
-  /** A geometric observation, not a throw-in or goal decision. */
   readonly outsidePitch: boolean
+  /** Simplified foot-control constraint, not complete dribbling behavior. */
   readonly controllerId: PlayerId | null
+  readonly controlOffset: Point2 | null
   readonly lastTouchPlayerId: PlayerId | null
 }
 
-/** Physics diagnostic state; match gameplay and official time do not exist. */
+export type ContactKind = 'control' | 'kick'
+export type ContactOutcome =
+  | 'controlled' | 'miscontrolled' | 'kicked'
+  | 'outOfReach' | 'occupied' | 'alreadyControlled' | 'invalidDirection'
+export interface ContactEvent {
+  readonly commandId: string
+  readonly playerId: PlayerId
+  readonly tick: number
+  readonly kind: ContactKind
+  readonly outcome: ContactOutcome
+  /** Whether this attempt consumed one random draw from ball/contact. */
+  readonly drawUsed: 0 | 1
+}
+
+/** Headless diagnostics only; no tactical AI or playable football match. */
 export interface MatchState {
   readonly schemaVersion: typeof MATCH_STATE_SCHEMA_VERSION
   readonly engineVersion: typeof FOUNDATION_ENGINE_VERSION
@@ -65,5 +77,6 @@ export interface MatchState {
   readonly randomStreams: Readonly<Record<MatchRandomStreamId, RandomStreamCheckpoint>>
   readonly pendingCommands: readonly ScheduledMatchCommand[]
   readonly appliedCommands: readonly AppliedMatchCommand[]
+  readonly contactEvents: readonly ContactEvent[]
   readonly nextCommandSequence: number
 }

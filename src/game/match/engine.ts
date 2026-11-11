@@ -1,6 +1,10 @@
 import { advanceSimulationClock, MAX_SIMULATION_TICK, restoreSimulationClock } from '../core/clock'
 import { restoreRandomStream } from '../core/rng'
 import {
+  advanceControlledBall, resolveContactAttempts,
+  expectedContactStream, FOOT_REACH_M,
+} from '../physics/contact'
+import {
   BALL_RADIUS_M, MAX_LAUNCH_SPEED_MPS, isBallFullyOutsidePitch, advanceBallPhysics,
 } from '../physics/ball'
 import type { MatchSetup } from '../model/match'
@@ -19,7 +23,7 @@ import {
 } from './state'
 import type { MatchState, PressingIntensity } from './state'
 
-export const MATCH_CHECKPOINT_VERSION = 3 as const
+export const MATCH_CHECKPOINT_VERSION = 4 as const
 export const MAX_ADVANCE_STEPS_PER_CALL = 10_000 as const
 
 export interface FoundationMatchCheckpoint {
@@ -71,7 +75,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   if (!Array.isArray(state.players) || state.players.length !== 22 ||
       !Array.isArray(state.teams) || state.teams.length !== 2 ||
       !object(state.ball) || !object(state.randomStreams) ||
-      !Array.isArray(state.pendingCommands) || !Array.isArray(state.appliedCommands)) {
+      !Array.isArray(state.pendingCommands) || !Array.isArray(state.appliedCommands) ||
+      !Array.isArray(state.contactEvents)) {
     throw new Error('Incomplete match state checkpoint')
   }
   const baseline = createInitialMatchState(setup).state
@@ -89,8 +94,9 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     const stream = restoreRandomStream(state.randomStreams[id])
     const cp = stream.checkpoint()
     if (cp.streamId !== id || cp.masterSeed !== setup.seed ||
-        cp.drawCount !== 0 ||
-        JSON.stringify(cp.words) !== JSON.stringify(baseline.randomStreams[id].words)) {
+        (id !== 'ball/contact' &&
+          (cp.drawCount !== 0 ||
+            JSON.stringify(cp.words) !== JSON.stringify(baseline.randomStreams[id].words)))) {
       throw new Error('Invalid or modified Phase 1 RNG stream')
     }
   }
@@ -141,7 +147,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   for (const command of orderedApplied) {
     if (command.type === 'setPressingIntensity') {
       tactics[command.teamId] = command.intensity
-    } else {
+    } else if (command.type === 'setMovementTarget') {
       lastMotion.set(command.playerId, command as Extract<AppliedMatchCommand, {type: 'setMovementTarget'}>)
     }
   }
@@ -149,10 +155,71 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     throw new Error('Tactical state disagrees with command history')
   }
 
-  // No diagnostic launch means the ball MUST remain identical to kick-off.
-  // When launched, the ball is a free physical body with no player contact.
+  // Validate precisely one recorded outcome per applied contact request.
+  const attempts = orderedApplied.filter((command) =>
+    command.type === 'attemptFirstTouch' || command.type === 'attemptKick')
+  if (state.contactEvents.length !== attempts.length) {
+    throw new Error('Missing or extra player-ball contact events')
+  }
+  let consumedDraws = 0
+  const eventById = new Map<string, (typeof state.contactEvents)[number]>()
+  for (let i = 0; i < attempts.length; i += 1) {
+    const command = attempts[i]
+    const recorded = state.contactEvents[i]
+    if (!recorded || typeof recorded !== 'object' ||
+        recorded.commandId !== command.commandId ||
+        recorded.playerId !== command.playerId ||
+        recorded.tick !== command.appliedTick ||
+        recorded.kind !== (command.type === 'attemptKick' ? 'kick' : 'control') ||
+        ![0, 1].includes(recorded.drawUsed) ||
+        !(
+          command.type === 'attemptKick'
+            ? ['kicked', 'outOfReach', 'occupied', 'invalidDirection'].includes(recorded.outcome)
+            : ['controlled', 'miscontrolled', 'outOfReach', 'occupied', 'alreadyControlled'].includes(recorded.outcome)
+        ) ||
+        recorded.drawUsed !== (['kicked', 'controlled', 'miscontrolled'].includes(recorded.outcome) ? 1 : 0) ||
+        Object.keys(recorded).sort().join(',') !==
+          'commandId,drawUsed,kind,outcome,playerId,tick') {
+      throw new Error('Invalid player-ball contact event history')
+    }
+    consumedDraws += recorded.drawUsed
+    eventById.set(recorded.commandId, recorded)
+  }
+  if (JSON.stringify(state.randomStreams['ball/contact']) !==
+      JSON.stringify(expectedContactStream(setup.seed, consumedDraws))) {
+    throw new Error('Contact RNG stream does not match the recorded draw history')
+  }
+
+  // A diagnostic launch resets ownership and last touch; contact attempts
+  // resolve after all queued launch commands and physical motion for that tick.
+  let expectedController: string | null = null
+  let expectedLastTouch: string | null = null
+  for (const tick of [...new Set(orderedApplied.map((c) => c.appliedTick))]) {
+    const due = orderedApplied.filter((c) => c.appliedTick === tick)
+    if (due.some((c) => c.type === 'diagnosticBallLaunch')) {
+      expectedController = null
+      expectedLastTouch = null
+    }
+    for (const command of due) {
+      if (command.type !== 'attemptFirstTouch' && command.type !== 'attemptKick') continue
+      const recorded = eventById.get(command.commandId)
+      if (!recorded) throw new Error('Missing applied contact outcome')
+      if (recorded.outcome === 'controlled') {
+        expectedController = command.playerId
+        expectedLastTouch = command.playerId
+      } else if (recorded.outcome === 'miscontrolled' ||
+                 recorded.outcome === 'kicked') {
+        expectedController = null
+        expectedLastTouch = command.playerId
+      }
+    }
+  }
+
+  // Without a diagnostic launch or a reachable contact, the ball must remain
+  // exactly at its original position. Other cases validate physical bounds.
   const launches = orderedApplied.filter((command) => command.type === 'diagnosticBallLaunch')
-  if (!launches.length) {
+  if (!launches.length && !state.contactEvents.some((ev) =>
+    ['kicked', 'miscontrolled', 'controlled'].includes(ev.outcome))) {
     if (JSON.stringify(state.ball) !== JSON.stringify(baseline.ball)) {
       throw new Error('Ball moved without an applied diagnostic launch')
     }
@@ -170,11 +237,29 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         Math.hypot(ball.velocity.xMps, ball.velocity.yMps, ball.velocity.zMps) >
           MAX_LAUNCH_SPEED_MPS + 1e-8 ||
         (ball.heightM <= BALL_RADIUS_M + 1e-8 && ball.velocity.zMps < -1e-8) ||
-        ball.controllerId !== null || ball.lastTouchPlayerId !== null ||
+        ball.controllerId !== expectedController ||
+        ball.lastTouchPlayerId !== expectedLastTouch ||
         typeof ball.outsidePitch !== 'boolean' ||
         ball.outsidePitch !== isBallFullyOutsidePitch(
           ball.position.xM, ball.position.yM, setup.pitch)) {
-      throw new Error('Ball checkpoint contains invalid free-flight or ground-roll state')
+      throw new Error('Ball checkpoint contains invalid flight, roll or contact state')
+    }
+    if (ball.controllerId !== null) {
+      const player = state.players.find((p) => p.playerId === ball.controllerId)
+      const offset = ball.controlOffset
+      if (!player || !object(offset) ||
+          !Number.isFinite(offset.xM) || !Number.isFinite(offset.yM) ||
+          Math.hypot(offset.xM, offset.yM) > FOOT_REACH_M + 1e-9 ||
+          ball.heightM !== BALL_RADIUS_M ||
+          ball.velocity.zMps !== 0 ||
+          Math.abs(ball.position.xM - (player.position.xM + offset.xM)) > 1e-8 ||
+          Math.abs(ball.position.yM - (player.position.yM + offset.yM)) > 1e-8 ||
+          ball.velocity.xMps !== player.velocity.xMps ||
+          ball.velocity.yMps !== player.velocity.yMps) {
+        throw new Error('Controlled ball is not physically attached to its owner')
+      }
+    } else if (ball.controlOffset !== null) {
+      throw new Error('Free ball unexpectedly has a possession offset')
     }
   }
 
@@ -283,8 +368,17 @@ export class FoundationMatchEngine {
       const clock = advanceSimulationClock(this.state.clock)
       const applied = applyDueMatchCommands({ ...this.state, clock })
       const agents = advancePlayerLocomotion(applied, this.setup.players, this.setup.pitch)
-      const ball = advanceBallPhysics(agents.ball, this.setup.pitch)
-      this.state = ball === agents.ball ? agents : { ...agents, ball }
+      const controller = agents.ball.controllerId
+        ? agents.players.find((p) => p.playerId === agents.ball.controllerId)
+        : null
+      if (agents.ball.controllerId && !controller) {
+        throw new Error('Ball controller is missing')
+      }
+      const ball = controller
+        ? advanceControlledBall(agents.ball, controller, this.setup.pitch)
+        : advanceBallPhysics(agents.ball, this.setup.pitch)
+      const moved = ball === agents.ball ? agents : { ...agents, ball }
+      this.state = resolveContactAttempts(moved, this.setup)
     }
     return this.getState()
   }

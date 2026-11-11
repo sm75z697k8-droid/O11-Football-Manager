@@ -39,7 +39,7 @@ export default function App() {
             <div className="pitch-dot pitch-dot-d" />
             <div className="pitch-ball" />
           </div>
-          <div className="schematic-foot"><span>PLAYER + BALL PHYSICS • NO MATCH AI</span><span>VISUAL CONCEPT</span></div>
+          <div className="schematic-foot"><span>PLAYER / BALL CONTACT • NO MATCH AI</span><span>VISUAL CONCEPT</span></div>
         </div>
       </section>
 
@@ -55,7 +55,7 @@ export default function App() {
               <span className="stage-number">{stage.id}</span>
               <div className="stage-copy"><strong>{stage.title}</strong><small>{stage.summary}</small></div>
               <span className={stage.id === PROJECT_PHASE ? 'stage-state stage-current' : 'stage-state'}>
-                {stage.id === PROJECT_PHASE ? 'CURRENT PHASE' : ['0A', '0B', '0C', '0D', '0E', '1'].includes(stage.id) ? 'COMPLETE' : 'PLANNED'}
+                {stage.id === PROJECT_PHASE ? 'CURRENT PHASE' : ['0A', '0B', '0C', '0D', '0E', '1', '2'].includes(stage.id) ? 'COMPLETE' : 'PLANNED'}
               </span>
             </li>
           ))}
