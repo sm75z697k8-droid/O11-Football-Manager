@@ -5,22 +5,20 @@ import type { ClubId, PlayerId } from '../model/player'
 import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
-export const MATCH_STATE_SCHEMA_VERSION = 1 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-foundation-0d-v1' as const
+export const MATCH_STATE_SCHEMA_VERSION = 2 as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-player-motion-p1-v1' as const
 
-/** Stable stream names; future decisions and ball contacts will consume these. */
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
   'ball/contact', 'match/referee', 'match/injuries',
 ] as const
-
 export type MatchRandomStreamId = (typeof MATCH_RANDOM_STREAM_IDS)[number]
 export type PressingIntensity = 'low' | 'standard' | 'high'
 
-export interface Velocity2 {
-  readonly xMps: number
-  readonly yMps: number
-}
+export interface Velocity2 { readonly xMps: number; readonly yMps: number }
+export type PlayerIntention =
+  | { readonly kind: 'holdFormation'; readonly sinceTick: number }
+  | { readonly kind: 'moveToPoint'; readonly sinceTick: number; readonly target: Point2 }
 
 export interface PlayerMatchState {
   readonly playerId: PlayerId
@@ -30,23 +28,20 @@ export interface PlayerMatchState {
   readonly role: PlayerRole
   readonly duty: PlayerDuty
   readonly participation: 'onField'
-  /** Metres on the physical pitch, not pixels. */
   readonly position: Point2
   readonly velocity: Velocity2
   readonly orientationRad: number
   readonly energy: number
-  /** Placeholder for later AI intentions, not a movement command. */
-  readonly intention: { readonly kind: 'holdFormation'; readonly sinceTick: number }
+  readonly intention: PlayerIntention
 }
 
 export interface TeamMatchState {
   readonly clubId: ClubId
   readonly attackingDirection: 1 | -1
   readonly score: number
-  /** Stored tactical preference only. No pressing behavior exists in Phase 0D. */
+  /** Pressing is a stored tactical preference; there is no tactical AI. */
   readonly pressingIntensity: PressingIntensity
 }
-
 export interface BallMatchState {
   readonly position: Point2
   readonly heightM: number
@@ -55,11 +50,7 @@ export interface BallMatchState {
   readonly lastTouchPlayerId: PlayerId | null
 }
 
-/**
- * Fully authoritative Phase 0D diagnostic match state.
- * Period remains 'notStarted'; no football time, movement, scoring or AI
- * is simulated by the foundation engine.
- */
+/** Diagnostic physical motion, NOT an actual timed football match. */
 export interface MatchState {
   readonly schemaVersion: typeof MATCH_STATE_SCHEMA_VERSION
   readonly engineVersion: typeof FOUNDATION_ENGINE_VERSION
@@ -73,6 +64,5 @@ export interface MatchState {
   readonly randomStreams: Readonly<Record<MatchRandomStreamId, RandomStreamCheckpoint>>
   readonly pendingCommands: readonly ScheduledMatchCommand[]
   readonly appliedCommands: readonly AppliedMatchCommand[]
-  /** One-based sequence number for the next accepted instruction. */
   readonly nextCommandSequence: number
 }
