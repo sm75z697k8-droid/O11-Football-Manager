@@ -1,5 +1,8 @@
 import { advanceSimulationClock, MAX_SIMULATION_TICK, restoreSimulationClock } from '../core/clock'
 import { restoreRandomStream } from '../core/rng'
+import {
+  BALL_RADIUS_M, MAX_LAUNCH_SPEED_MPS, isBallFullyOutsidePitch, advanceBallPhysics,
+} from '../physics/ball'
 import type { MatchSetup } from '../model/match'
 import { deriveMotionLimits, advancePlayerLocomotion, insidePitch } from '../physics/locomotion'
 import { assertValidMatchSetup } from '../../data/validate'
@@ -16,7 +19,7 @@ import {
 } from './state'
 import type { MatchState, PressingIntensity } from './state'
 
-export const MATCH_CHECKPOINT_VERSION = 2 as const
+export const MATCH_CHECKPOINT_VERSION = 3 as const
 export const MAX_ADVANCE_STEPS_PER_CALL = 10_000 as const
 
 export interface FoundationMatchCheckpoint {
@@ -72,9 +75,6 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     throw new Error('Incomplete match state checkpoint')
   }
   const baseline = createInitialMatchState(setup).state
-  if (JSON.stringify(state.ball) !== JSON.stringify(baseline.ball)) {
-    throw new Error('Ball movement is not implemented in Phase 1')
-  }
   if (state.teams.some((team, i) =>
     !object(team) || team.clubId !== baseline.teams[i].clubId ||
     team.attackingDirection !== baseline.teams[i].attackingDirection ||
@@ -147,6 +147,35 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   }
   if (state.teams.some((team) => team.pressingIntensity !== tactics[team.clubId])) {
     throw new Error('Tactical state disagrees with command history')
+  }
+
+  // No diagnostic launch means the ball MUST remain identical to kick-off.
+  // When launched, the ball is a free physical body with no player contact.
+  const launches = orderedApplied.filter((command) => command.type === 'diagnosticBallLaunch')
+  if (!launches.length) {
+    if (JSON.stringify(state.ball) !== JSON.stringify(baseline.ball)) {
+      throw new Error('Ball moved without an applied diagnostic launch')
+    }
+  } else {
+    const ball = state.ball
+    if (!object(ball.position) || !object(ball.velocity) ||
+        typeof ball.heightM !== 'number' || !Number.isFinite(ball.heightM) ||
+        ball.heightM < BALL_RADIUS_M - 1e-8 ||
+        !Number.isFinite(ball.position.xM) || !Number.isFinite(ball.position.yM) ||
+        Math.abs(ball.position.xM) > 3500 + setup.pitch.lengthM ||
+        Math.abs(ball.position.yM) > 3500 + setup.pitch.widthM ||
+        !Number.isFinite(ball.velocity.xMps) ||
+        !Number.isFinite(ball.velocity.yMps) ||
+        !Number.isFinite(ball.velocity.zMps) ||
+        Math.hypot(ball.velocity.xMps, ball.velocity.yMps, ball.velocity.zMps) >
+          MAX_LAUNCH_SPEED_MPS + 1e-8 ||
+        (ball.heightM <= BALL_RADIUS_M + 1e-8 && ball.velocity.zMps < -1e-8) ||
+        ball.controllerId !== null || ball.lastTouchPlayerId !== null ||
+        typeof ball.outsidePitch !== 'boolean' ||
+        ball.outsidePitch !== isBallFullyOutsidePitch(
+          ball.position.xM, ball.position.yM, setup.pitch)) {
+      throw new Error('Ball checkpoint contains invalid free-flight or ground-roll state')
+    }
   }
 
   const currentPlayers = state.players
@@ -243,7 +272,7 @@ export class FoundationMatchEngine {
     return receipt
   }
 
-  /** Fixed-step physical movement only, with no real match clock or ball physics. */
+  /** Fixed-step player and free-ball physics; no actual football gameplay. */
   advance(steps = 1): MatchState {
     if (!Number.isSafeInteger(steps) || steps < 0 ||
         steps > MAX_ADVANCE_STEPS_PER_CALL ||
@@ -253,7 +282,9 @@ export class FoundationMatchEngine {
     for (let i = 0; i < steps; i += 1) {
       const clock = advanceSimulationClock(this.state.clock)
       const applied = applyDueMatchCommands({ ...this.state, clock })
-      this.state = advancePlayerLocomotion(applied, this.setup.players, this.setup.pitch)
+      const agents = advancePlayerLocomotion(applied, this.setup.players, this.setup.pitch)
+      const ball = advanceBallPhysics(agents.ball, this.setup.pitch)
+      this.state = ball === agents.ball ? agents : { ...agents, ball }
     }
     return this.getState()
   }

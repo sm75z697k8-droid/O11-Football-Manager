@@ -5,8 +5,8 @@ import type { ClubId, PlayerId } from '../model/player'
 import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
-export const MATCH_STATE_SCHEMA_VERSION = 2 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-player-motion-p1-v1' as const
+export const MATCH_STATE_SCHEMA_VERSION = 3 as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-ball-motion-p2-v1' as const
 
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
@@ -19,7 +19,6 @@ export interface Velocity2 { readonly xMps: number; readonly yMps: number }
 export type PlayerIntention =
   | { readonly kind: 'holdFormation'; readonly sinceTick: number }
   | { readonly kind: 'moveToPoint'; readonly sinceTick: number; readonly target: Point2 }
-
 export interface PlayerMatchState {
   readonly playerId: PlayerId
   readonly clubId: ClubId
@@ -34,23 +33,25 @@ export interface PlayerMatchState {
   readonly energy: number
   readonly intention: PlayerIntention
 }
-
 export interface TeamMatchState {
   readonly clubId: ClubId
   readonly attackingDirection: 1 | -1
   readonly score: number
-  /** Pressing is a stored tactical preference; there is no tactical AI. */
+  /** Pressing is a stored preference; no tactical AI is implemented. */
   readonly pressingIntensity: PressingIntensity
 }
 export interface BallMatchState {
   readonly position: Point2
+  /** Height of the ball's CENTRE above the ground. */
   readonly heightM: number
   readonly velocity: Velocity2 & { readonly zMps: number }
+  /** A geometric observation, not a throw-in or goal decision. */
+  readonly outsidePitch: boolean
   readonly controllerId: PlayerId | null
   readonly lastTouchPlayerId: PlayerId | null
 }
 
-/** Diagnostic physical motion, NOT an actual timed football match. */
+/** Physics diagnostic state; match gameplay and official time do not exist. */
 export interface MatchState {
   readonly schemaVersion: typeof MATCH_STATE_SCHEMA_VERSION
   readonly engineVersion: typeof FOUNDATION_ENGINE_VERSION

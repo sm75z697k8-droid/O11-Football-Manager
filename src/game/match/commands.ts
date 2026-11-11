@@ -1,5 +1,7 @@
 import { MAX_SIMULATION_TICK } from '../core/clock'
 import type { PitchDefinition, Point2 } from '../model/pitch'
+import { validDiagnosticLaunchVelocity, launchDiagnosticBall } from '../physics/ball'
+import type { BallVelocity } from '../physics/ball'
 import { insidePitch } from '../physics/locomotion'
 import type { MatchState, PressingIntensity } from './state'
 
@@ -17,7 +19,15 @@ export interface SetMovementTargetRequest {
   readonly playerId: string
   readonly target: Point2
 }
-export type MatchCommandRequest = SetPressingCommandRequest | SetMovementTargetRequest
+/** A test impulse, NOT a pass, shot, kick decision or player contact. */
+export interface DiagnosticBallLaunchRequest {
+  readonly commandId: string
+  readonly teamId: string
+  readonly type: 'diagnosticBallLaunch'
+  readonly velocity: BallVelocity
+}
+export type MatchCommandRequest =
+  | SetPressingCommandRequest | SetMovementTargetRequest | DiagnosticBallLaunchRequest
 export type ScheduledMatchCommand = MatchCommandRequest & {
   readonly requestedTick: number
   readonly targetTick: number
@@ -31,6 +41,7 @@ export type CommandReceipt =
 const INTENSITIES: readonly PressingIntensity[] = ['low', 'standard', 'high']
 const PRESSING_FIELDS = ['commandId', 'teamId', 'type', 'intensity']
 const MOVEMENT_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target']
+const BALL_LAUNCH_FIELDS = ['commandId', 'teamId', 'type', 'velocity']
 
 export function parseMatchCommandRequest(
   input: unknown, pitch: PitchDefinition,
@@ -71,6 +82,17 @@ export function parseMatchCommandRequest(
       playerId: value.playerId, target: { xM: p.xM, yM: p.yM },
     } }
   }
+  if (value.type === 'diagnosticBallLaunch') {
+    if (Object.keys(value).some((k) => !BALL_LAUNCH_FIELDS.includes(k)) ||
+        !validDiagnosticLaunchVelocity(value.velocity)) {
+      return { reason: 'Invalid diagnostic ball velocity', commandId }
+    }
+    const v = value.velocity as BallVelocity
+    return { request: {
+      commandId, teamId: value.teamId, type: 'diagnosticBallLaunch',
+      velocity: { xMps: v.xMps, yMps: v.yMps, zMps: v.zMps },
+    } }
+  }
   return { reason: 'Unsupported command type', commandId }
 }
 
@@ -109,7 +131,7 @@ export function scheduleMatchCommand(
   }
 }
 
-/** Apply due commands BEFORE locomotion at that target tick. */
+/** Apply due commands BEFORE physical movement at the target tick. */
 export function applyDueMatchCommands(state: MatchState): MatchState {
   if (!state.pendingCommands.length) return state
   const due = state.pendingCommands
@@ -118,16 +140,19 @@ export function applyDueMatchCommands(state: MatchState): MatchState {
   if (!due.length) return state
   let teams = state.teams
   let players = state.players
+  let ball = state.ball
   for (const command of due) {
     if (command.type === 'setPressingIntensity') {
       teams = teams.map((team) => team.clubId === command.teamId
         ? { ...team, pressingIntensity: command.intensity }
         : team) as unknown as typeof teams
-    } else {
+    } else if (command.type === 'setMovementTarget') {
       players = players.map((p) => p.playerId === command.playerId
         ? { ...p, intention: { kind: 'moveToPoint' as const,
           sinceTick: state.clock.tick, target: { ...command.target } } }
         : p)
+    } else {
+      ball = launchDiagnosticBall(ball, command.velocity)
     }
   }
   const applied: AppliedMatchCommand[] = due.map((command) => ({
@@ -135,7 +160,7 @@ export function applyDueMatchCommands(state: MatchState): MatchState {
   }))
   const ids = new Set(due.map((command) => command.commandId))
   return {
-    ...state, teams, players,
+    ...state, teams, players, ball,
     pendingCommands: state.pendingCommands.filter((command) => !ids.has(command.commandId)),
     appliedCommands: [...state.appliedCommands, ...applied],
   }

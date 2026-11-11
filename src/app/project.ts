@@ -1,7 +1,7 @@
-/** O11 project metadata. Individual physical movement exists; a football match is not yet playable. */
+/** O11 project metadata. Player and free-ball physical motion exist; no playable football match yet. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = '1' as const
-export const ENGINE_STATUS = 'player-motion-only' as const
+export const PROJECT_PHASE = '2' as const
+export const ENGINE_STATUS = 'player-ball-motion' as const
 
 export const FOUNDATION_STAGES = [
   { id: '0A', title: 'Project foundation', summary: 'App, TypeScript, tests and deployment' },
@@ -10,4 +10,5 @@ export const FOUNDATION_STAGES = [
   { id: '0D', title: 'Engine state and commands', summary: 'Initialization, command scheduling and checkpoints' },
   { id: '0E', title: 'Release verification', summary: 'Replay testing and iPhone validation' },
   { id: '1', title: 'Player movement physics', summary: 'Fixed-step acceleration, turning, braking and pitch boundaries' },
+  { id: '2', title: 'Ball movement physics', summary: 'Gravity, rolling friction, bounces and boundary detection' },
 ] as const

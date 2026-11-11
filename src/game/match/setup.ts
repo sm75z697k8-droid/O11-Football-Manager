@@ -77,6 +77,7 @@ export function createInitialMatchState(input: unknown): {
     ball: {
       position: { xM: fixture.pitch.lengthM / 2, yM: fixture.pitch.widthM / 2 },
       heightM: 0.11,
+      outsidePitch: false,
       velocity: { xMps: 0, yMps: 0, zMps: 0 },
       controllerId: null, lastTouchPlayerId: null,
     },
