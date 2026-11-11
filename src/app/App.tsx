@@ -20,7 +20,7 @@ export default function App() {
           <div className="eyebrow"><span className="eyebrow-rule" /> ENGINEERING PHASE {PROJECT_PHASE}</div>
           <h1 id="page-title">Built for the <em>beautiful game.</em></h1>
           <p className="hero-lede">A football management simulator designed around meaningful decisions, detailed player attributes, and a genuine 2D match engine.</p>
-          <p className="hero-note">The technical foundation is being established. Match simulation and career gameplay are not available yet.</p>
+          <p className="hero-note">This is a temporary development preview, not the actual game interface. O11 is planned as a full-screen, landscape-first football management game.</p>
           <div className="hero-actions">
             <a className="primary-link" href="#foundation">View development plan <span aria-hidden="true">↘</span></a>
             <a className="subtle-link" href="https://github.com/sm75z697k8-droid/O11-Football-Manager" target="_blank" rel="noopener noreferrer">GitHub repository <span aria-hidden="true">↗</span></a>
@@ -55,7 +55,7 @@ export default function App() {
               <span className="stage-number">{stage.id}</span>
               <div className="stage-copy"><strong>{stage.title}</strong><small>{stage.summary}</small></div>
               <span className={stage.id === PROJECT_PHASE ? 'stage-state stage-current' : 'stage-state'}>
-                {stage.id === PROJECT_PHASE ? 'CURRENT PHASE' : 'PLANNED'}
+                {stage.id === PROJECT_PHASE ? 'CURRENT PHASE' : stage.id === '0A' ? 'COMPLETE' : 'PLANNED'}
               </span>
             </li>
           ))}
