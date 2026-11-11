@@ -1,36 +1,39 @@
 # O11-Football-Manager
 
-A simulation-first football management game in development, designed for full-screen **landscape-first play** on iPhone Safari and desktop. The current deployed page is a **temporary development preview**, not the finished interface.
+A serious football management simulator in development, designed as a **full-screen landscape-first game** on iPhone Safari and desktop. The published page is still a **temporary developer preview**.
 
-## Current status: Phase 0E
+## Current status — Phase 1: physical player movement
 
-- React + TypeScript + Vite foundation with GitHub Pages.
-- Canonical two-team fictional fixture: **Harbor Athletic vs Vale Rovers**, 11 players per side.
-- 49 core numeric attributes, 11 hidden characteristics and validated fixture data.
-- Deterministic fixed-step clock, independent seeded RNG streams, match foundation state and ordered command receipts.
-- Complete JSON checkpoint/restore. Tactics settings currently store intent **without affecting player movement**.
-- Regression, static performance baseline and production/deployment smoke checks.
+- React + TypeScript + Vite foundation and hardened GitHub Pages deployment.
+- Exactly two fictional test clubs — **Harbor Athletic** and **Vale Rovers**, 11 players each.
+- Canonical football data, deterministic clock, seeded random streams, command scheduling and versioned checkpoints.
+- **Individual player locomotion is now functional in the headless engine**: explicit movement targets drive bounded acceleration, braking, turning, speed caps and pitch-boundary handling, affected by core physical attributes.
+- Movement preserves deterministic continuation across tick chunk sizes and mid-stride saves; 66+ automated tests (verify current Actions logs for exact count).
+- Regression, build asset smoke checks, deployed HTTP asset checks and informative Node motion profiling.
 
-**Not yet implemented:** actual match play, dynamic positioning, ball physics, attacking/defending AI, scores, playable match viewer, career gameplay or save management. Static fixture positions are not a simulated match.
+**Not yet implemented:** full football match, tactical player AI, live match viewer, ball physics, player collisions, dribbling, goalkeeping, possessions, scores, match clock, manager career and persistence. The screenshot-style visual pitch on the developer page is illustrative, NOT generated from the movement engine.
 
-## Development and verification
+The match `period` stays `notStarted`. No fictional goals or invented football events are generated.
 
-All development is possible with GitHub's mobile website/editor and GitHub Actions; no Mac or PC is required.
+## Development and testing
 
-The Actions tab runs CI (TypeScript, tests, build and local asset verification). A successful CI push starts the GitHub Pages deployment, which verifies HTTP availability of compiled JavaScript and CSS.
+You can maintain this project with only an iPhone, GitHub web editor and GitHub Actions.
 
-Local commands (GitHub Actions runs them automatically):
+The Actions CI workflow runs `npm ci`, TypeScript checks, all Vitest tests and the Vite production build. The compiled site asset check verifies that the JavaScript and CSS files exist. The Pages deployment verifies that the source is **GitHub Actions**, and that the live HTML, JavaScript and CSS are accessible.
 
 ```sh
 npm ci
 npm run check
 npm run benchmark:foundation
+npm run benchmark:motion
 ```
 
-`benchmark:foundation` measures **only static foundation diagnostics on Node**, not real football simulation or iPhone FPS. See [Phase 0E verification notes](docs/design/phase-0e.md).
+**Performance numbers from GitHub's Node runner are not iPhone Safari performance results.** The motion workload is not a full match.
 
-GitHub Pages must use **Settings → Pages → Build and deployment → Source: GitHub Actions**. We previously fixed a blank screen caused by using branch publishing instead of the compiled Vite build.
+GitHub Pages must use **Settings → Pages → Source: GitHub Actions** to avoid publishing uncompiled source.
 
 Site: https://sm75z697k8-droid.github.io/O11-Football-Manager/
 
-Next: deterministic physical player movement, subject to separate approval. The match viewer will render the same authoritative state the engine actually simulates.
+Architecture and limitations: [Phase 1 player movement notes](docs/design/phase-1-player-movement.md).
+
+Next: carefully integrate additional real match physics and agent decisions. A future Canvas 2D viewer must visualize the *same* authoritative match state, not cosmetic animation.
