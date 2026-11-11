@@ -86,6 +86,9 @@ describe('Phase 2 deterministic ball physics', () => {
     expect(isBallFullyOutsidePitch(105 + BALL_RADIUS_M * 1.1, 34, DEFAULT_PITCH)).toBe(true)
     expect(isBallFullyOutsidePitch(-BALL_RADIUS_M * 1.1, 34, DEFAULT_PITCH)).toBe(true)
     expect(isBallFullyOutsidePitch(52, 68 + BALL_RADIUS_M * 1.1, DEFAULT_PITCH)).toBe(true)
+    // Diagonal corner crossings must account for the circular footprint.
+    expect(isBallFullyOutsidePitch(-0.08, -0.08, DEFAULT_PITCH)).toBe(true)
+    expect(isBallFullyOutsidePitch(-0.07, -0.07, DEFAULT_PITCH)).toBe(false)
   })
 
   it('never reflects off an imaginary touchline wall', () => {

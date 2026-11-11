@@ -30,8 +30,11 @@ const EPS = 1e-10
 export function isBallFullyOutsidePitch(
   xM: number, yM: number, pitch: PitchDefinition,
 ): boolean {
-  return xM < -BALL_RADIUS_M || xM > pitch.lengthM + BALL_RADIUS_M ||
-    yM < -BALL_RADIUS_M || yM > pitch.widthM + BALL_RADIUS_M
+  // Closest distance to the playing rectangle. Handles diagonal corner
+  // exits correctly, where the sphere can be wholly outside two sidelines.
+  const dx = Math.max(0, -xM, xM - pitch.lengthM)
+  const dy = Math.max(0, -yM, yM - pitch.widthM)
+  return dx * dx + dy * dy > BALL_RADIUS_M * BALL_RADIUS_M
 }
 
 export function validDiagnosticLaunchVelocity(input: unknown): input is BallVelocity {
