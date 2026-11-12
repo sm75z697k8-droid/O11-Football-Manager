@@ -11,6 +11,7 @@ describe('Seed-varied live exhibition attacking intelligence diagnostic', () => 
     const results: {
       seed: number; ticks: number; passes: number;
       shots: number; goals: number; out: boolean;
+      keeperCatches: number; keeperParries: number; keeperSaveAttempts: number;
     }[] = []
     for (const seed of [123456789, 42, 90, 117, 205, 832, 4100, 9999, 7654321]) {
       const session = new MatchViewerSession(seed)
@@ -36,6 +37,10 @@ describe('Seed-varied live exhibition attacking intelligence diagnostic', () => 
         seed, ticks: s.clock.tick, passes: passCommands.length,
         shots: realShotContacts.length, goals: s.goalEvents.length,
         out: s.ball.outsidePitch,
+        keeperCatches:s.automaticContactEvents.filter(e=>e.outcome==='caught').length,
+        keeperParries:s.automaticContactEvents.filter(e=>e.outcome==='parried').length,
+        keeperSaveAttempts:s.automaticContactEvents.filter(e=>
+          (e.outcome==='caught'||e.outcome==='parried')).length,
       })
     }
     console.info('[O11 seeded attacking baseline] ' + JSON.stringify({
@@ -46,6 +51,9 @@ describe('Seed-varied live exhibition attacking intelligence diagnostic', () => 
       x.ticks, x.passes, x.shots, x.goals,
     ]))).size).toBeGreaterThanOrEqual(3)
     expect(results.some(r => r.passes > 0)).toBe(true)
+    // These record ACTUAL physics contact, not attempted keeper animations.
+    expect(results.every(r=>r.keeperCatches+r.keeperParries===r.keeperSaveAttempts))
+      .toBe(true)
     // With no throw-ins, corners or goal kicks yet, a seeded exhibition
     // can genuinely end before a shot. Isolated physics/goal tests prove
     // shooting; this smoke test monitors short live-match variation.
