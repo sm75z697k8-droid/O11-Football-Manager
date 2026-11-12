@@ -2,15 +2,19 @@ import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
 import type { MatchState, PlayerMatchState } from '../match/state'
 import type { PossessionChoice } from './possession'
-import { attackingOpportunityAt } from './goal-directed'
+import {
+  attackingOpportunityAt, evaluateShootingOpportunity,
+  shootingCorridorObstruction,
+} from './goal-directed'
 import { deriveMotionLimits } from '../physics/locomotion'
+import { evaluateReceiverContinuation } from './receiver-continuation'
 
 /**
  * Phase 6.9A: bounded short-horizon evaluation, not branching match
  * simulations. No shot result, tackle, reception, or ball control is awarded.
  * Three geometric time samples per pass, 22 real player positions maximum.
  */
-export const SHORT_HORIZON_PLANNER_VERSION = 'opportunity-risks-v1'
+export const SHORT_HORIZON_PLANNER_VERSION = 'receivable-next-action-horizon-v2'
 export const ON_BALL_HORIZON_SECONDS = 1.6
 export const MAX_ON_BALL_CANDIDATES = 20
 const clip = (x: number, low: number, high: number) =>
@@ -151,8 +155,59 @@ function assessedPass(
   // This is an incentive for real line-breaking movement, not arbitrary
   // extra utility for every safe sideways or backwards pass.
   const futureGain = clip((futureChance - oldChance) * .45, -3, 4)
+  // A reachable first pass has value only insofar as the receiver can
+  // *use* the ball. Forecast one next on-ball option with the projected
+  // defensive shape. This does NOT perform or award a second action.
+  const receiverDefinition = setup.players.find(p => p.id === receiver.playerId)
+  if (!receiverDefinition) throw new Error('Missing receiver definition')
+  const remaining = team.attackingDirection === 1
+    ? setup.pitch.lengthM - choice.target.xM : choice.target.xM
+  let continuationAdjustment = 0
+  let continuationReason: string | null = null
+  if (remaining >= 2 && remaining <= 36 &&
+      receiver.formationSlot !== 'GK') {
+    const opponentsAtReceipt = opponents.map(p => ({
+      ...p, position: anticipatePlayer(p, setup, flight),
+    }))
+    const teammatesAtReceipt = state.players.filter(p =>
+      p.clubId === owner.clubId && p.playerId !== owner.playerId)
+      .map(p => ({ ...p, position: anticipatePlayer(p, setup, flight) }))
+    const forecast = evaluateReceiverContinuation(
+      receiver, receiverDefinition, choice.target, owner.playerId,
+      team, setup, teammatesAtReceipt, opponentsAtReceipt)
+    // If the projected receiver cannot easily meet the nominal target,
+    // avoid trusting an attractive but impossible follow-up.
+    const receptionConfidence = clip(
+      1 - Math.max(0, displacement - .7) / 5, .15, 1)
+    continuationAdjustment = forecast.adjustment *
+      receptionConfidence * .43
+    continuationReason = forecast.reason
+
+    // The second-action forecast is only an *incremental* reason to pass.
+    // An attacker with a clear, credible immediate shot must not become
+    // an endless passer just because a teammate might carry afterward.
+    const carrierDefinition = setup.players.find(p =>
+      p.id === owner.playerId)
+    if (!carrierDefinition) throw new Error('Missing carrier definition')
+    const immediateShot = evaluateShootingOpportunity(
+      owner, carrierDefinition, opponents, team, setup)
+    const clearImmediateShot = immediateShot &&
+      immediateShot.chanceQuality > .23 &&
+      shootingCorridorObstruction(
+        owner.position, immediateShot.target, opponents) < 1.8
+    if (clearImmediateShot && continuationAdjustment > 0) {
+      continuationAdjustment *= forecast.kind === 'shoot' ? .2 : 0
+      continuationReason = 'Current ball carrier has an immediate shooting lane'
+    }
+    // A routine sideways/backward pass to someone who can merely dribble
+    // should not be credited as creating a meaningful new attack.
+    if (forecast.kind === 'carry' && futureGain < 2 &&
+        continuationAdjustment > 0)
+      continuationAdjustment *= .2
+  }
   const penalty = laneRisk * 1.15 + pressureRisk + receivingRisk
-  const utility = choice.utility - .6 - penalty + futureGain
+  const utility = choice.utility - .6 - penalty + futureGain +
+    continuationAdjustment
   const reasons = [
     laneRisk > 2.2 ? 'Defender can contest the passing lane' :
       laneRisk > 0 ? 'Defender approaching the passing lane' :
@@ -164,6 +219,7 @@ function assessedPass(
     futureGain > 1.0 ? 'Pass may improve sight of goal' :
       futureGain < -1.0 ? 'Pass loses attacking opportunity' :
         'Maintains a viable possession option',
+    ...(continuationReason ? [continuationReason] : []),
   ]
   return { choice, utility, horizonSeconds: flight,
     reasons, laneRisk, receivingRisk: pressureRisk + receivingRisk }
