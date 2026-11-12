@@ -164,7 +164,7 @@ function assessedPass(
     ? setup.pitch.lengthM - choice.target.xM : choice.target.xM
   let continuationAdjustment = 0
   let continuationReason: string | null = null
-  if (remaining >= 2 && remaining <= 47 &&
+  if (remaining >= 2 && remaining <= 36 &&
       receiver.formationSlot !== 'GK') {
     const opponentsAtReceipt = opponents.map(p => ({
       ...p, position: anticipatePlayer(p, setup, flight),
@@ -180,7 +180,7 @@ function assessedPass(
     const receptionConfidence = clip(
       1 - Math.max(0, displacement - .7) / 5, .15, 1)
     continuationAdjustment = forecast.adjustment *
-      receptionConfidence * .74
+      receptionConfidence * .43
     continuationReason = forecast.reason
 
     // The second-action forecast is only an *incremental* reason to pass.
@@ -201,7 +201,7 @@ function assessedPass(
     }
     // A routine sideways/backward pass to someone who can merely dribble
     // should not be credited as creating a meaningful new attack.
-    if (forecast.kind === 'carry' && futureGain < .8 &&
+    if (forecast.kind === 'carry' && futureGain < 2 &&
         continuationAdjustment > 0)
       continuationAdjustment *= .2
   }
