@@ -170,6 +170,37 @@ describe('Phase 6.9G physically coordinated third-man movement',()=>{
       controllerId:other.playerId,lastTouchPlayerId:other.playerId}}
     expect(planWideUnderlap(controlled,setup,team)).toBeNull()
   })
+  it('mirrors the underlap toward the centre for a team attacking left',()=>{
+    const setup=makeFictionalMatchSetup()
+    const initial=createFoundationMatch(setup).getState()
+    const team=setup.clubs[1].id
+    const winger=initial.players.find(p=>p.clubId===team&&p.formationSlot==='RW')!
+    const midfielder=initial.players.find(p=>p.clubId===team&&p.formationSlot==='RCM')!
+    const players=initial.players.map(p=>{
+      const point=p.playerId===winger.playerId?{xM:27,yM:14}:
+        p.playerId===midfielder.playerId?{xM:30,yM:22}:
+        p.clubId!==team ? (p.formationSlot==='GK'
+          ? {xM:4,yM:34} : {xM:10,yM:p.position.yM<34?9:59})
+          :p.position
+      return {...p,position:point}
+    })
+    const state:MatchState={...initial,players,
+      ai:{...initial.ai,enabledTeams:[true,true]},
+      ball:{...initial.ball,position:{xM:27,yM:14},
+        controllerId:winger.playerId,
+        controlOffset:{xM:0,yM:0},
+        lastTouchPlayerId:winger.playerId},
+    }
+    const run=planWideUnderlap(state,setup,team)
+    expect(run).not.toBeNull()
+    expect(run?.playerId).toBe(midfielder.playerId)
+    expect(run!.target.xM).toBeLessThan(27)
+    expect(run!.target.yM).toBeGreaterThan(14)
+    expect(run!.target.yM).toBeLessThan(31)
+    expect(Math.hypot(run!.target.xM-30,
+      run!.target.yM-22)).toBeLessThanOrEqual(18)
+    expect(planWideUnderlap(state,setup,team)).toEqual(run)
+  })
   it('preserves deterministic headless match checkpoints',()=>{
     const session=new MatchViewerSession(90)
     for(let i=0;i<150 && !session.state.ball.outsidePitch;i++)session.advance(6)
