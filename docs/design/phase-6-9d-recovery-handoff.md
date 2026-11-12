@@ -6,9 +6,9 @@ An explicit pass intent forced the original target player to chase the ball unti
 ## Design
 - Keep the intended receiver's priority immediately following a **genuine kick**, not merely a queued command.
 - On a fixed four-tick (200ms) cadence, compare that player with eligible outfield teammates using the same acceleration/speed-dependent `estimatedRecoverySeconds` predictor used by the loose-ball system. Do not include the passer or a protected kickoff taker as a replacement.
-- Relinquish the original pass intent only when another teammate is **materially faster** (0.55s when interception is plausible; 0.3s when the old receiver is beyond the 3.2s interception forecast). One-way handoff prevents oscillation between the original target and subsequent chasers.
+- **Never** abandon a nominated receiver while their own projected interception is still physically plausible. Only when that forecast fails, relinquish the intent if another teammate has a recovery advantage of at least 0.55s. One-way handoff avoids oscillation.
 - A released intent forces a new coordinated 22-player tactical snapshot **that same tick**. Only the nominated recovery player engages, while the previous intended receiver returns to its normal shape/support instructions. Team support geometry uses the same nominated player as the recovery race.
-- Opening kickoff receiver preference is retained when still competitive but no longer forces an impossible chase.
+- The separate protected opening kickoff remains unchanged to preserve its legal and reproducible first reception.
 - Ball movement, kick quality, first-touch control, physical tackles and out-of-play decisions remain entirely in the existing authoritative physics.
 
 ## Bounded performance and determinism
