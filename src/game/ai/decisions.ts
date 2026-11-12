@@ -2,6 +2,7 @@ import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
 import type { MatchState, PlayerMatchState, AgentDecision } from '../match/state'
 import { activePassIntent, intendedReceiverTarget } from './pass-coordination'
+import { chooseDynamicSupport } from './support-space'
 import {
   AI_PASS_MIN_INTERVAL_TICKS, evaluateOnBallChoice,
 } from './possession'
@@ -90,6 +91,13 @@ export function planTeamDecisions(
         definitions.get(prospectiveReceiver.playerId)!, ball, setup.pitch)?.target
       : undefined
     const attackingReference = owner?.position ?? meeting ?? projectedBall
+    const dynamicSupport = inAttack && ballUsable
+      ? chooseDynamicSupport(state, setup, team.clubId, attackingReference,
+        new Set([
+          ...(owner ? [owner.playerId] : []),
+          ...pressingIds,
+        ]))
+      : null
     const coveredMarkIds = new Set<string>()
 
     for (const player of teammates) {
@@ -123,8 +131,9 @@ export function planTeamDecisions(
           projectedBall, team.attackingDirection, setup.pitch)
       } else if (inAttack && player.formationSlot !== 'GK') {
         action = 'support'
-        target = supportTarget(player, original, attackingReference,
-          team.attackingDirection, setup)
+        target = dynamicSupport?.get(player.playerId)?.target ??
+          supportTarget(player, original, attackingReference,
+            team.attackingDirection, setup)
       } else if (isDefending && player.formationSlot !== 'GK') {
         // Mark the nearest available opponent in this player's sector;
         // each threat is assigned to at most one defender.

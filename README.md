@@ -1,3 +1,11 @@
+## Phase 6.4 — Intelligent possession and spatial support
+
+The on-ball AI now weighs **real open passing lanes, defenders' proximity and marked receiving players** more directly against carrying; it no longer has an unconditional large passing penalty. Teammates search nearby physically useful support space, while respecting home/away flank discipline, positional roles and distance from one another. The earliest permissible follow-up pass is now 1.2 simulated seconds rather than 1.8 seconds after the previous AI attempt.
+
+These are **estimated deterministic football decisions**, not scripted passes or guaranteed outcomes. Actual acceleration, kicking, ball trajectory, possession and interception remain authoritative. The existing kickoff, full-screen 2D viewer, 50ms clock and defensive pressing implementation are unchanged.
+
+See [Phase 6.4 design and testing](docs/design/phase-6-4-possession-and-support.md). The next separate system to refine should be coordinated defensive pressing, guided by actual iPhone observation. Rules, goals and restarts still aren't implemented.
+
 ## Phase 6.3.1 — Flank discipline and coordinated physical passes
 
 The off-ball AI now keeps the **home and away teams' right/left roles on their correct flanks**, including the mirrored away kick-off midfielders. It no longer treats right as the same screen direction for both sides. Central midfielders can narrow but maintain their designated relative flank, and wide players preserve useful width.

@@ -8,9 +8,9 @@ import type { MatchState, PlayerMatchState } from '../match/state'
  * This is a bounded, deterministic utility planner on the existing metric pitch.
  * All weights are uncalibrated game-design estimates, not learned probabilities.
  */
-export const POSSESSION_PLANNER_VERSION = 'contextual-on-ball-v1'
+export const POSSESSION_PLANNER_VERSION = 'contextual-support-aware-v2'
 export const AI_SAFE_EDGE_MARGIN_M = 3.1
-export const AI_PASS_MIN_INTERVAL_TICKS = 36
+export const AI_PASS_MIN_INTERVAL_TICKS = 24
 
 const min = Math.min
 const max = Math.max
@@ -150,13 +150,25 @@ function passCandidates(
     const widePressure = nearestOpponent(carrier.position, opponents)
     // Forward progress is valuable but cannot override a blocked passing
     // lane or a tightly marked receiver. Backwards outlets remain eligible.
+    // A teammate offering an open, reachable passing lane is a meaningful
+    // possession option even when the ball carrier can dribble forward.
+    // Reward genuine geometry, never a mere "pass more often" toggle.
+    const unobstructedOutlet = receiverSpace >= 5.2 &&
+      obstruction < 1.2 && separation <= 29
+    const safeOutletBonus = unobstructedOutlet
+      ? 3.4 + min(2.5, (receiverSpace - 5.2) * .32) : 0
+    const pressureReleaseBonus = widePressure < 8
+      ? (8 - widePressure) * .55 : 0
+    // A back pass is reasonable under pressure but should not become the
+    // permanent default when a forward or lateral opportunity is open.
+    const veryDeepRecycle = progress < -18 ? (Math.abs(progress) - 18) * .24 : 0
     const utility =
       9 + .52 * progress + 1.35 * min(receiverSpace, 12) +
       .077 * passing + .055 * vision + .038 * decisions +
       .018 * composure -
       .13 * separation - obstruction * 2.7 - danger -
-      difficulty +
-      (widePressure < 5 ? (5 - widePressure) * .8 : 0)
+      difficulty - veryDeepRecycle +
+      safeOutletBonus + pressureReleaseBonus
     // Match the actual foot-contact kick speed equation. An old minimum
     // power of .17 severely overhit short ground passes; the receiver had
     // little time to meet the ball before it raced into empty space.
@@ -203,11 +215,12 @@ export function evaluateOnBallChoice(
     options.push(...passCandidates(owner, teammates, opponents,
       setup, team.attackingDirection, definition))
   }
-  // A carry is preferred in a close utility tie to avoid incessant passes,
-  // except where the carrier is trapped near the attacking goal line.
+  // Compare carry against truly open outlets rather than applying a blanket
+  // "always dribble" bias. A narrow tie still favors carrying, and blocked
+  // passes receive no free bonus because their corridor risk is already scored.
   const distanceToGoal = team.attackingDirection === 1
     ? setup.pitch.lengthM - owner.position.xM : owner.position.xM
-  const adjustment = distanceToGoal < 11 ? 5.5 : -2
+  const adjustment = distanceToGoal < 11 ? 5.5 : -0.6
   options.sort((a, b) => {
     const adjusted = (v: PossessionChoice) => v.utility +
       (v.kind === 'pass' ? adjustment : 0)
