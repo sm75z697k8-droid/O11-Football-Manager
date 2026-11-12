@@ -10,6 +10,9 @@ interface PassRecord {
   releaseTick: number
   distance: number
   minReceiverM: number
+  intended: {xM:number;yM:number}
+  receiverAtRelease: {xM:number;yM:number}
+  ownerFacing: number
   outcome: string
   finished: boolean
 }
@@ -35,7 +38,10 @@ describe('Physical pass completion baseline — observed match flow', () => {
               releaseTick:-1, distance:Math.hypot(
                 owner.position.xM-command.target.xM,
                 owner.position.yM-command.target.yM),
-              minReceiverM:99,outcome:'pending',finished:false,
+              minReceiverM:99,intended:command.target,
+              receiverAtRelease:s.players.find(p=>p.playerId===intent.receiverId)!.position,
+              ownerFacing:owner.orientationRad,
+              outcome:'pending',finished:false,
             }
             records.push(rec);pending.set(rec.id,rec);known.add(rec.id)
           }
@@ -79,6 +85,13 @@ describe('Physical pass completion baseline — observed match flow', () => {
       sampledMatches:snapshots.map(x=>JSON.parse(x)),
       kicked:finished.length,received:actual.length,touched:touched.length,
       outcomeCounts:byOutcome,
+      avoidableMisses:finished.filter(r=>r.outcome!=='receiverControl')
+        .slice(0,18).map(r=>({
+          seed:r.seed,passMetres:+r.distance.toFixed(1),
+          minGap:+r.minReceiverM.toFixed(2),outcome:r.outcome,
+          intended:r.intended,receiver:r.receiverAtRelease,
+          facingDeg:+(r.ownerFacing*180/Math.PI).toFixed(0),
+        })),
       samples:finished.slice(0,16).map(r=>({
         seed:r.seed,passMetres:+r.distance.toFixed(1),
         minReceiverMetres:+r.minReceiverM.toFixed(2),outcome:r.outcome,
