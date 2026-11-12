@@ -2,7 +2,7 @@
 
 The match viewer now offers separate **REPLAY** and **NEW MATCH** controls, including after a goal or out-of-play event. **REPLAY** uses exactly the current match seed and reproduces the same physical decisions and outcome for testing. **NEW MATCH** generates a different 32-bit seed with Web Crypto on the iPhone and starts a new exhibition with the same teams; the seed is visible on the viewer.
 
-The AI's actual pass, carry and shoot judgments now have **small deterministic seed-derived variation among genuinely close options**, moderated by Decisions, Composure and Vision. Strongly superior options retain priority. Kick-off may go to a different plausible midfielder when their abilities are close. These changes do not select winners, guarantee different scores, invent successful passes or alter real ball contact/goal-line physics.
+The AI's actual pass, carry and shoot judgments now have **tightly bounded deterministic seed-derived variation among genuinely close options**, moderated by Decisions, Composure and Vision. Strongly superior options retain priority. Kick-off may go to a different plausible midfielder when their abilities are close. These changes do not select winners, guarantee different scores, invent successful passes or alter real ball contact/goal-line physics.
 
 The engine remains a 20Hz seeded simulation and can still replay byte-for-byte from checkpoints. The match-state schema remains v9; the engine version is bumped for deterministic compatibility. Different seeds can occasionally result in a similar or identical score. Official match clock, full restarts, refereeing, tactical adaptation and career mode remain unimplemented.
 
