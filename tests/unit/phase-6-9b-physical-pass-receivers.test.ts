@@ -52,6 +52,25 @@ describe('Phase 6.9B real receiver connections', () => {
     expect(state.ball.controllerId).toBe(carrier.playerId)
     expect(state.contactEvents).toHaveLength(0)
   })
+  it('rejects a touch that cannot become a genuine controlled reception',()=>{
+    const {setup,state,carrier,receiver,footballer}=stagedPass()
+    const target=passMeetingPoint(receiver,setup)
+    const reachable=previewPhysicalPass(carrier,footballer,receiver,target,
+      .28,0,state.ball,setup)
+    expect(reachable.canReceive).toBe(true)
+    // Keep the same geometry and speed: only receiving skill changes.
+    const poorSetup={...setup,players:setup.players.map(p=>
+      p.id===receiver.playerId ? {...p,abilities:{...p.abilities,
+        technical:{...p.abilities.technical,firstTouch:1,technique:1},
+        mental:{...p.abilities.mental,anticipation:1},
+      }} : p)}
+    const uncontrolled=previewPhysicalPass(carrier,footballer,receiver,target,
+      .28,0,state.ball,poorSetup)
+    expect(uncontrolled.canReceive).toBe(false)
+    expect(uncontrolled.etaSeconds).toBeNull()
+    expect(state.ball.controllerId).toBe(carrier.playerId)
+    expect(state.contactEvents).toHaveLength(0)
+  })
   it('only leads running receivers by physically plausible stopping distance',()=>{
     const {setup,receiver}=stagedPass()
     const fast={...receiver,velocity:{xMps:7,yMps:0}}
