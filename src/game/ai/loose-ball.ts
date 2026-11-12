@@ -11,7 +11,7 @@ import {
  *
  * These are estimates of reaching the ball, not awarded interceptions.
  */
-export const LOOSE_BALL_AI_VERSION = 'contested-recovery-v1'
+export const LOOSE_BALL_AI_VERSION = 'coordinated-recovery-handoff-v2'
 const RECOVERY_SAMPLE_LIMIT_S = 3.2
 
 export function estimatedRecoverySeconds(
@@ -61,7 +61,10 @@ export function assessLooseBallRace(
       state.kickoff.teamId === team.clubId
         ? ranked.find(c => c.player.playerId === state.kickoff?.receiverId)
         : undefined
-    const nominated = kickoff ?? nearest
+    // Honor the opening receiver if still competitive, but do not force a
+    // hopeless chase after a badly misplaced opening kick.
+    const nominated = kickoff && kickoff.time <= nearest.time + .55
+      ? kickoff : nearest
     pursuerIds[team.clubId] = nominated.player.playerId
     arrivalSeconds[team.clubId] = nominated.time
   }
