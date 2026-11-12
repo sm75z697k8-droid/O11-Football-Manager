@@ -1,6 +1,7 @@
 import { advanceSimulationClock, MAX_SIMULATION_TICK, restoreSimulationClock } from '../core/clock'
 import { restoreRandomStream } from '../core/rng'
 import { runAutonomousDecisions } from '../ai/runner'
+import { maintainPassReception } from '../ai/pass-coordination'
 import {
   AUTO_CONTACT_COOLDOWN_TICKS, resolveAutomaticBallContact,
 } from '../physics/automatic-contact'
@@ -632,7 +633,11 @@ export class FoundationMatchEngine {
       const moved = ball === agents.ball ? agents : { ...agents, ball }
       const contacted = resolveContactAttempts(moved, this.setup)
       const kickedOff = advanceOpeningKickoff(contacted, this.setup)
-      this.state = resolveAutomaticBallContact(this.state, kickedOff, this.setup)
+      // Physical tackles and failed kicks can invalidate a pass chosen
+      // earlier in this same tick. Retire stale receiver instructions NOW,
+      // rather than letting a teammate chase a ball already lost.
+      const resolved = resolveAutomaticBallContact(this.state, kickedOff, this.setup)
+      this.state = maintainPassReception(resolved, this.setup)
     }
     return this.getState()
   }
