@@ -22,8 +22,12 @@ describe('Seed-varied live exhibition attacking intelligence diagnostic', () => 
         session.advance(8)
         const live = session.state
         const pass = live.ai.passIntent
-        if (pass && planThirdManRun(live, session.setup, pass.teamId))
-          distinctThirdManOffers.add(pass.commandId)
+        const activeTeam = pass?.teamId ?? live.players.find(p =>
+          p.playerId === live.ball.controllerId)?.clubId
+        const opportunity = activeTeam
+          ? planThirdManRun(live, session.setup, activeTeam) : null
+        if (opportunity)
+          distinctThirdManOffers.add(opportunity.sourcePassId)
       }
       const s = session.state
       const shotCommands = s.appliedCommands.filter(c =>
