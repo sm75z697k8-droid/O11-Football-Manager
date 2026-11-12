@@ -1,3 +1,9 @@
+## Phase 6.9D — Intelligent recovery handoff
+
+O11 now reviews a **physically kicked pass** every 200 simulated milliseconds to determine whether the intended receiver still has the best realistic opportunity to recover it. A materially faster outfield teammate can take over once the ball deviates, while the previous receiver returns to support/shape. The team immediately replans the recovery roles rather than waiting the usual 0.6 seconds. The opening kickoff's nominated receiver is also no longer forced to chase an impossible ball.
+
+This is a bounded, deterministic tactical estimate. It does not move the ball artificially, award touches or promise that every poor pass will be recovered. The previous physically-receivable pass planner and shooting/contact rules are retained; schema v9 is unchanged, with a new deterministic engine algorithm version. See [Phase 6.9D design](docs/design/phase-6-9d-recovery-handoff.md).
+
 ## Phase 6.9B — Real passes to real teammates
 
 O11 now rehearses each proposed pass using the **actual 50ms ball and receiver movement equations** before committing to the kick. The pass will only be considered when the nominated teammate has a plausible physical opportunity to reach it. Passes aim nearer the teammate's feet, account for braking/momentum, penalize unnecessary touchline danger and retain skill-/seed-dependent execution error. If the ball deviates far enough, the receiver updates toward the actual trajectory. Players also pause briefly after physical reception instead of endlessly releasing the ball on the very next tick.
