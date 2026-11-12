@@ -1,6 +1,7 @@
 import {describe, expect, it} from 'vitest'
 import {makeFictionalMatchSetup} from '../fixtures/fictional-match'
 import {createFoundationMatch, restoreFoundationMatch} from '../../src/game/match/engine'
+import {MatchViewerSession} from '../../src/game/viewer/session'
 import {resolveAutomaticBallContact} from '../../src/game/physics/automatic-contact'
 import {advanceControlledBall, resolveContactAttempts} from '../../src/game/physics/contact'
 import {GOALKEEPER_HAND_HEIGHT_M, GOALKEEPER_HOLD_MIN_TICKS, activeGoalkeeperCatch} from '../../src/game/physics/goalkeeper-handling'
@@ -112,6 +113,25 @@ describe('Phase 6.9E real goalkeeper catches, parries and held-ball release',()=
     expect(canReleaseControlledBall(keeperFeet,setup)).toBe(false)
     const later={...keeperFeet,clock:{...keeperFeet.clock,tick:48}}
     expect(canReleaseControlledBall(later,setup)).toBe(true)
+  })
+  it('restores a genuinely caught live shot and the later thrown ball identically',()=>{
+    const session=new MatchViewerSession(42)
+    for(let i=0;i<1100 && !session.state.ball.outsidePitch &&
+      !session.state.automaticContactEvents.some(e=>e.outcome==='caught');i++) {
+      session.advance(1)
+    }
+    expect(session.state.automaticContactEvents.some(e=>e.outcome==='caught')).toBe(true)
+    expect(activeGoalkeeperCatch(session.state)).not.toBeNull()
+    const restored=restoreFoundationMatch(session.checkpoint())
+    expect(restored.checkpoint()).toEqual(session.checkpoint())
+    // The saved, hands-held ball must remain an actual physical controller
+    // until a validated throw is executed after the hold period.
+    for(let i=0;i<90 && !session.state.ball.outsidePitch;i++){
+      restored.advance(1)
+      session.advance(1)
+      expect(restored.checkpoint()).toEqual(session.checkpoint())
+    }
+    expect(session.state.contactEvents.some(e=>e.outcome==='thrown')).toBe(true)
   })
   it('preserves checkpoint replay of unmodified matches',()=>{
     const setup=makeFictionalMatchSetup()
