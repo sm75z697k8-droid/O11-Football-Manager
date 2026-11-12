@@ -63,6 +63,35 @@ describe('Phase 6.9G physically coordinated third-man movement',()=>{
     expect(JSON.stringify(state)).toBe(original)
     expect(planThirdManRun(state,setup,team)).toEqual(planned)
   })
+  it('offers another runner after a genuine controlled teammate reception',()=>{
+    const {setup,state,team,receiver,striker}=stagedPass()
+    const liveReceiver=state.players.find(p=>p.playerId===receiver.playerId)!
+    const caught:MatchState={...state,
+      ai:{...state.ai,passIntent:null},
+      ball:{...state.ball,position:liveReceiver.position,
+        velocity:{xMps:0,yMps:0,zMps:0},
+        controllerId:receiver.playerId,
+        controlOffset:{xM:0,yM:0},
+        lastTouchPlayerId:receiver.playerId},
+      automaticContactEvents:[{
+        tick:23,playerId:receiver.playerId,kind:'interception',
+        outcome:'intercepted',contactFraction:.3,
+      }],
+    }
+    const run=planThirdManRun(caught,setup,team)
+    expect(run).not.toBeNull()
+    expect(run?.sourcePassId).toBe(state.ai.passIntent!.commandId)
+    expect(run?.initialReceiverId).toBe(receiver.playerId)
+    expect(run?.playerId).toBe(striker.playerId)
+    expect(chooseDynamicSupport(caught,setup,team,
+      liveReceiver.position,new Set([receiver.playerId]))
+      .get(striker.playerId)?.target).toEqual(run?.target)
+    expect(planTeamDecisions(caught,setup)
+      .find(d=>d.playerId===striker.playerId)?.engage).toBe(false)
+    // The owned ball is still real and nobody generated a second kick.
+    expect(caught.ball.controllerId).toBe(receiver.playerId)
+    expect(caught.contactEvents).toHaveLength(1)
+  })
   it('a queued or failed pass must not mobilize a speculative third man',()=>{
     const {setup,state,team}=stagedPass()
     expect(planThirdManRun({...state,contactEvents:[]},setup,team)).toBeNull()
