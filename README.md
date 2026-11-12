@@ -1,37 +1,30 @@
 # O11 Football Manager
 
-A serious simulation-first football management game, built to become a **full-screen landscape-first game** on iPhone Safari and desktop. Development uses GitHub's web editor and GitHub Actions, so no Mac or PC is required.
+A serious, simulation-first football management simulator being developed for full-screen, landscape-first play on iPhone Safari and desktop. Development uses GitHub web editing and GitHub Actions.
 
-## Current stage: Phase 3 — player–ball interactions
+## Current milestone: Phase 4 — Automatic ball contact
 
-- Exactly two fictional test teams: **Harbor Athletic** and **Vale Rovers** (11 players each).
-- Canonical football data; fixed 50 ms ticks; seeded reproducible randomness; authoritative player, ball and command state.
-- Deterministic player movement: acceleration, braking, turning, physical limits and pitch boundaries.
-- Deterministic free-ball physics: rolling resistance, gravity, approximate air resistance, turf rebounds and ball boundary detection.
-- **Player-ball interaction:** explicit first-touch requests and kick attempts succeed only when the player is physically close enough to the ball, its height allows foot contact, and the ball is available. First-touch skill and ball speed affect control; passing/technique/strength affect a released kick. Outcome events and RNG streams are checkpointed.
-- Controlled-ball offset is an early constrained-control approximation, **not complete dribbling**.
-- Complete versioned checkpoints, replay tests, and production/deployment verification.
+The shared test fixture includes exactly two fictional clubs, **Harbor Athletic** and **Vale Rovers**, with 11 players each.
 
-### What this is not yet
+- Deterministic 50 ms logical ticks, seeded random streams, ordered command scheduling and versioned checkpoints.
+- Physically derived player acceleration, braking, speed and turning.
+- Physical ball rolling, gravity, drag, bouncing and pitch boundaries.
+- Explicit first-touch and kick attempts, with skill and actual reach affecting results.
+- **NEW:** Physical interception/challenge detection across the complete relative ball–player movement segment in a tick (instead of endpoint-only checking). A footballer's `setBallEngagement` intent activates automatic contact detection; no repeated first-touch commands are necessary. Real position, relative velocity and attributes influence interception, deflection and defensive challenges, with single-winner arbitration and cooldown.
+- Match state, controls and automatic interaction events restore and replay deterministically.
 
-The displayed website remains a **temporary development preview**, not a rendered live match. The match engine has no autonomous tactical AI, automatic player-ball collision, match rules, goals, score changes, goalkeeper handling, interactive 2D viewer, career mode or persistent saves. Diagnostic commands are manually issued for physics tests; they do not represent simulated tactical passes or shooting choices.
+**Still not a playable football match:** The app has no autonomous tactical AI to choose when to engage, how to move, pass or defend; no formal match clock, goals, offside, fouls, player-body collision or interactive 2D match renderer. The website remains a temporary development preview with an illustrative pitch, not real match visualization. Physical body overlaps remain possible; the new contact resolver only arbitrates *ball* interactions.
 
-## Development checks
+## Build checks
 
-GitHub Actions runs TypeScript checks, Vitest, the compiled Vite build and verifies that GitHub Pages serves HTML, JS and CSS correctly.
+GitHub Actions validates TypeScript, all Vitest tests, the Vite build and production assets; Pages deployment checks live HTML, JS and CSS over HTTP. Keep GitHub Pages source set to **GitHub Actions**.
 
-- `npm run check`: full CI-equivalent check.
-- `npm run benchmark:foundation`: static logical-tick baseline.
-- `npm run benchmark:motion`: commanded player locomotion baseline.
-- `npm run benchmark:ball`: free-ball physics baseline.
-- `npm run benchmark:contact`: two player-ball contact attempts and physics baseline.
+Available scripts: `npm run check`, `npm run benchmark:foundation`, `npm run benchmark:motion`, `npm run benchmark:ball`, `npm run benchmark:contact` and `npm run benchmark:auto-contact`.
 
-All benchmark figures are from **GitHub Actions Linux Node**, *not iPhone Safari*. They are not full match FPS figures.
+Benchmarks run on GitHub's Linux Node runner. They are NOT iPhone Safari or real football-match frame-rate measurements.
 
-GitHub Pages must remain set to **Settings → Pages → Build and deployment → Source: GitHub Actions**. The deployment check prevents repeating the previous white-screen publishing error.
+[Phase 4 technical design](docs/design/phase-4-automatic-contact.md)
 
-[Phase 3 physics, limitations and testing](docs/design/phase-3-player-ball-contact.md)
+Live preview: https://sm75z697k8-droid.github.io/O11-Football-Manager/
 
-Preview: https://sm75z697k8-droid.github.io/O11-Football-Manager/
-
-The future match viewer will visualize this **same physical simulation**, not separate cosmetic football animations. Subsequent stages need independent approval.
+The eventual 2D match viewer must render this exact authoritative engine state; no fake passes or predetermined outcomes will substitute for actual simulation.

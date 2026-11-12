@@ -59,6 +59,7 @@ export function createInitialMatchState(input: unknown): {
       velocity: { xMps: 0, yMps: 0 },
       orientationRad: teamIndex === 0 ? 0 : Math.PI,
       energy: 100,
+      engagesBall: false,
       intention: { kind: 'holdFormation' as const, sinceTick: 0 },
     })),
   )
@@ -85,6 +86,8 @@ export function createInitialMatchState(input: unknown): {
     pendingCommands: [],
     appliedCommands: [],
     contactEvents: [],
+    automaticContactEvents: [],
+    ballContactCooldownUntilTick: 0,
     nextCommandSequence: 1,
   }
   return { setup: fixture, state }

@@ -1,6 +1,9 @@
 import { advanceSimulationClock, MAX_SIMULATION_TICK, restoreSimulationClock } from '../core/clock'
 import { restoreRandomStream } from '../core/rng'
 import {
+  AUTO_CONTACT_COOLDOWN_TICKS, resolveAutomaticBallContact,
+} from '../physics/automatic-contact'
+import {
   advanceControlledBall, resolveContactAttempts,
   expectedContactStream, FOOT_REACH_M,
 } from '../physics/contact'
@@ -23,7 +26,7 @@ import {
 } from './state'
 import type { MatchState, PressingIntensity } from './state'
 
-export const MATCH_CHECKPOINT_VERSION = 4 as const
+export const MATCH_CHECKPOINT_VERSION = 5 as const
 export const MAX_ADVANCE_STEPS_PER_CALL = 10_000 as const
 
 export interface FoundationMatchCheckpoint {
@@ -76,7 +79,10 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       !Array.isArray(state.teams) || state.teams.length !== 2 ||
       !object(state.ball) || !object(state.randomStreams) ||
       !Array.isArray(state.pendingCommands) || !Array.isArray(state.appliedCommands) ||
-      !Array.isArray(state.contactEvents)) {
+      !Array.isArray(state.contactEvents) ||
+      !Array.isArray(state.automaticContactEvents) ||
+      !Number.isSafeInteger(state.ballContactCooldownUntilTick) ||
+      state.ballContactCooldownUntilTick < 0) {
     throw new Error('Incomplete match state checkpoint')
   }
   const baseline = createInitialMatchState(setup).state
@@ -122,7 +128,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         !setup.clubs.some((club) => club.id === command.teamId) ||
         ((command.type === 'setMovementTarget' ||
           command.type === 'attemptFirstTouch' ||
-          command.type === 'attemptKick') && !setup.players.some(
+          command.type === 'attemptKick' ||
+          command.type === 'setBallEngagement') && !setup.players.some(
           (p) => p.id === command.playerId && p.clubId === command.teamId)) ||
         seen.has(command.commandId)) {
       throw new Error('Invalid checkpoint command chronology')
@@ -146,11 +153,14 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     (a, b) => a.targetTick - b.targetTick || a.sequence - b.sequence,
   )
   const lastMotion = new Map<string, Extract<AppliedMatchCommand, {type: 'setMovementTarget'}>>()
+  const engagement = new Map(setup.players.map(p => [p.id, false]))
   for (const command of orderedApplied) {
     if (command.type === 'setPressingIntensity') {
       tactics[command.teamId] = command.intensity
     } else if (command.type === 'setMovementTarget') {
       lastMotion.set(command.playerId, command as Extract<AppliedMatchCommand, {type: 'setMovementTarget'}>)
+    } else if (command.type === 'setBallEngagement') {
+      engagement.set(command.playerId, command.enabled)
     }
   }
   if (state.teams.some((team) => team.pressingIntensity !== tactics[team.clubId])) {
@@ -192,13 +202,58 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     throw new Error('Contact RNG stream does not match the recorded draw history')
   }
 
-  // A diagnostic launch resets ownership and last touch; contact attempts
-  // resolve after all queued launch commands and physical motion for that tick.
+  // Automatically resolved collisions have a separate ordered event log.
+  // They use deterministic geometry and attributes, with no RNG draws.
+  // Only engaged players can generate automatic interactions.
+  let previousAutomaticTick = -AUTO_CONTACT_COOLDOWN_TICKS
+  const autoByTick = new Map<number, (typeof state.automaticContactEvents)[number]>()
+  for (const ev of state.automaticContactEvents) {
+    if (!ev || typeof ev !== 'object' ||
+        !Number.isSafeInteger(ev.tick) || ev.tick < 1 ||
+        ev.tick > state.clock.tick ||
+        ev.tick < previousAutomaticTick + AUTO_CONTACT_COOLDOWN_TICKS ||
+        typeof ev.playerId !== 'string' ||
+        !setup.players.some(p => p.id === ev.playerId) ||
+        !Number.isFinite(ev.contactFraction) ||
+        ev.contactFraction < 0 || ev.contactFraction > 1 ||
+        !(
+          (ev.kind === 'interception' &&
+            ['intercepted', 'deflected'].includes(ev.outcome)) ||
+          (ev.kind === 'challenge' &&
+            ['wonChallenge', 'heldOff'].includes(ev.outcome))
+        ) ||
+        Object.keys(ev).sort().join(',') !==
+          'contactFraction,kind,outcome,playerId,tick') {
+      throw new Error('Invalid automatic ball contact history')
+    }
+    autoByTick.set(ev.tick, ev)
+    previousAutomaticTick = ev.tick
+  }
+  const nextCooldown = state.automaticContactEvents.length
+    ? state.automaticContactEvents[state.automaticContactEvents.length - 1].tick +
+      AUTO_CONTACT_COOLDOWN_TICKS
+    : 0
+  if (state.ballContactCooldownUntilTick !== nextCooldown) {
+    throw new Error('Ball contact cooldown disagrees with event history')
+  }
+
+  // Commands apply before motion; manual contacts after motion; automatic
+  // contest resolves last. Reconstruct ownership from that chronology.
   let expectedController: string | null = null
   let expectedLastTouch: string | null = null
-  for (const tick of [...new Set(orderedApplied.map((c) => c.appliedTick))]) {
-    const due = orderedApplied.filter((c) => c.appliedTick === tick)
-    if (due.some((c) => c.type === 'diagnosticBallLaunch')) {
+  const engagementAtTick = new Map(setup.players.map(p => [p.id, false]))
+  const ticks = [...new Set([
+    ...orderedApplied.map(c => c.appliedTick),
+    ...state.automaticContactEvents.map(e => e.tick),
+  ])].sort((a, b) => a - b)
+  for (const tick of ticks) {
+    const due = orderedApplied.filter(c => c.appliedTick === tick)
+    for (const cmd of due) {
+      if (cmd.type === 'setBallEngagement') {
+        engagementAtTick.set(cmd.playerId, cmd.enabled)
+      }
+    }
+    if (due.some(c => c.type === 'diagnosticBallLaunch')) {
       expectedController = null
       expectedLastTouch = null
     }
@@ -215,13 +270,36 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         expectedLastTouch = command.playerId
       }
     }
+    const ev = autoByTick.get(tick)
+    if (ev) {
+      const contender = setup.players.find(p => p.id === ev.playerId)
+      const owner = expectedController
+        ? setup.players.find(p => p.id === expectedController)
+        : undefined
+      const wrongKind = owner ? ev.kind !== 'challenge' ||
+        contender?.clubId === owner.clubId : ev.kind !== 'interception'
+      const manualContact = state.contactEvents.some(e => e.tick === tick &&
+        ['controlled', 'miscontrolled', 'kicked'].includes(e.outcome))
+      if (!engagementAtTick.get(ev.playerId) || wrongKind ||
+          manualContact || due.some(c => c.type === 'diagnosticBallLaunch')) {
+        throw new Error('Automatic contact is incompatible with engagement or ownership')
+      }
+      if (ev.outcome === 'intercepted' || ev.outcome === 'wonChallenge') {
+        expectedController = ev.playerId
+        expectedLastTouch = ev.playerId
+      } else if (ev.outcome === 'deflected') {
+        expectedController = null
+        expectedLastTouch = ev.playerId
+      }
+    }
   }
 
   // Without a diagnostic launch or a reachable contact, the ball must remain
   // exactly at its original position. Other cases validate physical bounds.
   const launches = orderedApplied.filter((command) => command.type === 'diagnosticBallLaunch')
-  if (!launches.length && !state.contactEvents.some((ev) =>
-    ['kicked', 'miscontrolled', 'controlled'].includes(ev.outcome))) {
+  if (!launches.length && state.automaticContactEvents.length === 0 &&
+      !state.contactEvents.some((ev) =>
+        ['kicked', 'miscontrolled', 'controlled'].includes(ev.outcome))) {
     if (JSON.stringify(state.ball) !== JSON.stringify(baseline.ball)) {
       throw new Error('Ball moved without an applied diagnostic launch')
     }
@@ -271,22 +349,29 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     const original = baseline.players[i]
     if (!player || typeof player !== 'object') throw new Error('Invalid player state')
 
-    const { position, velocity, orientationRad, intention, ...metadata } = player
+    const { position, velocity, orientationRad, intention, engagesBall, ...metadata } = player
     const {
       position: _initialPosition, velocity: _initialVelocity,
-      orientationRad: _initialOrientation, intention: _initialIntention, ...expected
+      orientationRad: _initialOrientation, intention: _initialIntention,
+      engagesBall: _initialEngagement, ...expected
     } = original
     void _initialPosition
     void _initialVelocity
     void _initialOrientation
     void _initialIntention
+    void _initialEngagement
+    if (typeof engagesBall !== 'boolean' ||
+        engagesBall !== engagement.get(player.playerId)) {
+      throw new Error('Player ball engagement does not match applied commands')
+    }
     if (JSON.stringify(metadata) !== JSON.stringify(expected)) {
       throw new Error('Player identity, physical condition or roster was modified')
     }
 
     const motion = lastMotion.get(player.playerId)
     if (!motion) {
-      if (JSON.stringify(player) !== JSON.stringify(original)) {
+      if (JSON.stringify({ ...player, engagesBall: false }) !==
+          JSON.stringify(original)) {
         throw new Error('Player moved without an authoritative movement command')
       }
       continue
@@ -380,7 +465,8 @@ export class FoundationMatchEngine {
         ? advanceControlledBall(agents.ball, controller, this.setup.pitch)
         : advanceBallPhysics(agents.ball, this.setup.pitch)
       const moved = ball === agents.ball ? agents : { ...agents, ball }
-      this.state = resolveContactAttempts(moved, this.setup)
+      const contacted = resolveContactAttempts(moved, this.setup)
+      this.state = resolveAutomaticBallContact(this.state, contacted, this.setup)
     }
     return this.getState()
   }

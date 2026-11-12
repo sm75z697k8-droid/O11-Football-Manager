@@ -5,8 +5,8 @@ import type { ClubId, PlayerId } from '../model/player'
 import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
-export const MATCH_STATE_SCHEMA_VERSION = 4 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-player-contact-p3-v1' as const
+export const MATCH_STATE_SCHEMA_VERSION = 5 as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-swept-contact-p4-v1' as const
 
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
@@ -31,6 +31,8 @@ export interface PlayerMatchState {
   readonly orientationRad: number
   readonly energy: number
   readonly intention: PlayerIntention
+  /** Engagement is an intent, not automatic tactical decision-making. */
+  readonly engagesBall: boolean
 }
 export interface TeamMatchState {
   readonly clubId: ClubId
@@ -43,12 +45,10 @@ export interface BallMatchState {
   readonly heightM: number
   readonly velocity: Velocity2 & { readonly zMps: number }
   readonly outsidePitch: boolean
-  /** Simplified foot-control constraint, not complete dribbling behavior. */
   readonly controllerId: PlayerId | null
   readonly controlOffset: Point2 | null
   readonly lastTouchPlayerId: PlayerId | null
 }
-
 export type ContactKind = 'control' | 'kick'
 export type ContactOutcome =
   | 'controlled' | 'miscontrolled' | 'kicked'
@@ -59,11 +59,17 @@ export interface ContactEvent {
   readonly tick: number
   readonly kind: ContactKind
   readonly outcome: ContactOutcome
-  /** Whether this attempt consumed one random draw from ball/contact. */
   readonly drawUsed: 0 | 1
 }
-
-/** Headless diagnostics only; no tactical AI or playable football match. */
+export interface AutomaticContactEvent {
+  readonly tick: number
+  readonly playerId: PlayerId
+  readonly kind: 'interception' | 'challenge'
+  readonly outcome: 'intercepted' | 'deflected' | 'wonChallenge' | 'heldOff'
+  /** Relative time of the physical encounter within the engine step. */
+  readonly contactFraction: number
+}
+/** Headless physical diagnostics; no actual 11v11 match is playable yet. */
 export interface MatchState {
   readonly schemaVersion: typeof MATCH_STATE_SCHEMA_VERSION
   readonly engineVersion: typeof FOUNDATION_ENGINE_VERSION
@@ -78,5 +84,7 @@ export interface MatchState {
   readonly pendingCommands: readonly ScheduledMatchCommand[]
   readonly appliedCommands: readonly AppliedMatchCommand[]
   readonly contactEvents: readonly ContactEvent[]
+  readonly automaticContactEvents: readonly AutomaticContactEvent[]
+  readonly ballContactCooldownUntilTick: number
   readonly nextCommandSequence: number
 }

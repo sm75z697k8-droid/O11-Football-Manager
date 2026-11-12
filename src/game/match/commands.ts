@@ -42,9 +42,18 @@ export interface AttemptKickRequest {
   readonly power: number
   readonly lift: number
 }
+/** Toggle physical contact intent; physics handles entry automatically thereafter. */
+export interface SetBallEngagementRequest {
+  readonly commandId: string
+  readonly teamId: string
+  readonly type: 'setBallEngagement'
+  readonly playerId: string
+  readonly enabled: boolean
+}
 export type MatchCommandRequest =
   | SetPressingCommandRequest | SetMovementTargetRequest
   | DiagnosticBallLaunchRequest | AttemptFirstTouchRequest | AttemptKickRequest
+  | SetBallEngagementRequest
 export type ScheduledMatchCommand = MatchCommandRequest & {
   readonly requestedTick: number
   readonly targetTick: number
@@ -61,6 +70,7 @@ const MOVEMENT_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target']
 const BALL_LAUNCH_FIELDS = ['commandId', 'teamId', 'type', 'velocity']
 const FIRST_TOUCH_FIELDS = ['commandId', 'teamId', 'type', 'playerId']
 const KICK_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target', 'power', 'lift']
+const ENGAGEMENT_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'enabled']
 
 export function parseMatchCommandRequest(
   input: unknown, pitch: PitchDefinition,
@@ -112,6 +122,17 @@ export function parseMatchCommandRequest(
       velocity: { xMps: v.xMps, yMps: v.yMps, zMps: v.zMps },
     } }
   }
+  if (value.type === 'setBallEngagement') {
+    if (Object.keys(value).some((k) => !ENGAGEMENT_FIELDS.includes(k)) ||
+        typeof value.playerId !== 'string' || !value.playerId.trim() ||
+        typeof value.enabled !== 'boolean') {
+      return { reason: 'Invalid ball engagement request', commandId }
+    }
+    return { request: {
+      commandId, teamId: value.teamId, type: 'setBallEngagement',
+      playerId: value.playerId, enabled: value.enabled,
+    } }
+  }
   if (value.type === 'attemptFirstTouch') {
     if (Object.keys(value).some((k) => !FIRST_TOUCH_FIELDS.includes(k)) ||
         typeof value.playerId !== 'string' || !value.playerId.trim()) {
@@ -161,7 +182,8 @@ export function scheduleMatchCommand(
   })
   if (!state.teams.some((team) => team.clubId === req.teamId)) return reject('Unknown match team')
   if ((req.type === 'setMovementTarget' ||
-       req.type === 'attemptFirstTouch' || req.type === 'attemptKick') &&
+       req.type === 'attemptFirstTouch' || req.type === 'attemptKick' ||
+       req.type === 'setBallEngagement') &&
       !state.players.some((p) => p.playerId === req.playerId && p.clubId === req.teamId)) {
     return reject('Player does not belong to the specified team')
   }
@@ -202,6 +224,10 @@ export function applyDueMatchCommands(state: MatchState): MatchState {
       players = players.map((p) => p.playerId === command.playerId
         ? { ...p, intention: { kind: 'moveToPoint' as const,
           sinceTick: state.clock.tick, target: { ...command.target } } }
+        : p)
+    } else if (command.type === 'setBallEngagement') {
+      players = players.map(p => p.playerId === command.playerId
+        ? { ...p, engagesBall: command.enabled }
         : p)
     } else if (command.type === 'diagnosticBallLaunch') {
       ball = launchDiagnosticBall(ball, command.velocity)
