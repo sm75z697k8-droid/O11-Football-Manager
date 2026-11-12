@@ -3,13 +3,14 @@ import type { Point2 } from '../model/pitch'
 import type { MatchState, PlayerMatchState } from '../match/state'
 import { boundedTarget, separationM, supportTarget } from './coordination'
 import { laneObstruction } from './possession'
+import { attackingOpportunityAt } from './goal-directed'
 
 /**
  * Local space search, not scripted runs. Every support location is chosen
  * from actual opponent positions, passing corridors, and formation anchors.
  * Small fixed candidate set keeps 22-player iPhone workloads bounded.
  */
-export const SUPPORT_SPACE_VERSION = 'spatial-outlets-v1'
+export const SUPPORT_SPACE_VERSION = 'final-third-half-space-runs-v2'
 const MIN_OUTLET_DISTANCE_M = 5.5
 const MAX_OUTLET_DISTANCE_M = 34
 const MIN_SEPARATION_M = 5.2
@@ -73,7 +74,7 @@ function supportOpportunity(
   opponents: readonly PlayerMatchState[],
   teammates: readonly PlayerMatchState[],
   reserved: readonly Point2[],
-  direction: 1 | -1,
+  direction: 1 | -1, attackingChance = 0,
 ): SupportOpportunity | null {
   const distanceToCarrier = separationM(reference, target)
   if (distanceToCarrier < MIN_OUTLET_DISTANCE_M ||
@@ -109,10 +110,14 @@ function supportOpportunity(
   const roleProgress = backline
     ? (forward > -5 ? -Math.max(0, forward + 5) * .8 : 0)
     : clamp(forward, -16, 15) * .22
+  // Higher-value final-third positions matter only when they actually
+  // offer a usable shot corridor and sufficient defender separation.
+  // This is a role-sensitive tactical bonus, not a scripted goal/shot.
   const utility =
     1.4 * Math.min(12, defenderGapM) -
     blocked * 3.1 - crowded - spacing +
-    distScore + angleBonus + roleProgress -
+    distScore + angleBonus + roleProgress +
+    attackingChance * Math.min(1, defenderGapM / 5) -
     .33 * separationM(base, target) -
     .12 * separationM(player.position, target) -
     .08 * fromAnchor
@@ -143,6 +148,24 @@ export function chooseDynamicSupport(
     })
   const reserved: Point2[] = []
   const selected = new Map<string, SupportOpportunity>()
+  const attackDistance = team.attackingDirection === 1
+    ? setup.pitch.lengthM - reference.xM : reference.xM
+  // Only an actually controlled team attack can trigger an aggressive run.
+  // A team merely favored in a loose-ball race still prioritizes support.
+  const controlledAttack = state.players.some(p =>
+    p.playerId === state.ball.controllerId && p.clubId === teamId)
+  const penetrativePhase = controlledAttack &&
+    attackDistance >= 9 && attackDistance <= 42
+  const forward = (point: Point2) =>
+    point.xM * team.attackingDirection
+  const secondLastDefender = opponents.map(p => forward(p.position))
+    .sort((a,b) => b - a)[1]
+  // Approximate an offside-aware ceiling for new run TARGETS. The actual
+  // football offside law is not implemented, so this does not adjudicate
+  // or promise legal positions; it avoids obvious behind-the-line runs.
+  const ballForward = forward(reference)
+  const forwardLimit = Math.max(ballForward,
+    (secondLastDefender ?? ballForward) - 1.25)
   // Candidate offsets use pitch metres; all targets keep proper flank roles.
   const offsets: readonly [number, number][] = [
     [0, 0], [0, -5], [0, 5], [-5, 0], [5, 0],
@@ -160,6 +183,33 @@ export function chooseDynamicSupport(
       const scored = supportOpportunity(player, point, base, anchor,
         reference, opponents, teammates, reserved, team.attackingDirection)
       if (scored) considered.push(scored)
+    }
+    // Wingers formerly held the chalk even on final-third attacks, leaving
+    // almost no usable shooting position or additional keeper work. Explore
+    // three inside channels at realistic runner distances instead of
+    // teleporting to the box or forcing a shot.
+    if (penetrativePhase &&
+        (player.formationSlot === 'RW' || player.formationSlot === 'LW')) {
+      const side = flankOf(player.formationSlot) *
+        team.attackingDirection
+      const advance = clamp(attackDistance * .37, 6, 12)
+      const candidateProgress = Math.min(
+        ballForward + advance, forwardLimit)
+      const centreY = setup.pitch.widthM / 2
+      for (const gapM of [9, 12, 15]) {
+        for (const retreat of [0, 3]) {
+          const point = keepTeamFlank(player, {
+            xM: team.attackingDirection * (candidateProgress - retreat),
+            yM: centreY + side * gapM,
+          }, team.attackingDirection, setup)
+          const chance = attackingOpportunityAt(
+            point, team, setup, opponents)
+          const scored = supportOpportunity(player, point, base, anchor,
+            reference, opponents, teammates, reserved,
+            team.attackingDirection, chance * 1.4)
+          if (scored) considered.push(scored)
+        }
+      }
     }
     considered.sort((a, b) => b.utility - a.utility ||
       a.target.xM - b.target.xM || a.target.yM - b.target.yM)
