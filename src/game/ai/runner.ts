@@ -1,4 +1,4 @@
-import type { MatchState, AgentDecision } from '../match/state'
+import type { MatchState } from '../match/state'
 import type { MatchSetup } from '../model/match'
 import { MAX_COMMANDS_PER_MATCH, scheduleMatchCommand } from '../match/commands'
 import {

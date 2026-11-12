@@ -85,7 +85,6 @@ export function planTeamDecisions(
   for (const [teamIndex, team] of state.teams.entries()) {
     if (!state.ai.enabledTeams[teamIndex]) continue
     const players = state.players.filter(p => p.clubId === team.clubId)
-    const opponents = state.players.filter(p => p.clubId !== team.clubId)
     const ownersTeam = state.ball.controllerId !== null &&
       players.some(p => p.playerId === state.ball.controllerId)
     const owner = ownersTeam

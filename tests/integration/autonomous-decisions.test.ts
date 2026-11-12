@@ -115,7 +115,7 @@ describe('Phase 5 opt-in tactical decision system', () => {
     engine.submitCommand(toggle('club_vale', true, 'away'))
     engine.advance(300)
     const state = engine.getState()
-    expect(state.players.some((p, i) =>
+    expect(state.players.some((p) =>
       Math.hypot(p.position.xM -
           state.ai.formationPositions[p.playerId].xM,
         p.position.yM - state.ai.formationPositions[p.playerId].yM) > 1)).toBe(true)
