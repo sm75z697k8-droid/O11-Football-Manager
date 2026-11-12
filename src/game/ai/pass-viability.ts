@@ -5,7 +5,7 @@ import type { BallMatchState, PlayerMatchState } from '../match/state'
 import { BALL_RADIUS_M } from '../physics/ball'
 import { deriveMotionLimits } from '../physics/locomotion'
 import { contactAccuracy, kickAngleErrorRange } from '../physics/contact'
-import { estimateInterception, predictBallAt, separationM } from './coordination'
+import { estimateInterception, predictBallAt } from './coordination'
 
 /**
  * P6.9B: a pass is aimed for a physically reachable teammate, not a
