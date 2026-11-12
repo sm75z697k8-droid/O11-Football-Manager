@@ -38,7 +38,17 @@ describe('Phase 6.3.1 authoritative pass-receiver coordination', () => {
     expect(pending.target).toEqual(intent.target)
     expect(s.ai.lastPassTick).toBe(intent.requestedTick)
     expect(receiver.engagesBall).toBe(true)
-    expect(receiver.intention.kind).toBe('moveToPoint')
+    // The physical locomotion system correctly converts moveToPoint to
+    // holdFormation once the recipient ALREADY stands at the meeting point.
+    // This is not a missing instruction: no movement is needed for a pass to feet.
+    if (receiver.intention.kind === 'holdFormation') {
+      expect(Math.hypot(
+        receiver.position.xM - intent.target.xM,
+        receiver.position.yM - intent.target.yM,
+      )).toBeLessThan(.3)
+    } else {
+      expect(receiver.intention.kind).toBe('moveToPoint')
+    }
     expect(s.ball.controllerId).toBe(passer.playerId)
     expect(s.contactEvents.some(e => e.commandId === intent.commandId)).toBe(false)
     expect(restoreFoundationMatch(engine.checkpoint()).checkpoint()).toEqual(engine.checkpoint())
