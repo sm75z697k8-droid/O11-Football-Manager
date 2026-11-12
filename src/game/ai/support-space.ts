@@ -172,7 +172,7 @@ export function chooseDynamicSupport(
   // hardcoded right/left attacker.
   const laneClearance = (side: -1 | 1) => {
     const position = {xM: reference.xM + team.attackingDirection * 9,
-      yM: centreY + side * 11}
+      yM: centreY + side * team.attackingDirection * 11}
     return nearestOpponent(position, opponents)
   }
   const ballSide = (reference.yM - centreY) * team.attackingDirection
