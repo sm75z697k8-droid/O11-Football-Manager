@@ -23,6 +23,9 @@ describe('Phase 5 autonomous reasoning workload', () => {
     expect(state.ai.enabledTeams).toEqual([true, true])
     expect(state.ai.decisionSnapshot).toHaveLength(22)
     expect(state.teams.map(t => t.score)).toEqual([0, 0])
+    const successfulAutonomousKicks = state.contactEvents.filter(event =>
+      event.commandId.startsWith('ai-pass-') && event.outcome === 'kicked').length
+    expect(successfulAutonomousKicks).toBeGreaterThan(0)
     expect(restoreFoundationMatch(checkpoint).checkpoint()).toEqual(checkpoint)
     console.info('[O11 Phase 5 AI baseline] ' + JSON.stringify({
       runner: 'GitHub Actions Node, NOT iPhone Safari',
@@ -31,6 +34,7 @@ describe('Phase 5 autonomous reasoning workload', () => {
       lastDecisionTick: state.ai.lastDecisionTick,
       autonomousKickCommands: state.appliedCommands.filter(c =>
         c.commandId.startsWith('ai-pass-')).length,
+      physicallyExecutedAutonomousKicks: successfulAutonomousKicks,
       automaticContactEvents: state.automaticContactEvents.length,
       elapsedMs: Number(elapsed.toFixed(2)),
       checkpointBytes: Buffer.byteLength(JSON.stringify(checkpoint), 'utf8'),
