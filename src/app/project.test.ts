@@ -5,7 +5,7 @@ describe('Project development status', () => {
   it('keeps the match engine clearly marked as landscape-first physical viewer', () => {
     expect(PROJECT_NAME).toBe('O11 Football Manager')
     expect(PROJECT_PHASE).toBe('6.3')
-    expect(ENGINE_STATUS).toBe('coordinated-team-intelligence'
+    expect(ENGINE_STATUS).toBe('coordinated-team-intelligence')
   })
 
   it('defines unique and sequential foundation milestones', () => {
