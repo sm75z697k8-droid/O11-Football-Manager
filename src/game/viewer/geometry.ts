@@ -12,7 +12,7 @@ export interface PitchProjection {
 
 export function projectPitch(
   viewportWidth: number, viewportHeight: number, pitch: PitchDefinition,
-  margin = 18,
+  margin = 8,
 ): PitchProjection {
   const width = Math.max(0, viewportWidth - 2 * margin)
   const height = Math.max(0, viewportHeight - 2 * margin)

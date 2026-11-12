@@ -17,7 +17,7 @@ export interface FrameScene {
   readonly selectedPlayerId: string | null
 }
 
-const FIELD_LINE = 'rgba(219,247,222,0.49)'
+const FIELD_LINE = 'rgba(234,255,236,0.76)'
 
 function drawMarkings(
   ctx: CanvasRenderingContext2D,
@@ -71,23 +71,83 @@ function drawMarkings(
   ctx.fillStyle = FIELD_LINE
 }
 
+/**
+ * Fill the entire canvas with a quiet stadium apron and stand textures,
+ * then contain a geometrically accurate football pitch in the viewport.
+ * Never stretch one coordinate axis or clip players just to fill a screen.
+ */
+function drawStadiumBackdrop(
+  ctx: CanvasRenderingContext2D, projection: PitchProjection,
+  viewportWidth: number, viewportHeight: number,
+): void {
+  const right = projection.x + projection.width
+  const surface = ctx.createLinearGradient(0, 0, 0, viewportHeight)
+  surface.addColorStop(0, '#253b36')
+  surface.addColorStop(0.5, '#263b34')
+  surface.addColorStop(1, '#122822')
+  ctx.fillStyle = surface
+  ctx.fillRect(0, 0, viewportWidth, viewportHeight)
+
+  // Two muted spectator aprons behind the goals. The repeated seat rows
+  // have no gameplay significance and consume no image/network resources.
+  const wings: [number, number, boolean][] = [
+    [0, projection.x, false],
+    [right, Math.max(0, viewportWidth - right), true],
+  ]
+  for (const [origin, breadth, rightSide] of wings) {
+    if (breadth < 3) continue
+    const grad = ctx.createLinearGradient(origin, 0, origin + breadth, 0)
+    if (rightSide) {
+      grad.addColorStop(0, '#244038')
+      grad.addColorStop(0.14, '#24352f')
+      grad.addColorStop(1, '#101c1c')
+    } else {
+      grad.addColorStop(0, '#101c1c')
+      grad.addColorStop(.86, '#24352f')
+      grad.addColorStop(1, '#244038')
+    }
+    ctx.fillStyle = grad
+    ctx.fillRect(origin, 0, breadth, viewportHeight)
+    const tierWidth = Math.max(0, breadth - 17)
+    const tierX = rightSide ? origin + 17 : origin
+    ctx.fillStyle = 'rgba(233,238,226,0.043)'
+    for (let row = 9; row < viewportHeight; row += 10) {
+      ctx.fillRect(tierX, row, tierWidth, 2)
+    }
+    ctx.fillStyle = 'rgba(0,0,0,.17)'
+    for (let row = 4; row < viewportHeight; row += 41) {
+      ctx.fillRect(tierX, row, tierWidth, 1)
+    }
+  }
+}
+
 function drawPitch(
   ctx: CanvasRenderingContext2D, projection: PitchProjection,
   length: number, width: number,
 ): void {
   const { x, y, height, scale } = projection
-  ctx.fillStyle = '#122b24'
-  ctx.fillRect(x - 3, y - 3, projection.width + 6, projection.height + 6)
-  ctx.fillStyle = '#193f30'
+  // A slight perimeter strip gives the touchline separation from stands.
+  ctx.fillStyle = '#0c241d'
+  ctx.fillRect(x - 5, y - 5, projection.width + 10, projection.height + 10)
+  ctx.fillStyle = '#2a6a42'
   ctx.fillRect(x, y, projection.width, height)
-  const stripes = 12
-  for (let i = 0; i < stripes; i += 1) {
-    if (i % 2 === 1) {
-      ctx.fillStyle = '#1d4836'
-      ctx.fillRect(x + (i / stripes) * length * scale, y,
-        (length / stripes) * scale, height)
+
+  // Subtle checkerboard mowing pattern similar to professional 2D viewers.
+  const columns = 12
+  const rows = 8
+  const cellW = projection.width / columns
+  const cellH = projection.height / rows
+  for (let c = 0; c < columns; c += 1) {
+    for (let row = 0; row < rows; row += 1) {
+      if ((c + row) % 2 === 0) {
+        ctx.fillStyle = '#317449'
+        ctx.fillRect(x + c * cellW, y + row * cellH, cellW + .3, cellH + .3)
+      }
     }
   }
+  // Width remains pitch width*scale: markings and player coordinates
+  // use the SAME geometry as the hit-testing system.
+  void scale
   drawMarkings(ctx, projection, length, width)
 }
 
@@ -120,10 +180,8 @@ export function renderMatchFrame(ctx: CanvasRenderingContext2D, scene: FrameScen
   if (width <= 0 || height <= 0) return
 
   ctx.clearRect(0, 0, width, height)
-  ctx.fillStyle = '#0c1a1a'
-  ctx.fillRect(0, 0, width, height)
-
   const projection = projectPitch(width, height, setup.pitch)
+  drawStadiumBackdrop(ctx, projection, width, height)
   if (projection.scale <= 0) return
   drawPitch(ctx, projection, setup.pitch.lengthM, setup.pitch.widthM)
 
@@ -163,8 +221,16 @@ export function renderMatchFrame(ctx: CanvasRenderingContext2D, scene: FrameScen
       ctx.stroke()
     }
 
+    // Small orientation indicator comes from the player's real heading.
+    ctx.fillStyle = 'rgba(244,255,247,.85)'
+    const arrowX = projected.x + Math.cos(player.orientationRad) * (radius + 3.6)
+    const arrowY = projected.y + Math.sin(player.orientationRad) * (radius + 3.6)
+    ctx.beginPath()
+    ctx.arc(arrowX, arrowY, Math.max(1.6, radius * .21), 0, Math.PI * 2)
+    ctx.fill()
+
     ctx.fillStyle = teamColors.get(player.clubId) ?? '#b7bfc1'
-    ctx.strokeStyle = player.formationSlot === 'GK' ? '#eaffdd' : 'rgba(255,255,255,.58)'
+    ctx.strokeStyle = player.formationSlot === 'GK' ? '#eaffdd' : 'rgba(255,255,255,.77)'
     ctx.lineWidth = player.formationSlot === 'GK' ? 2.4 : 1
     ctx.beginPath()
     ctx.arc(projected.x, projected.y, radius, 0, Math.PI * 2)
