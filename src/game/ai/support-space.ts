@@ -155,7 +155,7 @@ export function chooseDynamicSupport(
   const controlledAttack = state.players.some(p =>
     p.playerId === state.ball.controllerId && p.clubId === teamId)
   const penetrativePhase = controlledAttack &&
-    attackDistance >= 9 && attackDistance <= 42
+    attackDistance >= 9 && attackDistance <= 34
   const forward = (point: Point2) =>
     point.xM * team.attackingDirection
   const secondLastDefender = opponents.map(p => forward(p.position))
@@ -166,6 +166,19 @@ export function chooseDynamicSupport(
   const ballForward = forward(reference)
   const forwardLimit = Math.max(ballForward,
     (secondLastDefender ?? ballForward) - 1.25)
+  const centreY = setup.pitch.widthM / 2
+  // Preserve one true wide outlet while the other forward explores a
+  // half-space. Choose the less closely marked inside lane, not a fixed
+  // hardcoded right/left attacker.
+  const laneClearance = (side: -1 | 1) => {
+    const position = {xM: reference.xM + team.attackingDirection * 9,
+      yM: centreY + side * 11}
+    return nearestOpponent(position, opponents)
+  }
+  const ballSide = (reference.yM - centreY) * team.attackingDirection
+  const insideSide: -1 | 1 = Math.abs(ballSide) > 4
+    ? (ballSide > 0 ? -1 : 1)
+    : laneClearance(1) >= laneClearance(-1) ? 1 : -1
   // Candidate offsets use pitch metres; all targets keep proper flank roles.
   const offsets: readonly [number, number][] = [
     [0, 0], [0, -5], [0, 5], [-5, 0], [5, 0],
@@ -189,19 +202,30 @@ export function chooseDynamicSupport(
     // three inside channels at realistic runner distances instead of
     // teleporting to the box or forcing a shot.
     if (penetrativePhase &&
-        (player.formationSlot === 'RW' || player.formationSlot === 'LW')) {
+        (player.formationSlot === 'RW' || player.formationSlot === 'LW') &&
+        flankOf(player.formationSlot) === insideSide) {
       const side = flankOf(player.formationSlot) *
         team.attackingDirection
       const advance = clamp(attackDistance * .37, 6, 12)
       const candidateProgress = Math.min(
         ballForward + advance, forwardLimit)
-      const centreY = setup.pitch.widthM / 2
       for (const gapM of [9, 12, 15]) {
         for (const retreat of [0, 3]) {
-          const point = keepTeamFlank(player, {
+          const wanted = keepTeamFlank(player, {
             xM: team.attackingDirection * (candidateProgress - retreat),
             yM: centreY + side * gapM,
           }, team.attackingDirection, setup)
+          // Long diagonal cuts are made in successive physical running
+          // phases. A single tactical refresh cannot assign a winger a
+          // wildly remote target while deleting nearby passing outlets.
+          const runDistance = separationM(player.position, wanted)
+          const fraction = runDistance > 20 ? 20 / runDistance : 1
+          const point = keepTeamFlank(player,{
+            xM: player.position.xM +
+              (wanted.xM - player.position.xM) * fraction,
+            yM: player.position.yM +
+              (wanted.yM - player.position.yM) * fraction,
+          },team.attackingDirection,setup)
           const chance = attackingOpportunityAt(
             point, team, setup, opponents)
           const scored = supportOpportunity(player, point, base, anchor,
