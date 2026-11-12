@@ -95,7 +95,11 @@ export function planTeamDecisions(
 
     // For a ball rolling towards our team, plan support around the *estimated
     // reception*, not the position of the ball at this instant.
-    const prospectiveReceiver = ownsLooseBall ? rank[0] : undefined
+    // Set the support shape around the same nominated recovery player,
+    // not a separately ranked teammate with a different receiving run.
+    const prospectiveReceiver = ownsLooseBall
+      ? teammates.find(p => p.playerId === looseRace?.pursuerIds[team.clubId]) ?? rank[0]
+      : undefined
     const meeting = prospectiveReceiver && definitions.get(prospectiveReceiver.playerId)
       ? estimateInterception(prospectiveReceiver,
         definitions.get(prospectiveReceiver.playerId)!, ball, setup.pitch)?.target

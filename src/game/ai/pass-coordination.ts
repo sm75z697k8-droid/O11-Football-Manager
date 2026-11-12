@@ -1,6 +1,7 @@
 import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
 import type { MatchState, CoordinatedPassIntent, PlayerMatchState } from '../match/state'
+import { estimatedRecoverySeconds } from './loose-ball'
 import {
   boundedTarget, estimateInterception, predictBallAt,
 } from './coordination'
@@ -9,6 +10,52 @@ import {
  * It tells the actual intended player where to seek physical contact.
  */
 export const PASS_INTENT_MAX_AGE_TICKS = 80
+/** Reassess live recovery only every 200 simulated milliseconds. */
+export const PASS_RECOVERY_REVIEW_INTERVAL_TICKS = 4
+/** Abandon only an unreachable receiver for a clearly faster chaser. */
+export const PASS_RECOVERY_HANDOFF_MARGIN_S = 0.55
+
+/**
+ * A nominated receiver retains priority while a plausible intercept exists.
+ * After the kick, a materially faster outfield teammate can take over a
+ * missed/deflected pass. Both estimates use the existing physical
+ * interception predictor; no contact or possession is fabricated.
+ *
+ * Pure and bounded: at most 10 prospective teammates every four ticks
+ * while an actual kicked pass remains loose. Once released, normal team
+ * recovery owns the decision rather than oscillating between receivers.
+ */
+export function shouldYieldPassReception(
+  state: MatchState, setup: MatchSetup, intent: CoordinatedPassIntent,
+): boolean {
+  if (state.ball.controllerId !== null || state.ball.outsidePitch ||
+      state.clock.tick - intent.requestedTick < PASS_RECOVERY_REVIEW_INTERVAL_TICKS ||
+      state.clock.tick % PASS_RECOVERY_REVIEW_INTERVAL_TICKS !== 0 ||
+      !state.contactEvents.some(e =>
+        e.commandId === intent.commandId && e.outcome === 'kicked')) return false
+
+  const original = state.players.find(p => p.playerId === intent.receiverId)
+  if (!original) return false
+  const definition = setup.players.find(p => p.id === intent.receiverId)
+  if (!definition) throw new Error('Missing intended pass receiver definition')
+  // A teammate being closer to the travelling ball does not invalidate an
+  // intentional, still-reachable pass. Only replace the intended runner
+  // if their own interception estimate has become physically implausible.
+  if (estimateInterception(original, definition, state.ball, setup.pitch))
+    return false
+  const originalTime = estimatedRecoverySeconds(original, state, setup)
+  return state.players.some(p => {
+    if (p.clubId !== intent.teamId || p.formationSlot === 'GK' ||
+        p.playerId === intent.receiverId || p.playerId === intent.passerId)
+      return false
+    // Opening taker must not be assigned the second touch before anybody
+    // else contacts the ball (Law 8).
+    if (state.kickoff?.phase === 'inPlay' &&
+        p.playerId === state.kickoff.kickerId &&
+        state.ball.lastTouchPlayerId === p.playerId) return false
+    return estimatedRecoverySeconds(p, state, setup) + PASS_RECOVERY_HANDOFF_MARGIN_S < originalTime
+  })
+}
 
 export function activePassIntent(state: MatchState): CoordinatedPassIntent | null {
   const intent = state.ai.passIntent
@@ -78,7 +125,7 @@ export function maintainPassReception(
 ): MatchState {
   if (!state.ai.passIntent) return state
   const intent = activePassIntent(state)
-  if (!intent) {
+  if (!intent || shouldYieldPassReception(state, setup, intent)) {
     return { ...state, ai: { ...state.ai, passIntent: null } }
   }
   const target = intendedReceiverTarget(state, setup, intent)

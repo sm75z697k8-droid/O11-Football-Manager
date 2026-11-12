@@ -27,9 +27,15 @@ export function runAutonomousDecisions(
     current.contactEvents.at(-1)?.tick ?? -1,
     current.automaticContactEvents.at(-1)?.tick ?? -1,
   )
+  // Receiver handoff/expired intent is itself a tactical event. The old
+  // receiver must stop chasing and the new recovery player must engage now,
+  // even between the usual 12-tick team planning cycles.
+  const receptionReleased = state.ai.passIntent !== null &&
+    current.ai.passIntent === null
   if (current.ai.lastDecisionTick >= 0 &&
       current.clock.tick - current.ai.lastDecisionTick < AI_DECISION_PERIOD_TICKS &&
-      latestContactTick <= current.ai.lastDecisionTick) {
+      latestContactTick <= current.ai.lastDecisionTick &&
+      !receptionReleased) {
     return current
   }
   // Evaluate movement intent and kick release on the SAME physical world
