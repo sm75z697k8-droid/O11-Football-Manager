@@ -36,7 +36,7 @@ function stage(advance: boolean) {
 }
 describe('Phase 6.9F winger half-space support is real geometry',()=>{
   it('offers a purposeful inside channel when a teammate controls the final-third ball',()=>{
-    const {setup,state,carrier,rightWing,reference}=stage(true)
+    const {setup,state,carrier,rightWing,leftWing,reference}=stage(true)
     const raw=JSON.stringify(state)
     const options=chooseDynamicSupport(state,setup,carrier.clubId,
       reference,new Set([carrier.playerId]))
@@ -44,6 +44,9 @@ describe('Phase 6.9F winger half-space support is real geometry',()=>{
     expect(run).toBeDefined()
     expect(run.target.yM).toBeLessThan(54)
     expect(run.target.yM).toBeGreaterThanOrEqual(41)
+    expect(options.get(leftWing.playerId)!.target.yM).toBeLessThan(20)
+    expect(Math.hypot(run.target.xM-rightWing.position.xM,
+      run.target.yM-rightWing.position.yM)).toBeLessThanOrEqual(18.01)
     expect(run.target.xM).toBeGreaterThan(reference.xM)
     expect(run.target.xM).toBeLessThanOrEqual(94)
     expect(attackingOpportunityAt(run.target,state.teams[0],
