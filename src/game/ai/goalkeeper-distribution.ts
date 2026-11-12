@@ -2,7 +2,8 @@ import type { MatchState } from '../match/state'
 import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
 import { activeGoalkeeperCatch, GOALKEEPER_HOLD_MIN_TICKS } from '../physics/goalkeeper-handling'
-import { passMeetingPoint, segmentProximity } from './possession'
+import { passMeetingPoint } from './pass-viability'
+import { segmentProximity } from './possession'
 
 /**
  * Goalkeepers who genuinely catch a shot make a deliberate, bounded decision
