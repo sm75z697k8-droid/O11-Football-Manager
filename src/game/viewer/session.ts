@@ -59,8 +59,11 @@ export class MatchViewerSession {
     if (steps > 0) {
       // Keep adjacent *real* 50ms snapshots for smooth interpolation, even
       // when Safari needs to catch up multiple physics ticks in one frame.
-      if (steps > 1) this.engine.advance(steps - 1)
-      this.prior = steps > 1 ? this.engine.getState() : this.latest
+      // advance() already supplies a detached authoritative snapshot.
+      // Reuse it as the interpolation prior instead of deep-cloning the
+      // ever-growing physical event logs a second time every Safari frame.
+      this.prior = steps > 1
+        ? this.engine.advance(steps - 1) : this.latest
       this.latest = this.engine.advance(1)
     }
     return this.latest

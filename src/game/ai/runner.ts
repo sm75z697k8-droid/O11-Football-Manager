@@ -7,6 +7,7 @@ import { trackGoalkeeperSaves } from './goal-directed'
 import { chooseGoalkeeperThrow } from './goalkeeper-distribution'
 import { activeGoalkeeperCatch } from '../physics/goalkeeper-handling'
 import { canReleaseControlledBall, evaluateOnBallChoice } from './possession'
+import { FOOT_CONTACT_MAX_HEIGHT_M, FOOT_REACH_M } from '../physics/contact'
 import {
   AI_DECISION_PERIOD_TICKS, choosePossessionRelease, planTeamDecisions,
 } from './decisions'
@@ -34,8 +35,32 @@ export function runAutonomousDecisions(
   // even between the usual 12-tick team planning cycles.
   const receptionReleased = state.ai.passIntent !== null &&
     current.ai.passIntent === null
+  // Previously, repeated HELD OFF contact spam accidentally made carriers
+  // replan every six ticks. Replace that dependency with a REAL geometric
+  // pressure signal: a defender in imminent tackle range gets a promptly
+  // reconsidered pass/carry/shot, without needing a fake new collision.
+  const pressureOwner = current.ball.heightM <= FOOT_CONTACT_MAX_HEIGHT_M
+    ? current.players.find(p =>
+      p.playerId === current.ball.controllerId && p.formationSlot !== 'GK')
+    : undefined
+  const lastContest = current.automaticContactEvents.at(-1)
+  // A *real* lost challenge may leave the same player physically crowding
+  // the controller. The old bug emitted a duplicate heldOff contact every
+  // 6 ticks, inadvertently causing a rapid replanning cadence. Keep that
+  // tactical responsiveness ONLY while the verified failed contest is
+  // still physically unresolved. Ordinary pressing does not speed up
+  // decisions or encourage gratuitous short passes.
+  const unresolvedHeldOff = !!pressureOwner &&
+    lastContest?.outcome === 'heldOff' &&
+    current.ball.lastTouchPlayerId === pressureOwner.playerId &&
+    current.players.some(p =>
+      p.playerId === lastContest.playerId &&
+      p.clubId !== pressureOwner.clubId &&
+      Math.hypot(p.position.xM - current.ball.position.xM,
+        p.position.yM - current.ball.position.yM) <= FOOT_REACH_M + .05)
+  const decisionPeriod = unresolvedHeldOff ? 6 : AI_DECISION_PERIOD_TICKS
   if (current.ai.lastDecisionTick >= 0 &&
-      current.clock.tick - current.ai.lastDecisionTick < AI_DECISION_PERIOD_TICKS &&
+      current.clock.tick - current.ai.lastDecisionTick < decisionPeriod &&
       latestContactTick <= current.ai.lastDecisionTick &&
       !receptionReleased) {
     return current
