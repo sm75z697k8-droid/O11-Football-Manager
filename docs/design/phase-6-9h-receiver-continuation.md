@@ -16,7 +16,7 @@ These are deterministic *estimated tactical values*, not calibrated probabilitie
 
 ## Safety and performance
 - At most the previously bounded 20 on-ball options are evaluated, with up to three short carry targets and one opponent scan per advanced teammate for each physically viable attacking pass. No new render passes or full branching simulations.
-- The model only produces this extra value within 47m of goal. Deep midfield retains its existing tactics.
+- The model only produces this extra value within 36m of goal. Deep midfield retains its existing tactics.
 - The receive-point and defender positions are from the 1.6-second existing movement forecast. Receiver/ball mismatch reduces the utility contribution, avoiding rewards for an impossible teleport to the target.
 - Existing defensive AI, true shot and goal adjudication, goalkeeper hands, football replay and opening kickoff remain untouched.
 - Engine algorithm version changes to protect saved replay compatibility; serialized schema remains 9.
