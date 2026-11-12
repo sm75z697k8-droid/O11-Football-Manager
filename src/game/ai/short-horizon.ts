@@ -151,10 +151,7 @@ function assessedPass(
   // This is an incentive for real line-breaking movement, not arbitrary
   // extra utility for every safe sideways or backwards pass.
   const futureGain = clip((futureChance - oldChance) * .45, -3, 4)
-  // A visibly open receiver is not a useful outlet if a defender can
-  // reach the corridor earlier. Treat multiple closing lane threats as
-  // materially costly, without declaring every long pass impossible.
-  const penalty = laneRisk * 1.65 + pressureRisk + receivingRisk
+  const penalty = laneRisk * 1.15 + pressureRisk + receivingRisk
   const utility = choice.utility - .6 - penalty + futureGain
   const reasons = [
     laneRisk > 2.2 ? 'Defender can contest the passing lane' :
