@@ -1,3 +1,11 @@
+## Phase 6.9B — Real passes to real teammates
+
+Based on the user's observation of unconnected passes, a nine-seed physics baseline identified 79 genuinely controlled receptions from 104 AI-kicked passes before this refinement. O11 now previews whether the selected receiver could physically reach the planned ball, based on kick power, flight and acceleration; unreachable options are rejected before kicking, rather than hoping a receiver appears. Passes are aimed nearer the teammate's feet with cautious momentum-based lead, and passes toward touchlines carry more danger. AI-specific angular kick noise is tightened without removing physical mistakes. If the ball deviates enough to invalidate the original rendezvous, the nominated receiver reacts toward its real trajectory.
+
+The actual match engine still decides every kick, first touch, interception and goal. Defenders remain able to intercept, and passes are not guaranteed. The deterministic seed and checkpoint schema v9 remain preserved, while the engine algorithm version changes. The known limitation of matches stopping at the first out-of-play/goal still applies.
+
+See [Phase 6.9B technical notes](docs/design/phase-6-9b-pass-connection-reliability.md).
+
 ## Phase 6.9A — Intelligent On-Ball Anticipation
 
 The autonomous 2D football AI now forecasts up to **1.6 simulated seconds** when considering passing, carrying or shooting. Passes are checked against moving defenders and anticipated receiver position (not just today's open-looking lane). Carry choices consider defenders arriving near the planned route, attacking progress and safe continuity rather than zigzagging across repeated decisions. Shots remain selected by credible chance and physically executed. A newly consolidated snapshot ensures the AI's kick-release selection and its movement instruction see the same world.

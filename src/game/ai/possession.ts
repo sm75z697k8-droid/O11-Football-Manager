@@ -1,6 +1,8 @@
 import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
 import type { PlayerDefinition } from '../model/player'
+import type { BallMatchState } from '../match/state'
+import { passMeetingPoint, previewPhysicalPass } from './pass-viability'
 import type { MatchState, PlayerMatchState, TeamMatchState } from '../match/state'
 import {
   attackingOpportunityAt, evaluateShootingOpportunity,
@@ -14,7 +16,7 @@ import type { ActionAssessment } from './short-horizon'
  * This is a bounded, deterministic utility planner on the existing metric pitch.
  * All weights are uncalibrated game-design estimates, not learned probabilities.
  */
-export const POSSESSION_PLANNER_VERSION = 'short-horizon-judgment-p69a-v1'
+export const POSSESSION_PLANNER_VERSION = 'receivable-passes-p69b-v1'
 export const AI_SAFE_EDGE_MARGIN_M = 3.1
 export const AI_PASS_MIN_INTERVAL_TICKS = 12
 
@@ -134,6 +136,7 @@ function passCandidates(
   teammates: readonly PlayerMatchState[],
   opponents: readonly PlayerMatchState[],
   setup: MatchSetup, team: TeamMatchState, def: PlayerDefinition,
+  ball: BallMatchState,
 ): PossessionChoice[] {
   const options: PossessionChoice[] = []
   const direction = team.attackingDirection
@@ -147,10 +150,7 @@ function passCandidates(
     // imply that goalkeeper distribution intelligence is complete.
     const separation = distance(carrier.position, receiver.position)
     if (separation < 3 || separation > 39) continue
-    const aimed = safePoint({
-      xM: receiver.position.xM + clamp(receiver.velocity.xMps * .3, -1.5, 1.5),
-      yM: receiver.position.yM + clamp(receiver.velocity.yMps * .3, -1.5, 1.5),
-    }, setup)
+    const aimed = passMeetingPoint(receiver, setup)
     const progress = (aimed.xM - carrier.position.xM) * direction
     const receiverSpace = nearestOpponent(aimed, opponents)
     const obstruction = laneObstruction(carrier.position, aimed, opponents)
@@ -209,11 +209,16 @@ function passCandidates(
     const power = clamp(
       (desiredSpeed / (.9 + .1 * accuracy) - 3) / strikeFactor,
       .035, .96)
+    // A risky speculative chip is not a solution for a strongly blocked
+    // route to a teammate. Keep genuine ground passes physically reachable.
     const lift = obstruction > 3.5 && separation > 13 && passing > 64
       ? .20 : 0
+    const viable = previewPhysicalPass(
+      carrier, def, receiver, aimed, power, lift, ball, setup)
+    if (!viable.canReceive) continue
     options.push({
       kind: 'pass', target: aimed, receiverId: receiver.playerId,
-      power, lift, utility,
+      power, lift, utility: utility - viable.safetyPenalty,
     })
   }
   return options
@@ -265,7 +270,7 @@ export function evaluateOnBallPlan(
   }))
   if (allowPass) {
     options.push(...passCandidates(owner, teammates, opponents,
-      setup, team, definition))
+      setup, team, definition, state.ball))
   }
   const shot = evaluateShootingOpportunity(owner, definition, opponents, team, setup)
   if (shot) options.push({

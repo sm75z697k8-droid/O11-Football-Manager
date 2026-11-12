@@ -1,7 +1,9 @@
 import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
 import type { MatchState, CoordinatedPassIntent, PlayerMatchState } from '../match/state'
-import { boundedTarget, estimateInterception } from './coordination'
+import {
+  boundedTarget, estimateInterception, predictBallAt,
+} from './coordination'
 
 /** Small, bounded team-level pass intent. Never awards a reception.
  * It tells the actual intended player where to seek physical contact.
@@ -44,7 +46,12 @@ export function intendedReceiverTarget(
   const estimate = estimateInterception(receiver, definition, state.ball, setup.pitch)
   // The intended point remains a valid fallback if the recipient cannot
   // physically intercept the current ball flight in the first 3.2 seconds.
-  return estimate?.target ?? boundedTarget(intent.target, setup.pitch)
+  if (estimate) return estimate.target
+  // After a real inaccurate kick, the original intended point may be
+  // unreachable. Continue pursuing the actual rolling trajectory instead
+  // of sprinting toward an empty, outdated meeting location.
+  const projected = predictBallAt(state.ball, .55).position
+  return boundedTarget(projected, setup.pitch)
 }
 
 function setReceiverIntention(

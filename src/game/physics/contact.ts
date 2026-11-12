@@ -1,6 +1,7 @@
 import { createRandomStream, restoreRandomStream } from '../core/rng'
 import { BALL_RADIUS_M, isBallFullyOutsidePitch } from './ball'
 import type { MatchSetup } from '../model/match'
+import type { PlayerDefinition } from '../model/player'
 import type { PitchDefinition, Point2 } from '../model/pitch'
 import type { PlayerMatchState, BallMatchState, MatchState, ContactEvent } from '../match/state'
 import type { AppliedMatchCommand } from '../match/commands'
@@ -12,6 +13,32 @@ import type { AppliedMatchCommand } from '../match/commands'
  * execution quality. Constants are SIMULATION ESTIMATES, not measured data.
  */
 export const CONTACT_PHYSICS_VERSION = 'player-ball-contact-v1' as const
+/** Use the same skill blend in the pass planner and actual kick. */
+export function contactAccuracy(definition: PlayerDefinition, shooting: boolean): number {
+  const a = definition.abilities
+  return shooting ? (
+    .50 * a.technical.finishing + .20 * a.technical.longShots +
+    .20 * a.technical.technique + .10 * a.mental.composure
+  ) / 100 : (
+    .50 * a.technical.passing + .30 * a.technical.technique +
+    .20 * a.mental.composure
+  ) / 100
+}
+
+/** AI ground passes have a smaller, skill-dependent angular spread than the
+ * old diagnostic kicks. Bad body orientation still hurts precision.
+ * The angular roll remains seeded, and physical contacts still decide the
+ * result; there is NO artificial pass completion or trajectory snapping.
+ */
+export function kickAngleErrorRange(
+  accuracy: number, facingError: number, aiPass: boolean, shooting: boolean,
+): number {
+  if (aiPass && !shooting) {
+    return .015 + (1 - accuracy) * .16 + facingError * .08
+  }
+  return .025 + (1 - accuracy) * .26 + facingError * .12
+}
+
 export const FOOT_REACH_M = 1.05
 export const FOOT_CONTACT_MAX_HEIGHT_M = BALL_RADIUS_M + 0.34
 
@@ -174,25 +201,15 @@ export function resolveContactAttempts(
       continue
     }
     const a = definition.abilities
-    // A physical shot uses finishing/long-shots instead of a pass-only
-    // rating. It still has seeded angular error and real flight physics.
     const shooting = command.commandId.startsWith('ai-shot-')
-    const accuracy = shooting ? (
-      0.50 * a.technical.finishing +
-      0.20 * a.technical.longShots +
-      0.20 * a.technical.technique +
-      0.10 * a.mental.composure
-    ) / 100 : (
-      0.50 * a.technical.passing +
-      0.30 * a.technical.technique +
-      0.20 * a.mental.composure
-    ) / 100
+    const accuracy = contactAccuracy(definition, shooting)
     const heading = Math.atan2(dy, dx)
     const facingError = Math.abs(Math.atan2(
       Math.sin(heading - player.orientationRad),
       Math.cos(heading - player.orientationRad),
     )) / Math.PI
-    const errorRange = 0.025 + (1 - accuracy) * 0.26 + facingError * 0.12
+    const errorRange = kickAngleErrorRange(accuracy, facingError,
+      command.commandId.startsWith('ai-pass-'), shooting)
     const angle = heading + (contactRng.nextFloat() - 0.5) * 2 * errorRange
     const strength = a.physical.strength
     const speed = Math.min(38,
