@@ -219,13 +219,19 @@ export function chooseDynamicSupport(
           // phases. A single tactical refresh cannot assign a winger a
           // wildly remote target while deleting nearby passing outlets.
           const runDistance = separationM(player.position, wanted)
-          const fraction = runDistance > 20 ? 20 / runDistance : 1
+          const fraction = runDistance > 18 ? 18 / runDistance : 1
           const point = keepTeamFlank(player,{
             xM: player.position.xM +
               (wanted.xM - player.position.xM) * fraction,
             yM: player.position.yM +
               (wanted.yM - player.position.yM) * fraction,
           },team.attackingDirection,setup)
+          // Cut inside only when there is an actual unmarked path, rather
+          // than abandoning width merely because a central shot would
+          // look attractive if defenders were ignored.
+          if (nearestOpponent(point, opponents) < 5.6 ||
+              laneObstruction(reference, point, opponents) > 1.3)
+            continue
           const chance = attackingOpportunityAt(
             point, team, setup, opponents)
           const scored = supportOpportunity(player, point, base, anchor,
