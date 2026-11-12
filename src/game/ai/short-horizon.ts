@@ -2,7 +2,10 @@ import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
 import type { MatchState, PlayerMatchState } from '../match/state'
 import type { PossessionChoice } from './possession'
-import { attackingOpportunityAt } from './goal-directed'
+import {
+  attackingOpportunityAt, evaluateShootingOpportunity,
+  shootingCorridorObstruction,
+} from './goal-directed'
 import { deriveMotionLimits } from '../physics/locomotion'
 import { evaluateReceiverContinuation } from './receiver-continuation'
 
@@ -177,8 +180,30 @@ function assessedPass(
     const receptionConfidence = clip(
       1 - Math.max(0, displacement - .7) / 5, .15, 1)
     continuationAdjustment = forecast.adjustment *
-      receptionConfidence * .86
+      receptionConfidence * .74
     continuationReason = forecast.reason
+
+    // The second-action forecast is only an *incremental* reason to pass.
+    // An attacker with a clear, credible immediate shot must not become
+    // an endless passer just because a teammate might carry afterward.
+    const carrierDefinition = setup.players.find(p =>
+      p.id === owner.playerId)
+    if (!carrierDefinition) throw new Error('Missing carrier definition')
+    const immediateShot = evaluateShootingOpportunity(
+      owner, carrierDefinition, opponents, team, setup)
+    const clearImmediateShot = immediateShot &&
+      immediateShot.chanceQuality > .23 &&
+      shootingCorridorObstruction(
+        owner.position, immediateShot.target, opponents) < 1.8
+    if (clearImmediateShot && continuationAdjustment > 0) {
+      continuationAdjustment *= forecast.kind === 'shoot' ? .2 : 0
+      continuationReason = 'Current ball carrier has an immediate shooting lane'
+    }
+    // A routine sideways/backward pass to someone who can merely dribble
+    // should not be credited as creating a meaningful new attack.
+    if (forecast.kind === 'carry' && futureGain < .8 &&
+        continuationAdjustment > 0)
+      continuationAdjustment *= .2
   }
   const penalty = laneRisk * 1.15 + pressureRisk + receivingRisk
   const utility = choice.utility - .6 - penalty + futureGain +
