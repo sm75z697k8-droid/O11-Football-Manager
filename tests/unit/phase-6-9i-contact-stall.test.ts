@@ -113,9 +113,11 @@ describe('Phase 6.9I — failed-challenge collision de-duplication',()=>{
   })
   it('reconsiders possession promptly under genuine pressure without requiring contact spam',()=>{
     const {state,setup,weakId}=scene()
-    const current:MatchState={...state,
-      clock:{...state.clock,tick:6},
-      ai:{...state.ai,enabledTeams:[true,true],lastDecisionTick:0},
+    const blocked=oneTick(state,setup)
+    expect(blocked.automaticContactEvents.at(-1)?.outcome).toBe('heldOff')
+    const current:MatchState={...blocked,
+      clock:{...blocked.clock,tick:6},
+      ai:{...blocked.ai,enabledTeams:[true,true],lastDecisionTick:0},
     }
     const update=runAutonomousDecisions(current,setup)
     expect(update.ai.lastDecisionTick).toBe(6)
