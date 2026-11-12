@@ -6,7 +6,7 @@ import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
 export const MATCH_STATE_SCHEMA_VERSION = 9 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-coordinated-ball-recovery-p69d-v1' as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-keeper-handling-catches-and-throws-p69e-v1' as const
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
   'ball/contact', 'match/referee', 'match/injuries',
@@ -47,10 +47,11 @@ export interface BallMatchState {
   readonly controlOffset: Point2 | null
   readonly lastTouchPlayerId: PlayerId | null
 }
-export type ContactKind = 'control' | 'kick'
+export type ContactKind = 'control' | 'kick' | 'throw'
 export type ContactOutcome =
   | 'controlled' | 'miscontrolled' | 'kicked'
   | 'outOfReach' | 'occupied' | 'alreadyControlled' | 'invalidDirection'
+  | 'thrown' | 'notHolding' | 'tooSoon'
 export interface ContactEvent {
   readonly commandId: string
   readonly playerId: PlayerId
@@ -63,7 +64,7 @@ export interface AutomaticContactEvent {
   readonly tick: number
   readonly playerId: PlayerId
   readonly kind: 'interception' | 'challenge'
-  readonly outcome: 'intercepted' | 'deflected' | 'wonChallenge' | 'heldOff'
+  readonly outcome: 'intercepted' | 'deflected' | 'wonChallenge' | 'heldOff' | 'caught' | 'parried'
   readonly contactFraction: number
 }
 /** The opening state and physical release; no other football restarts yet. */

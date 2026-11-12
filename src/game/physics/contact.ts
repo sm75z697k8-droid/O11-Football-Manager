@@ -1,5 +1,6 @@
 import { createRandomStream, restoreRandomStream } from '../core/rng'
 import { BALL_RADIUS_M, isBallFullyOutsidePitch } from './ball'
+import { GOALKEEPER_HAND_HEIGHT_M, GOALKEEPER_HOLD_MIN_TICKS, activeGoalkeeperCatch } from './goalkeeper-handling'
 import type { MatchSetup } from '../model/match'
 import type { PlayerDefinition } from '../model/player'
 import type { PitchDefinition, Point2 } from '../model/pitch'
@@ -73,7 +74,8 @@ export function advanceControlledBall(
   return {
     ...ball,
     position,
-    heightM: BALL_RADIUS_M,
+    heightM: ball.heightM === GOALKEEPER_HAND_HEIGHT_M
+      ? GOALKEEPER_HAND_HEIGHT_M : BALL_RADIUS_M,
     velocity: {
       xMps: player.velocity.xMps,
       yMps: player.velocity.yMps,
@@ -84,10 +86,11 @@ export function advanceControlledBall(
 }
 
 function event(
-  command: AppliedMatchCommand, kind: 'control' | 'kick',
+  command: AppliedMatchCommand, kind: 'control' | 'kick' | 'throw',
   outcome: ContactEvent['outcome'], drawUsed: 0 | 1,
 ): ContactEvent {
-  if (command.type !== 'attemptFirstTouch' && command.type !== 'attemptKick') {
+  if (command.type !== 'attemptFirstTouch' && command.type !== 'attemptKick' &&
+      command.type !== 'attemptGoalkeeperThrow') {
     throw new Error('Unexpected command supplied to contact resolver')
   }
   return {
@@ -110,7 +113,8 @@ export function resolveContactAttempts(
 
   const commands = state.appliedCommands.filter((command) =>
     command.appliedTick === state.clock.tick &&
-    (command.type === 'attemptFirstTouch' || command.type === 'attemptKick'),
+    (command.type === 'attemptFirstTouch' || command.type === 'attemptKick' ||
+      command.type === 'attemptGoalkeeperThrow'),
   )
   if (!commands.length) return state
 
@@ -120,14 +124,57 @@ export function resolveContactAttempts(
   let contactRng = restoreRandomStream(state.randomStreams['ball/contact'])
   const events: ContactEvent[] = []
   for (const command of commands) {
-    if (command.type !== 'attemptFirstTouch' && command.type !== 'attemptKick') continue
-    const kind = command.type === 'attemptFirstTouch' ? 'control' : 'kick'
+    if (command.type !== 'attemptFirstTouch' && command.type !== 'attemptKick' &&
+        command.type !== 'attemptGoalkeeperThrow') continue
+    const kind = command.type === 'attemptFirstTouch' ? 'control' :
+      command.type === 'attemptGoalkeeperThrow' ? 'throw' : 'kick'
     const player = players.get(command.playerId)
     const definition = definitions.get(command.playerId)
     if (!player || !definition) throw new Error('Applied contact references an unknown player')
 
     if (ball.controllerId && ball.controllerId !== command.playerId) {
       events.push(event(command, kind, 'occupied', 0))
+      continue
+    }
+    if (command.type === 'attemptGoalkeeperThrow') {
+      const catchEvent = activeGoalkeeperCatch({...state, ball})
+      if (ball.controllerId !== player.playerId ||
+          player.formationSlot !== 'GK' || !catchEvent) {
+        events.push(event(command, kind, 'notHolding', 0))
+        continue
+      }
+      if (state.clock.tick - catchEvent.tick < GOALKEEPER_HOLD_MIN_TICKS) {
+        events.push(event(command, kind, 'tooSoon', 0))
+        continue
+      }
+      const dx = command.target.xM - ball.position.xM
+      const dy = command.target.yM - ball.position.yM
+      if (Math.hypot(dx, dy) < .05) {
+        events.push(event(command, kind, 'invalidDirection', 0))
+        continue
+      }
+      const a = definition.abilities
+      if (!a.goalkeeping) throw new Error('Only a goalkeeper can throw from hands')
+      const quality = (
+        .6 * a.goalkeeping.throwingDistribution +
+        .25 * a.technical.technique + .15 * a.mental.composure) / 100
+      const heading = Math.atan2(dy, dx)
+      const spread = .015 + (1 - quality) * .12
+      const angle = heading + (contactRng.nextFloat() - .5) * 2 * spread
+      // A release at hand height follows real airborne ball physics;
+      // success still depends on a teammate's physical first touch.
+      const speed = 4.8 + command.power * 9.3
+      ball = {
+        ...ball,
+        velocity: {
+          xMps: Math.cos(angle) * speed,
+          yMps: Math.sin(angle) * speed,
+          zMps: .4 + command.power * 1.2,
+        },
+        controllerId: null, controlOffset: null,
+        lastTouchPlayerId: player.playerId,
+      }
+      events.push(event(command, kind, 'thrown', 1))
       continue
     }
     if (!canReachBall(player, ball)) {

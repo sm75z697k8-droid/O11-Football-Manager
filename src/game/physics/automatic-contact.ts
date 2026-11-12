@@ -5,6 +5,7 @@ import type { MatchState, BallMatchState, PlayerMatchState, AutomaticContactEven
 import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
 import { activePhysicalShot } from '../ai/goal-directed'
+import { GOALKEEPER_HAND_HEIGHT_M } from './goalkeeper-handling'
 
 /**
  * Phase 4 — physical detection when an agent has declared intent to contest.
@@ -105,8 +106,43 @@ function attachTo(
   }
 }
 
+function withinOwnPenaltyArea(
+  player: PlayerMatchState, setup: MatchSetup,
+): boolean {
+  const home = player.clubId === setup.clubs[0].id
+  const away = player.clubId === setup.clubs[1].id
+  if (!home && !away) return false
+  const {lengthM,widthM} = setup.pitch
+  return (home ? player.position.xM <= 16.5
+    : player.position.xM >= lengthM - 16.5) &&
+    Math.abs(player.position.yM - widthM / 2) <= 20.16
+}
+
+/** A real hand reception from a physically swept collision. */
+function attachToHands(
+  ball: BallMatchState, keeper: PlayerMatchState,
+  pitch: MatchSetup['pitch'],
+): BallMatchState {
+  const offset = {
+    xM: Math.cos(keeper.orientationRad) * .28,
+    yM: Math.sin(keeper.orientationRad) * .28,
+  }
+  const position = {
+    xM: keeper.position.xM + offset.xM,
+    yM: keeper.position.yM + offset.yM,
+  }
+  return {
+    ...ball, position, heightM: GOALKEEPER_HAND_HEIGHT_M,
+    velocity: {...keeper.velocity, zMps: 0},
+    controllerId: keeper.playerId, controlOffset: offset,
+    lastTouchPlayerId: keeper.playerId,
+    outsidePitch: isBallFullyOutsidePitch(position.xM, position.yM, pitch),
+  }
+}
+
 function candidate(
   before: MatchState, after: MatchState, owner: PlayerMatchState | undefined,
+  setup: MatchSetup,
 ): Candidate | null {
   const pastPlayers = new Map(before.players.map(p => [p.playerId, p]))
   const options: Candidate[] = []
@@ -126,7 +162,8 @@ function candidate(
     // Keepers use a modest aerial hand-reach envelope ONLY while responding
     // to a confirmed opposition shot. The sweep still checks real motion.
     const goalkeeperSave = p.formationSlot === 'GK' &&
-      !!shooter && shooter.clubId !== p.clubId
+      !!shooter && shooter.clubId !== p.clubId &&
+      withinOwnPenaltyArea(p, setup)
     const result = sweptFootContact(old, p, before.ball, after.ball,
       goalkeeperSave ? 1.55 : FOOT_REACH_M,
       goalkeeperSave ? 2.17 : FOOT_CONTACT_MAX_HEIGHT_M)
@@ -156,14 +193,14 @@ export function resolveAutomaticBallContact(
   // Phase 3 explicitly requested touch/kick has priority this tick, but an
   // unsuccessful or out-of-reach attempt does not suppress physical contact.
   if (after.contactEvents.some(e => e.tick === tick &&
-      ['controlled', 'miscontrolled', 'kicked'].includes(e.outcome))) return after
+      ['controlled', 'miscontrolled', 'kicked', 'thrown'].includes(e.outcome))) return after
   if (after.ball.outsidePitch && before.ball.outsidePitch) return after
   if (!after.players.some(p => p.engagesBall)) return after
 
   const owner = after.ball.controllerId
     ? after.players.find(p => p.playerId === after.ball.controllerId)
     : undefined
-  const picked = candidate(before, after, owner)
+  const picked = candidate(before, after, owner, setup)
   if (!picked) return after
   const { player, sample } = picked
   if (isBallFullyOutsidePitch(sample.impact.xM, sample.impact.yM, setup.pitch)) return after
@@ -212,7 +249,14 @@ export function resolveAutomaticBallContact(
     )
     const challengeDifficulty = (keeperSave ? 1.12 : 1.6) * relativeSpeed +
       9 * sample.distanceM / (keeperSave ? 1.55 : FOOT_REACH_M)
-    if (quality - challengeDifficulty >= (keeperSave ? 15 : 24)) {
+    // Catching a ball requires a clean, manageable shot. A real contact
+    // that fails the catch threshold is physically parried, not held.
+    const cleanCatch = keeperSave &&
+      quality - challengeDifficulty >= 37 && relativeSpeed <= 20
+    if (cleanCatch) {
+      ball = attachToHands(ball, player, setup.pitch)
+      outcome = 'caught'
+    } else if (!keeperSave && quality - challengeDifficulty >= 24) {
       ball = attachTo(ball, player, sample.impact, setup.pitch)
       outcome = 'intercepted'
     } else {
@@ -238,7 +282,7 @@ export function resolveAutomaticBallContact(
         lastTouchPlayerId: player.playerId,
         outsidePitch: isBallFullyOutsidePitch(position.xM, position.yM, setup.pitch),
       }
-      outcome = 'deflected'
+      outcome = keeperSave ? 'parried' : 'deflected'
     }
   }
 

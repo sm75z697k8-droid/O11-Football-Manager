@@ -2,6 +2,7 @@ import { advanceSimulationClock, MAX_SIMULATION_TICK, restoreSimulationClock } f
 import { restoreRandomStream } from '../core/rng'
 import { runAutonomousDecisions } from '../ai/runner'
 import { maintainPassReception } from '../ai/pass-coordination'
+import { GOALKEEPER_HAND_HEIGHT_M, GOALKEEPER_HOLD_MIN_TICKS } from '../physics/goalkeeper-handling'
 import { adjudicatePhysicalGoal } from './goals'
 import {
   AUTO_CONTACT_COOLDOWN_TICKS, resolveAutomaticBallContact,
@@ -176,6 +177,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         ((command.type === 'setMovementTarget' ||
           command.type === 'attemptFirstTouch' ||
           command.type === 'attemptKick' ||
+          command.type === 'attemptGoalkeeperThrow' ||
           command.type === 'setBallEngagement') && !setup.players.some(
           (p) => p.id === command.playerId && p.clubId === command.teamId)) ||
         seen.has(command.commandId)) {
@@ -236,7 +238,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     throw new Error('Invalid autonomous team/checkpoint state')
   }
   const generated = commands.filter(c =>
-    c.type === 'attemptKick' && (c.commandId.startsWith('ai-pass-') || c.commandId.startsWith('ai-shot-')))
+    (c.type === 'attemptKick' || c.type === 'attemptGoalkeeperThrow') &&
+    (c.commandId.startsWith('ai-pass-') || c.commandId.startsWith('ai-shot-')))
   const expectedLastPass = generated.length
     ? Math.max(...generated.map(c => c.requestedTick)) : -1000
   if (state.ai.lastPassTick !== expectedLastPass) {
@@ -255,7 +258,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     const passer = state.players.find(p => p.playerId === intent.passerId)
     const receiver = state.players.find(p => p.playerId === intent.receiverId)
     const aiTeamIndex = state.teams.findIndex(t => t.clubId === intent.teamId)
-    if (!candidate || candidate.type !== 'attemptKick' ||
+    if (!candidate || (candidate.type !== 'attemptKick' &&
+        candidate.type !== 'attemptGoalkeeperThrow') ||
         !candidate.commandId.startsWith('ai-pass-') ||
         candidate.teamId !== intent.teamId ||
         candidate.playerId !== intent.passerId ||
@@ -306,7 +310,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
 
   // Validate precisely one recorded outcome per applied contact request.
   const attempts = orderedApplied.filter((command) =>
-    command.type === 'attemptFirstTouch' || command.type === 'attemptKick')
+    command.type === 'attemptFirstTouch' || command.type === 'attemptKick' ||
+    command.type === 'attemptGoalkeeperThrow')
   if (state.contactEvents.length !== attempts.length) {
     throw new Error('Missing or extra player-ball contact events')
   }
@@ -319,14 +324,17 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         recorded.commandId !== command.commandId ||
         recorded.playerId !== command.playerId ||
         recorded.tick !== command.appliedTick ||
-        recorded.kind !== (command.type === 'attemptKick' ? 'kick' : 'control') ||
+        recorded.kind !== (command.type === 'attemptKick' ? 'kick' :
+          command.type === 'attemptGoalkeeperThrow' ? 'throw' : 'control') ||
         ![0, 1].includes(recorded.drawUsed) ||
         !(
           command.type === 'attemptKick'
             ? ['kicked', 'outOfReach', 'occupied', 'invalidDirection'].includes(recorded.outcome)
-            : ['controlled', 'miscontrolled', 'outOfReach', 'occupied', 'alreadyControlled'].includes(recorded.outcome)
+            : command.type === 'attemptGoalkeeperThrow'
+              ? ['thrown', 'occupied', 'notHolding', 'tooSoon', 'invalidDirection'].includes(recorded.outcome)
+              : ['controlled', 'miscontrolled', 'outOfReach', 'occupied', 'alreadyControlled'].includes(recorded.outcome)
         ) ||
-        recorded.drawUsed !== (['kicked', 'controlled', 'miscontrolled'].includes(recorded.outcome) ? 1 : 0) ||
+        recorded.drawUsed !== (['kicked', 'controlled', 'miscontrolled', 'thrown'].includes(recorded.outcome) ? 1 : 0) ||
         Object.keys(recorded).sort().join(',') !==
           'commandId,drawUsed,kind,outcome,playerId,tick') {
       throw new Error('Invalid player-ball contact event history')
@@ -355,13 +363,18 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         ev.contactFraction < 0 || ev.contactFraction > 1 ||
         !(
           (ev.kind === 'interception' &&
-            ['intercepted', 'deflected'].includes(ev.outcome)) ||
+            ['intercepted', 'deflected', 'caught', 'parried'].includes(ev.outcome)) ||
           (ev.kind === 'challenge' &&
             ['wonChallenge', 'heldOff'].includes(ev.outcome))
         ) ||
         Object.keys(ev).sort().join(',') !==
           'contactFraction,kind,outcome,playerId,tick') {
       throw new Error('Invalid automatic ball contact history')
+    }
+    if ((ev.outcome === 'caught' || ev.outcome === 'parried') &&
+        !state.players.some(p => p.playerId === ev.playerId &&
+          p.formationSlot === 'GK')) {
+      throw new Error('Only a goalkeeper may record a glove save')
     }
     autoByTick.set(ev.tick, ev)
     previousAutomaticTick = ev.tick
@@ -378,6 +391,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   // contest resolves last. Reconstruct ownership from that chronology.
   let expectedController: string | null = null
   let expectedLastTouch: string | null = null
+  let expectedCatchTick: number | null = null
   const engagementAtTick = new Map(setup.players.map(p => [p.id, false]))
   const autonomousAtTick = new Map(setup.clubs.map(c => [c.id, false]))
   const ticks = [...new Set([
@@ -401,18 +415,29 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     if (due.some(c => c.type === 'diagnosticBallLaunch')) {
       expectedController = null
       expectedLastTouch = null
+      expectedCatchTick = null
     }
     for (const command of due) {
-      if (command.type !== 'attemptFirstTouch' && command.type !== 'attemptKick') continue
+      if (command.type !== 'attemptFirstTouch' && command.type !== 'attemptKick' &&
+          command.type !== 'attemptGoalkeeperThrow') continue
       const recorded = eventById.get(command.commandId)
       if (!recorded) throw new Error('Missing applied contact outcome')
       if (recorded.outcome === 'controlled') {
         expectedController = command.playerId
         expectedLastTouch = command.playerId
+        expectedCatchTick = null
       } else if (recorded.outcome === 'miscontrolled' ||
-                 recorded.outcome === 'kicked') {
+                 recorded.outcome === 'kicked' ||
+                 recorded.outcome === 'thrown') {
+        if (recorded.outcome === 'thrown' && (
+          expectedController !== command.playerId ||
+          expectedCatchTick === null ||
+          tick - expectedCatchTick < GOALKEEPER_HOLD_MIN_TICKS)) {
+          throw new Error('Goalkeeper throw without a sufficiently held catch')
+        }
         expectedController = null
         expectedLastTouch = command.playerId
+        expectedCatchTick = null
       }
     }
     const ev = autoByTick.get(tick)
@@ -431,12 +456,15 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
           due.some(c => c.type === 'diagnosticBallLaunch')) {
         throw new Error('Automatic contact is incompatible with engagement or ownership')
       }
-      if (ev.outcome === 'intercepted' || ev.outcome === 'wonChallenge') {
+      if (ev.outcome === 'intercepted' || ev.outcome === 'wonChallenge' ||
+          ev.outcome === 'caught') {
         expectedController = ev.playerId
         expectedLastTouch = ev.playerId
-      } else if (ev.outcome === 'deflected') {
+        expectedCatchTick = ev.outcome === 'caught' ? tick : null
+      } else if (ev.outcome === 'deflected' || ev.outcome === 'parried') {
         expectedController = null
         expectedLastTouch = ev.playerId
+        expectedCatchTick = null
       }
     }
   }
@@ -446,7 +474,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   const launches = orderedApplied.filter((command) => command.type === 'diagnosticBallLaunch')
   if (!launches.length && state.automaticContactEvents.length === 0 &&
       !state.contactEvents.some((ev) =>
-        ['kicked', 'miscontrolled', 'controlled'].includes(ev.outcome))) {
+        ['kicked', 'miscontrolled', 'controlled', 'thrown'].includes(ev.outcome))) {
     if (JSON.stringify(state.ball) !== JSON.stringify(baseline.ball)) {
       throw new Error('Ball moved without an applied diagnostic launch')
     }
@@ -466,6 +494,9 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         (ball.heightM <= BALL_RADIUS_M + 1e-8 && ball.velocity.zMps < -1e-8) ||
         ball.controllerId !== expectedController ||
         ball.lastTouchPlayerId !== expectedLastTouch ||
+        (ball.controllerId !== null &&
+          (ball.heightM === GOALKEEPER_HAND_HEIGHT_M) !==
+            (expectedCatchTick !== null)) ||
         typeof ball.outsidePitch !== 'boolean' ||
         ball.outsidePitch !== isBallFullyOutsidePitch(
           ball.position.xM, ball.position.yM, setup.pitch)) {
@@ -477,7 +508,12 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       if (!player || !object(offset) ||
           !Number.isFinite(offset.xM) || !Number.isFinite(offset.yM) ||
           Math.hypot(offset.xM, offset.yM) > FOOT_REACH_M + 1e-9 ||
-          ball.heightM !== BALL_RADIUS_M ||
+          (expectedCatchTick === null
+            ? ball.heightM !== BALL_RADIUS_M ||
+              Math.hypot(offset.xM, offset.yM) > FOOT_REACH_M + 1e-9
+            : player.formationSlot !== 'GK' ||
+              ball.heightM !== GOALKEEPER_HAND_HEIGHT_M ||
+              Math.hypot(offset.xM, offset.yM) > .29) ||
           ball.velocity.zMps !== 0 ||
           Math.abs(ball.position.xM - (player.position.xM + offset.xM)) > 1e-8 ||
           Math.abs(ball.position.yM - (player.position.yM + offset.yM)) > 1e-8 ||

@@ -1,3 +1,9 @@
+## Phase 6.9E — Goalkeeper hands, catches, parries, and deliberate release
+
+Goalkeepers now respond to real opposition shots within their own penalty area using physical swept hand contact. Manageable shots produce a recorded **catch**, holding the ball at hand height rather than at the keeper's feet. More difficult shots that physically contact the gloves are **parried** and remain loose, with their actual ball velocity changed by the collision. A held ball cannot be foot-kicked instantly; after a short deliberate hold, a distinct physical hand-throw command can distribute toward a selected nearby teammate without guaranteeing possession. Goalkeepers also take longer to settle a genuine ball received at their feet before kicking it again. The current keeper distribution planner is basic and does not yet cover directional dives, sweeper-keeper roles, crosses, or sophisticated build-up play.
+
+Automated tests exercise catch, parry, hand holding, delayed throw and replay checks; the match algorithm version was bumped while retaining serialized schema v9. See [Phase 6.9E design notes](docs/design/phase-6-9e-goalkeeper-handling.md).
+
 ## Phase 6.9D — Intelligent recovery handoff
 
 O11 now reviews a **physically kicked pass** every 200 simulated milliseconds to determine whether the intended receiver still has the best realistic opportunity to recover it. A materially faster outfield teammate can take over once the ball deviates, while the previous receiver returns to support/shape. The team immediately replans the recovery roles rather than waiting the usual 0.6 seconds. The existing special opening kickoff receiver is preserved.

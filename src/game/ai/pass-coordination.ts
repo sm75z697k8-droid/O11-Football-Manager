@@ -32,7 +32,8 @@ export function shouldYieldPassReception(
       state.clock.tick - intent.requestedTick < PASS_RECOVERY_REVIEW_INTERVAL_TICKS ||
       state.clock.tick % PASS_RECOVERY_REVIEW_INTERVAL_TICKS !== 0 ||
       !state.contactEvents.some(e =>
-        e.commandId === intent.commandId && e.outcome === 'kicked')) return false
+        e.commandId === intent.commandId &&
+    (e.outcome === 'kicked' || e.outcome === 'thrown'))) return false
 
   const original = state.players.find(p => p.playerId === intent.receiverId)
   if (!original) return false
@@ -65,7 +66,7 @@ export function activePassIntent(state: MatchState): CoordinatedPassIntent | nul
       state.clock.tick > intent.requestedTick + PASS_INTENT_MAX_AGE_TICKS ||
       state.ball.outsidePitch) return null
   const contact = state.contactEvents.find(e => e.commandId === intent.commandId)
-  if (contact && contact.outcome !== 'kicked') return null
+  if (contact && contact.outcome !== 'kicked' && contact.outcome !== 'thrown') return null
   // A different player touching the ball, or a new controller, ends this
   // particular pass. Subsequent decisions can generate a different one.
   if (state.ball.controllerId !== null &&
@@ -86,7 +87,8 @@ export function intendedReceiverTarget(
   const definition = setup.players.find(p => p.id === intent.receiverId)
   if (!receiver || !definition) throw new Error('Missing physically intended pass receiver')
   const hasKicked = state.contactEvents.some(e =>
-    e.commandId === intent.commandId && e.outcome === 'kicked')
+    e.commandId === intent.commandId &&
+    (e.outcome === 'kicked' || e.outcome === 'thrown'))
   if (!hasKicked || state.ball.controllerId !== null) {
     return boundedTarget(intent.target, setup.pitch)
   }
