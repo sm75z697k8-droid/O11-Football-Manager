@@ -69,7 +69,7 @@ describe('Phase 6.9H: prospective next action after a physically viable pass',()
       defenderStates)).toEqual(continuation)
   })
   it('recognizes a receiving striker with a physically plausible shooting corridor',()=>{
-    const {setup,state,team,passer,definition,teammates,
+    const {setup,state,team,passer,teammates,
       defenderStates}=stage({xM:88,yM:34},{xM:76,yM:20})
     const striker=teammates.find(p=>p.formationSlot==='ST')!
     const strikerDefinition=setup.players.find(p=>p.id===striker.playerId)!
