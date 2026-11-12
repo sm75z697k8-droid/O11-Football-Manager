@@ -8,6 +8,7 @@ import {
   attackingOpportunityAt, evaluateShootingOpportunity,
 } from './goal-directed'
 import { chooseSeededOption } from './decision-variation'
+import { GOALKEEPER_HAND_HEIGHT_M } from '../physics/goalkeeper-handling'
 import { reviewOnBallActions } from './short-horizon'
 import type { ActionAssessment } from './short-horizon'
 
@@ -37,7 +38,7 @@ export function canReleaseControlledBall(
   if (state.clock.tick - state.ai.lastPassTick < AI_PASS_MIN_INTERVAL_TICKS)
     return false
   const owner = state.players.find(p => p.playerId === state.ball.controllerId)
-  if (!owner) return false
+  if (!owner || state.ball.heightM === GOALKEEPER_HAND_HEIGHT_M) return false
   let lastManual = -1
   for (let i = state.contactEvents.length - 1; i >= 0; i--) {
     const e = state.contactEvents[i]
@@ -291,6 +292,10 @@ export function evaluateOnBallPlan(
   const owner = state.players.find(p => p.playerId === state.ball.controllerId)
   if (!owner) return {
     choice: null, assessments: [], selectedReason: 'Nobody controls the ball',
+  }
+  if (state.ball.heightM === GOALKEEPER_HAND_HEIGHT_M) return {
+    choice: null, assessments: [],
+    selectedReason: 'Goalkeeper holds the ball in their hands',
   }
   const team = state.teams.find(t => t.clubId === owner.clubId)
   const definition = setup.players.find(p => p.id === owner.playerId)
