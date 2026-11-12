@@ -3,12 +3,13 @@ import type { Point2 } from '../model/pitch'
 import type { MatchState, PlayerMatchState, AgentDecision } from '../match/state'
 import { activePassIntent, intendedReceiverTarget } from './pass-coordination'
 import { chooseDynamicSupport } from './support-space'
+import { planDefensiveResponsibilities } from './defensive-shape'
 import {
   AI_PASS_MIN_INTERVAL_TICKS, evaluateOnBallChoice,
 } from './possession'
 import {
-  boundedTarget, coverTarget, estimateInterception, markTarget,
-  predictBallAt, pursuitTarget, rankBallChasers, separationM, supportTarget,
+  boundedTarget, estimateInterception,
+  predictBallAt, pursuitTarget, rankBallChasers, supportTarget,
 } from './coordination'
 
 /** Phase 6.3: Team coordinated intentions; physics remains authoritative.
@@ -53,7 +54,6 @@ export function planTeamDecisions(
   for (const [teamIndex, team] of state.teams.entries()) {
     if (!state.ai.enabledTeams[teamIndex]) continue
     const teammates = state.players.filter(p => p.clubId === team.clubId)
-    const opponents = state.players.filter(p => p.clubId !== team.clubId)
     const owner = teammates.find(p => p.playerId === ball.controllerId)
     const ownsLooseBall = ball.controllerId === null &&
       belongsTo(team.clubId, ball.lastTouchPlayerId, state.players)
@@ -62,16 +62,13 @@ export function planTeamDecisions(
       (ball.lastTouchPlayerId !== null && !ownsLooseBall))
     const rank = rankBallChasers(
       teammates, definitions, ball, setup.pitch, restrictedTaker)
-    const defendingThird = (ball.position.xM -
-      (team.attackingDirection === 1 ? 0 : setup.pitch.lengthM)) *
-      team.attackingDirection < setup.pitch.lengthM * .43
-
-    // A press consists of a first challenger, optionally a second high-press
-    // challenger; one distinct cover player always protects behind.
-    const pressCount = !ballUsable || owner ? 0 : isDefending
-      ? team.pressingIntensity === 'high' ? 2 :
-        team.pressingIntensity === 'standard' || defendingThird ? 1 : 0
-      : team.pressingIntensity === 'high' ? 2 : 1
+    // Defensive pressure is assigned to the TEAM rather than choosing
+    // isolated chasers. Attacking pursuit remains with the original physics.
+    const defensivePlan = isDefending && ballUsable
+      ? planDefensiveResponsibilities(state, setup, team, projectedBall)
+      : null
+    const pressCount = !ballUsable || owner || isDefending ? 0 :
+      team.pressingIntensity === 'high' ? 2 : 1
     // The passer commits to a particular teammate. Until contact or loss,
     // that receiver is given the first opportunity rather than leaving a
     // coordinated pass to a different generic ball-chasing footballer.
@@ -80,8 +77,6 @@ export function planTeamDecisions(
       ? teammates.find(p => p.playerId === intent.receiverId) : undefined
     const pressing = committed ? [committed] : rank.slice(0, pressCount)
     const pressingIds = new Set(pressing.map(p => p.playerId))
-    const cover = isDefending && ballUsable
-      ? rank.find(p => !pressingIds.has(p.playerId)) : undefined
 
     // For a ball rolling towards our team, plan support around the *estimated
     // reception*, not the position of the ball at this instant.
@@ -98,7 +93,6 @@ export function planTeamDecisions(
           ...pressingIds,
         ]))
       : null
-    const coveredMarkIds = new Set<string>()
 
     for (const player of teammates) {
       const original = state.ai.formationPositions[player.playerId]
@@ -116,40 +110,26 @@ export function planTeamDecisions(
         engage = true
         target = choice?.kind === 'carry'
           ? choice.target : { ...player.position }
+      } else if (defensivePlan) {
+        const assigned = defensivePlan.get(player.playerId)
+        if (!assigned) throw new Error('Defensive player missing team responsibility')
+        action = assigned.action
+        engage = assigned.engage
+        target = assigned.target
       } else if (pressingIds.has(player.playerId)) {
         const def = definitions.get(player.playerId)
         if (!def) throw new Error('Missing pursuing footballer definition')
         action = committed?.playerId === player.playerId || ownsLooseBall
-          ? 'receive' : isDefending ? 'press' : 'pursue'
+          ? 'receive' : 'pursue'
         engage = true
         target = committed?.playerId === player.playerId && intent
           ? intendedReceiverTarget(state, setup, intent)
           : pursuitTarget(player, def, ball, setup.pitch)
-      } else if (cover && cover.playerId === player.playerId) {
-        action = 'cover'
-        target = coverTarget(player, pressing[0] ?? player,
-          projectedBall, team.attackingDirection, setup.pitch)
       } else if (inAttack && player.formationSlot !== 'GK') {
         action = 'support'
         target = dynamicSupport?.get(player.playerId)?.target ??
           supportTarget(player, original, attackingReference,
             team.attackingDirection, setup)
-      } else if (isDefending && player.formationSlot !== 'GK') {
-        // Mark the nearest available opponent in this player's sector;
-        // each threat is assigned to at most one defender.
-        const threats = opponents.filter(p => p.formationSlot !== 'GK' &&
-          !coveredMarkIds.has(p.playerId) &&
-          separationM(p.position, shape) <= 19)
-          .sort((a, b) =>
-            separationM(a.position, shape) - separationM(b.position, shape) ||
-            (a.playerId < b.playerId ? -1 :
-              a.playerId > b.playerId ? 1 : 0))
-        const threat = threats[0]
-        if (threat) {
-          coveredMarkIds.add(threat.playerId)
-          action = 'mark'
-          target = markTarget(shape, threat, team.attackingDirection, setup.pitch)
-        }
       }
       decisions.push({
         playerId: player.playerId, clubId: player.clubId,

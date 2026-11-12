@@ -1,3 +1,13 @@
+## Phase 6.5 — Defensive team intelligence
+
+**Updated defensive recovery for every outfield role.** Players no longer automatically mark the nearest opponent to an old formation anchor. Instead, the defending XI has a collective set of responsibilities: nearby pressers, one goal-side cover player, compact midfield and backline recovery, selective nearby marking of genuinely dangerous attacking opponents, and wingers staying on their team-relative sides. The goalkeeper stays near its goal.
+
+This specifically addresses the user's iPhone observation that #8 would follow an irrelevant opposing defender instead of dropping to protect the home defence. High/standard/low pressing still alters commitment, while physical tackles and possession are resolved exclusively by the existing authoritative engine.
+
+The attack planner, full-screen viewer, legal kick-off and fixed 50ms physics remain unchanged. The match schema stays v8, but deterministic replay engine version is updated to protect against mismatched AI algorithms.
+
+See [Phase 6.5 design](docs/design/phase-6-5-defensive-team-intelligence.md). Goals, referee, shooting, offside, full match periods and out-of-play restarts are still not implemented. Heuristic positioning and pressing remain estimated simulation values; on-device visual tests are required.
+
 ## Phase 6.4 — Intelligent possession and spatial support
 
 The on-ball AI now weighs **real open passing lanes, defenders' proximity and marked receiving players** more directly against carrying; it no longer has an unconditional large passing penalty. Teammates search nearby physically useful support space, while respecting home/away flank discipline, positional roles and distance from one another. The earliest permissible follow-up pass is now 1.2 simulated seconds rather than 1.8 seconds after the previous AI attempt.

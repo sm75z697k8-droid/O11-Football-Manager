@@ -6,7 +6,7 @@ import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
 export const MATCH_STATE_SCHEMA_VERSION = 8 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-dynamic-support-p64-v1' as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-defensive-team-shape-p65-v1' as const
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
   'ball/contact', 'match/referee', 'match/injuries',
@@ -74,7 +74,7 @@ export interface KickoffState {
   readonly phase: 'awaitingKick' | 'inPlay'
   readonly takenTick: number | null
 }
-export type AgentAction = 'shape' | 'support' | 'press' | 'pursue' | 'carry' | 'receive' | 'cover' | 'mark'
+export type AgentAction = 'shape' | 'support' | 'press' | 'pursue' | 'carry' | 'receive' | 'cover' | 'mark' | 'recover'
 export interface AgentDecision {
   readonly tick: number
   readonly playerId: PlayerId
