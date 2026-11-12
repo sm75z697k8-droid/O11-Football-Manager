@@ -8,7 +8,7 @@ import { createRandomStream } from '../core/rng'
  * No wall time, Math.random, UI frame timing or hidden mutation is used.
  */
 export const SEEDED_CHOICE_VERSION = 'bounded-player-judgment-v1'
-export const MAX_VARIATION_UTILITY_GAP = 5.5
+export const MAX_VARIATION_UTILITY_GAP = 2.0
 
 export interface RankedActionOption {
   readonly utility: number
@@ -22,7 +22,7 @@ export function decisionDiscretion(
 ): number {
   const awareness = Math.max(0, Math.min(100,
     .55 * decisions + .30 * composure + .15 * vision))
-  return 1.6 + (100 - awareness) * .035
+  return .75 + (100 - awareness) * .016
 }
 
 /**
@@ -40,6 +40,10 @@ export function chooseSeededOption<T extends RankedActionOption>(
   }
   const adjusted = options.map(o => o.utility + adjustment(o))
   const bestScore = Math.max(...adjusted)
+  const strongest = options[adjusted.indexOf(bestScore)]
+  // A genuinely superior shooting opportunity is not displaced by
+  // incidental exploratory noise merely to make one seed look different.
+  if ('kind' in strongest && strongest.kind === 'shoot') return strongest
   const spread = decisionDiscretion(decisions, composure, vision)
   let bestIndex = adjusted.indexOf(bestScore)
   let bestValue = -Infinity
