@@ -20,23 +20,29 @@ type FeedItem = {
 }
 
 function physicalEvents(state: MatchState): FeedItem[] {
-  const automatic = state.automaticContactEvents.map((event, index) => ({
-    key: 'auto-' + index,
+  // Keep only recent items before formatting/sorting. Match history is
+  // still preserved by the engine, but an iPhone HUD should not reprocess
+  // every contact from the whole exhibition on each 135ms refresh.
+  const autoOffset = Math.max(0, state.automaticContactEvents.length - 18)
+  const automatic = state.automaticContactEvents
+    .slice(autoOffset).map((event, index) => ({
+    key: 'auto-' + (index + autoOffset),
     tick: event.tick,
     kind: 'challenge' as const,
     title: event.outcome.replace(/([A-Z])/g, ' $1').toUpperCase(),
     detail: event.playerId.replaceAll('_', ' ') + ' · ' + event.kind,
   }))
-  const manual = state.contactEvents
+  const manualOffset = Math.max(0, state.contactEvents.length - 48)
+  const manual = state.contactEvents.slice(manualOffset)
     .filter(event => !['outOfReach', 'occupied', 'invalidDirection'].includes(event.outcome))
     .map((event, index) => ({
-      key: 'manual-' + index,
+      key: 'manual-' + (index + manualOffset),
       tick: event.tick,
       kind: event.kind === 'kick' ? 'kick' as const : 'contact' as const,
       title: event.outcome.toUpperCase(),
       detail: event.playerId.replaceAll('_', ' ') + ' · ' + event.kind,
     }))
-  const goals = state.goalEvents.map((goal, index) => ({
+  const goals = state.goalEvents.slice(-14).map((goal, index) => ({
     key: 'goal-' + index,
     tick: goal.tick,
     kind: 'goal' as const,
@@ -139,7 +145,7 @@ export default function App() {
       }
       // Out-of-play is not a goal, throw-in or other restart yet. Stop the
       // viewer deliberately to avoid burning CPU on an unplayable dead end.
-      if (active.state.ball.outsidePitch) {
+      if (active.state.ball.outsidePitch || active.state.goalEvents.length > 0) {
         setHud(active.state)
         setPlaying(false)
         draw(1)
