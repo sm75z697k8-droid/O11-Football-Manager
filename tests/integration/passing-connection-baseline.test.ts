@@ -73,6 +73,10 @@ describe('Physical pass completion baseline — observed match flow', () => {
       snapshots.push(JSON.stringify({
         seed,ticks:session.state.clock.tick,ballOut:session.state.ball.outsidePitch,
         attempted:[...records].filter(r=>r.seed===seed).length,
+        received:[...records].filter(r=>r.seed===seed && r.outcome==='receiverControl').length,
+        keeperCatches:session.state.automaticContactEvents.filter(e=>e.outcome==='caught').length,
+        keeperParries:session.state.automaticContactEvents.filter(e=>e.outcome==='parried').length,
+        keeperThrows:session.state.contactEvents.filter(e=>e.outcome==='thrown').length,
       }))
     }
     const finished=records.filter(r=>r.releaseTick>=0)
