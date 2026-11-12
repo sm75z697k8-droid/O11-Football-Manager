@@ -3,7 +3,6 @@ import { createFoundationMatch, restoreFoundationMatch } from '../../src/game/ma
 import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
 import type { MatchState, PlayerMatchState } from '../../src/game/match/state'
 import type { Point2 } from '../../src/game/model/pitch'
-import type { MatchSetup } from '../../src/game/model/match'
 import {
   chooseDynamicSupport, keepTeamFlank,
 } from '../../src/game/ai/support-space'
@@ -17,7 +16,7 @@ function baseline() {
   return { setup, state }
 }
 function possession(
-  setup: MatchSetup, state: MatchState, index: number, centre: Point2,
+  state: MatchState, index: number, centre: Point2,
 ): MatchState {
   const owner = state.players[index]
   return {
@@ -113,7 +112,7 @@ describe('Phase 6.4 dynamic, spatially evaluated supporting runs', () => {
 
   it('uses separate supporting angles and does not abandon an intended pass receiver', () => {
     const { setup, state } = baseline()
-    const owned = possession(setup, state, 9, { xM: 57, yM: 34 })
+    const owned = possession(state, 9, { xM: 57, yM: 34 })
     const home = setup.clubs[0].id
     const snapshot = planTeamDecisions(owned, setup)
     const support = snapshot.filter(d => d.clubId === home && d.action === 'support')
@@ -159,7 +158,7 @@ describe('Phase 6.4 possession decisions reward open outlets, not blind passes',
 
   it('recognizes an open nearby lateral teammate as an available pass', () => {
     const { setup, state } = baseline()
-    const owned = possession(setup, state, 9, { xM: 62, yM: 32 })
+    const owned = possession(state, 9, { xM: 62, yM: 32 })
     const selected = owned.players[8]
     const updated: MatchState = {
       ...owned,
@@ -180,7 +179,7 @@ describe('Phase 6.4 possession decisions reward open outlets, not blind passes',
 
   it('does not force a pass when receivers are all out of physical range', () => {
     const { setup, state } = baseline()
-    const controlled = possession(setup, state, 9, { xM: 45, yM: 34 })
+    const controlled = possession(state, 9, { xM: 45, yM: 34 })
     const noOutlet: MatchState = {
       ...controlled,
       players: controlled.players.map(p =>
