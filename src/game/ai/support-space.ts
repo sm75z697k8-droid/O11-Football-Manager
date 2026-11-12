@@ -4,7 +4,7 @@ import type { MatchState, PlayerMatchState } from '../match/state'
 import { boundedTarget, separationM, supportTarget } from './coordination'
 import { laneObstruction } from './possession'
 import { attackingOpportunityAt } from './goal-directed'
-import { planThirdManRun } from './combination-runs'
+import { planThirdManRun, planWideUnderlap } from './combination-runs'
 
 /**
  * Local space search, not scripted runs. Every support location is chosen
@@ -151,7 +151,8 @@ export function chooseDynamicSupport(
   const selected = new Map<string, SupportOpportunity>()
   // Exactly one runner can offer a third-man combination after a genuine
   // kicked pass. The existing receiver still pursues the physical ball.
-  const thirdMan = planThirdManRun(state, setup, teamId)
+  const combination = planThirdManRun(state, setup, teamId) ??
+    planWideUnderlap(state, setup, teamId)
   const attackDistance = team.attackingDirection === 1
     ? setup.pitch.lengthM - reference.xM : reference.xM
   // Only an actually controlled team attack can trigger an aggressive run.
@@ -245,10 +246,10 @@ export function chooseDynamicSupport(
         }
       }
     }
-    if (thirdMan && player.playerId === thirdMan.playerId) {
-      const scored = supportOpportunity(player, thirdMan.target,
+    if (combination && player.playerId === combination.playerId) {
+      const scored = supportOpportunity(player, combination.target,
         base, anchor, reference, opponents, teammates, reserved,
-        team.attackingDirection, thirdMan.utilityBonus)
+        team.attackingDirection, combination.utilityBonus)
       if (scored) considered.push(scored)
     }
     considered.sort((a, b) => b.utility - a.utility ||
