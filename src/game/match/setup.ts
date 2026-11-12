@@ -98,6 +98,7 @@ export function createInitialMatchState(input: unknown): {
       enabledTeams: [false, false],
       lastDecisionTick: -1,
       lastPassTick: -1000,
+      passIntent: null,
       decisionSnapshot: [],
       formationPositions: Object.fromEntries(players.map(p => [
         p.playerId, { ...p.position },

@@ -39,7 +39,8 @@ export function openingKickoffPosition(
     // selected option is based on player attributes, not hardcoded RCM.
     return {
       xM: centreX + side * 5.8,
-      yM: centreY + (slot === 'RCM' ? 3.4 : -3.4),
+      yM: centreY + (slot === 'RCM' ? 1 : -1) *
+        (teamIndex === 0 ? 3.4 : -3.4),
     }
   }
   // All non-kickers stay in their own half, with the defending side

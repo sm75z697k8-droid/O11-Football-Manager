@@ -5,8 +5,8 @@ import type { ClubId, PlayerId } from '../model/player'
 import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
-export const MATCH_STATE_SCHEMA_VERSION = 7 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-coordinated-team-p63-v1' as const
+export const MATCH_STATE_SCHEMA_VERSION = 8 as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-pass-coordination-p631-v1' as const
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
   'ball/contact', 'match/referee', 'match/injuries',
@@ -83,7 +83,19 @@ export interface AgentDecision {
   readonly engage: boolean
   readonly target: Point2
 }
+/** A selected recipient and meeting point for ONE genuine physical pass.
+ * This intention cannot itself generate ball contact or award possession.
+ */
+export interface CoordinatedPassIntent {
+  readonly commandId: string
+  readonly teamId: ClubId
+  readonly passerId: PlayerId
+  readonly receiverId: PlayerId
+  readonly requestedTick: number
+  readonly target: Point2
+}
 export interface AIState {
+  readonly passIntent: CoordinatedPassIntent | null
   readonly enabledTeams: readonly [boolean, boolean]
   readonly lastDecisionTick: number
   readonly lastPassTick: number

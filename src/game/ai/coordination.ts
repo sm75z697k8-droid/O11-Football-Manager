@@ -157,8 +157,11 @@ export function supportTarget(
 ): Point2 {
   const slot = player.formationSlot
   const { lengthM, widthM } = setup.pitch
-  const side = slot === 'RCM' || slot === 'RW' || slot === 'RB' ? 1 :
-    slot === 'LCM' || slot === 'LW' || slot === 'LB' ? -1 :
+  // Right/left are TEAM-relative. The away XI attacks in -X and its
+  // right flank is toward -Y (the initial formation mirrors both axes).
+  const flank = slot === 'RCM' || slot === 'RW' || slot === 'RB' ? 1 :
+    slot === 'LCM' || slot === 'LW' || slot === 'LB' ? -1 : 0
+  const side = flank !== 0 ? flank * direction :
     anchor.yM >= widthM / 2 ? 1 : -1
   let point: Point2
   if (slot === 'RCM' || slot === 'LCM') {
@@ -190,9 +193,17 @@ export function supportTarget(
   const weight = slot === 'GK' ? .18 :
     slot === 'RCB' || slot === 'LCB' ? .55 : .85
   const mixed = anchored(anchor, point, weight)
+  // Keep role flanks stable even when the carrier moves across midfield.
+  // Central midfielders can narrow, but do not exchange left/right slots.
+  const channel = slot === 'RCM' || slot === 'LCM' ? 3 :
+    slot === 'RW' || slot === 'LW' || slot === 'RB' || slot === 'LB' ? 7 : 0
+  const minimum = widthM / 2 + channel
+  const maximum = widthM / 2 - channel
   return boundedTarget({
     xM: clamp(mixed.xM, 2.5, lengthM - 2.5),
-    yM: mixed.yM,
+    yM: flank === 0 ? mixed.yM :
+      side > 0 ? Math.max(minimum, mixed.yM) :
+        Math.min(maximum, mixed.yM),
   }, setup.pitch)
 }
 

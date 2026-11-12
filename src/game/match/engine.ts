@@ -30,7 +30,7 @@ import {
 } from './state'
 import type { MatchState, PressingIntensity } from './state'
 
-export const MATCH_CHECKPOINT_VERSION = 7 as const
+export const MATCH_CHECKPOINT_VERSION = 8 as const
 export const MAX_ADVANCE_STEPS_PER_CALL = 10_000 as const
 
 export interface FoundationMatchCheckpoint {
@@ -201,6 +201,36 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     ? Math.max(...generated.map(c => c.requestedTick)) : -1000
   if (state.ai.lastPassTick !== expectedLastPass) {
     throw new Error('AI pass checkpoint does not match the physical kick commands')
+  }
+  // A selected receiver is temporary coordination metadata, not proof of
+  // contact. Verify it against the actual next-tick physical kick request.
+  if (state.ai.passIntent !== null) {
+    const intent = state.ai.passIntent
+    if (!object(intent) ||
+        Object.keys(intent).sort().join(',') !==
+          'commandId,passerId,receiverId,requestedTick,target,teamId') {
+      throw new Error('Malformed coordinated-pass intent')
+    }
+    const candidate = commands.find(c => c.commandId === intent.commandId)
+    const passer = state.players.find(p => p.playerId === intent.passerId)
+    const receiver = state.players.find(p => p.playerId === intent.receiverId)
+    const aiTeamIndex = state.teams.findIndex(t => t.clubId === intent.teamId)
+    if (!candidate || candidate.type !== 'attemptKick' ||
+        !candidate.commandId.startsWith('ai-pass-') ||
+        candidate.teamId !== intent.teamId ||
+        candidate.playerId !== intent.passerId ||
+        candidate.requestedTick !== intent.requestedTick ||
+        state.ai.lastPassTick !== intent.requestedTick ||
+        !object(intent.target) || !insidePitch(intent.target, setup.pitch) ||
+        JSON.stringify(candidate.target) !== JSON.stringify(intent.target) ||
+        !passer || !receiver || passer.playerId === receiver.playerId ||
+        passer.clubId !== intent.teamId || receiver.clubId !== intent.teamId ||
+        aiTeamIndex < 0 || !state.ai.enabledTeams[aiTeamIndex] ||
+        !Number.isSafeInteger(intent.requestedTick) ||
+        intent.requestedTick < 0 || intent.requestedTick > state.clock.tick ||
+        state.clock.tick > intent.requestedTick + 80) {
+      throw new Error('Coordinated-pass intent disagrees with physical command history')
+    }
   }
   const liveDecisions = new Set<string>()
   for (const d of state.ai.decisionSnapshot) {

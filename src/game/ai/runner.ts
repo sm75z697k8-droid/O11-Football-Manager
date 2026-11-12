@@ -1,6 +1,7 @@
 import type { MatchState } from '../match/state'
 import type { MatchSetup } from '../model/match'
 import { MAX_COMMANDS_PER_MATCH, scheduleMatchCommand } from '../match/commands'
+import { maintainPassReception } from './pass-coordination'
 import {
   AI_DECISION_PERIOD_TICKS, choosePossessionRelease, planTeamDecisions,
 } from './decisions'
@@ -14,14 +15,15 @@ export function runAutonomousDecisions(
   // Law 8: no autonomous chase or movement until the real opening kick
   // has clearly moved the stationary centre ball.
   if (state.kickoff?.phase === 'awaitingKick') return state
-  if (!state.ai.enabledTeams.some(Boolean)) return state
-  if (state.ai.lastDecisionTick >= 0 &&
-      state.clock.tick - state.ai.lastDecisionTick < AI_DECISION_PERIOD_TICKS) {
-    return state
+  const current = maintainPassReception(state, setup)
+  if (!current.ai.enabledTeams.some(Boolean)) return current
+  if (current.ai.lastDecisionTick >= 0 &&
+      current.clock.tick - current.ai.lastDecisionTick < AI_DECISION_PERIOD_TICKS) {
+    return current
   }
-  const snapshot = planTeamDecisions(state, setup)
+  const snapshot = planTeamDecisions(current, setup)
   const byId = new Map(snapshot.map((decision) => [decision.playerId, decision]))
-  const players = state.players.map(player => {
+  const players = current.players.map(player => {
     const decision = byId.get(player.playerId)
     if (!decision) return player
     const previous = player.intention
@@ -39,10 +41,10 @@ export function runAutonomousDecisions(
     }
   })
   let result: MatchState = {
-    ...state, players,
+    ...current, players,
     ai: {
-      ...state.ai,
-      lastDecisionTick: state.clock.tick,
+      ...current.ai,
+      lastDecisionTick: current.clock.tick,
       decisionSnapshot: snapshot,
     },
   }
@@ -51,8 +53,9 @@ export function runAutonomousDecisions(
     c.type === 'attemptKick' && c.commandId.startsWith('ai-pass-'))
   if (attempt && !alreadyPending &&
       result.nextCommandSequence <= MAX_COMMANDS_PER_MATCH) {
+    const commandId = 'ai-pass-' + result.clock.tick + '-' + attempt.playerId
     const receipt = scheduleMatchCommand(result, {
-      commandId: 'ai-pass-' + result.clock.tick + '-' + attempt.playerId,
+      commandId,
       type: 'attemptKick',
       teamId: attempt.teamId,
       playerId: attempt.playerId,
@@ -61,10 +64,20 @@ export function runAutonomousDecisions(
       lift: attempt.lift,
     }, setup.pitch)
     if (receipt.receipt.accepted) {
-      result = {
+      result = maintainPassReception({
         ...receipt.state,
-        ai: { ...result.ai, lastPassTick: result.clock.tick },
-      }
+        ai: {
+          ...result.ai,
+          lastPassTick: result.clock.tick,
+          passIntent: {
+            commandId, teamId: attempt.teamId,
+            passerId: attempt.playerId,
+            receiverId: attempt.receiverId,
+            requestedTick: result.clock.tick,
+            target: { ...attempt.target },
+          },
+        },
+      }, setup)
     }
   }
   return result

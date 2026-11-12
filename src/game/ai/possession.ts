@@ -157,8 +157,18 @@ function passCandidates(
       .13 * separation - obstruction * 2.7 - danger -
       difficulty +
       (widePressure < 5 ? (5 - widePressure) * .8 : 0)
+    // Match the actual foot-contact kick speed equation. An old minimum
+    // power of .17 severely overhit short ground passes; the receiver had
+    // little time to meet the ball before it raced into empty space.
+    const accuracy = (.5 * passing +
+      .3 * def.abilities.technical.technique + .2 * composure) / 100
+    const strikeFactor = 14 + .13 * def.abilities.physical.strength +
+      .065 * def.abilities.technical.technique
+    const flightTime = clamp(separation / 9, .8, 2.4)
+    const desiredSpeed = separation / flightTime + .375 * flightTime
     const power = clamp(
-      .12 + separation / (37 + passing * .105), .17, .96)
+      (desiredSpeed / (.9 + .1 * accuracy) - 3) / strikeFactor,
+      .035, .96)
     const lift = obstruction > 3.5 && separation > 13 && passing > 64
       ? .20 : 0
     options.push({

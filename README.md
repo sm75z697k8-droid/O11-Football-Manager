@@ -1,3 +1,17 @@
+## Phase 6.3.1 — Flank discipline and coordinated physical passes
+
+The off-ball AI now keeps the **home and away teams' right/left roles on their correct flanks**, including the mirrored away kick-off midfielders. It no longer treats right as the same screen direction for both sides. Central midfielders can narrow but maintain their designated relative flank, and wide players preserve useful width.
+
+When the possession AI selects a pass, the command is linked to an **explicit real teammate**. That intended receiver engages before the kick and updates their movement target each 50 ms physical tick as the actual ball travels, rather than blindly remaining in place or chasing an old pass coordinate. The temporary pass instruction expires when the ball is lost, a kick fails, or enough simulated time has elapsed. The existing physics continues to decide whether the kick and interception succeed.
+
+Estimated pass power has been recalibrated against the actual contact-engine speed formula so nearby pass targets are not consistently struck with excessive force. All numbers remain uncalibrated game-design estimates, and through balls or lost passes can still legitimately miss.
+
+Match state and checkpoint schema is now **v8**, because an explicit transient `ai.passIntent` is persisted and validated against real queued/applied physical commands. Previous v7 snapshots are rejected rather than misinterpreted. The existing full-screen viewer, 50ms physics, opening kick-off and non-AI diagnostic behavior are preserved.
+
+**Still not implemented:** full-body player collisions, keeper intelligence, goal adjudication, referee, throw-ins, corners, shots and restart logic. The viewer will still pause once the ball truly leaves play.
+
+See [Phase 6.3.1 design and tests](docs/design/phase-6-3-1-flank-pass-coordination.md).
+
 ## Phase 6.3 — Coordinated team intelligence
 
 O11 now computes **predictive pass reception** from the actual moving ball and each player's physical reach, rather than always chasing the current ball position. The opening kick has two nearby central-midfield options and chooses an intended recipient by relevant attributes. The other ten players act on coordinated responsibilities: staggered passing-triangle support, wing width, holding-midfielder outlets, goal-side defensive cover and selective marking alongside realistic pressing.

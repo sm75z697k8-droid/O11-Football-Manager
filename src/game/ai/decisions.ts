@@ -1,6 +1,7 @@
 import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
 import type { MatchState, PlayerMatchState, AgentDecision } from '../match/state'
+import { activePassIntent, intendedReceiverTarget } from './pass-coordination'
 import {
   AI_PASS_MIN_INTERVAL_TICKS, evaluateOnBallChoice,
 } from './possession'
@@ -70,7 +71,13 @@ export function planTeamDecisions(
       ? team.pressingIntensity === 'high' ? 2 :
         team.pressingIntensity === 'standard' || defendingThird ? 1 : 0
       : team.pressingIntensity === 'high' ? 2 : 1
-    const pressing = rank.slice(0, pressCount)
+    // The passer commits to a particular teammate. Until contact or loss,
+    // that receiver is given the first opportunity rather than leaving a
+    // coordinated pass to a different generic ball-chasing footballer.
+    const intent = activePassIntent(state)
+    const committed = intent?.teamId === team.clubId
+      ? teammates.find(p => p.playerId === intent.receiverId) : undefined
+    const pressing = committed ? [committed] : rank.slice(0, pressCount)
     const pressingIds = new Set(pressing.map(p => p.playerId))
     const cover = isDefending && ballUsable
       ? rank.find(p => !pressingIds.has(p.playerId)) : undefined
@@ -104,9 +111,12 @@ export function planTeamDecisions(
       } else if (pressingIds.has(player.playerId)) {
         const def = definitions.get(player.playerId)
         if (!def) throw new Error('Missing pursuing footballer definition')
-        action = ownsLooseBall ? 'receive' : isDefending ? 'press' : 'pursue'
+        action = committed?.playerId === player.playerId || ownsLooseBall
+          ? 'receive' : isDefending ? 'press' : 'pursue'
         engage = true
-        target = pursuitTarget(player, def, ball, setup.pitch)
+        target = committed?.playerId === player.playerId && intent
+          ? intendedReceiverTarget(state, setup, intent)
+          : pursuitTarget(player, def, ball, setup.pitch)
       } else if (cover && cover.playerId === player.playerId) {
         action = 'cover'
         target = coverTarget(player, pressing[0] ?? player,
@@ -146,7 +156,7 @@ export function planTeamDecisions(
  */
 export function choosePossessionRelease(
   state: MatchState, setup: MatchSetup,
-): { teamId: string; playerId: string; target: Point2; power: number; lift: number } | null {
+): { teamId: string; playerId: string; receiverId: string; target: Point2; power: number; lift: number } | null {
   const owner = state.players.find(p => p.playerId === state.ball.controllerId)
   if (!owner || state.ball.outsidePitch || state.ball.heightM > .45 ||
       state.clock.tick - state.ai.lastPassTick < AI_PASS_MIN_INTERVAL_TICKS) return null
@@ -156,6 +166,7 @@ export function choosePossessionRelease(
   return choice?.kind === 'pass'
     ? {
       teamId: owner.clubId, playerId: owner.playerId,
+      receiverId: choice.receiverId,
       target: choice.target, power: choice.power, lift: choice.lift,
     } : null
 }
