@@ -200,7 +200,9 @@ export default function App() {
   const successContacts = hud.contactEvents.filter(e =>
     ['controlled', 'miscontrolled', 'kicked'].includes(e.outcome)).length
   const statuses = failure ? 'ENGINE ERROR' :
-    out ? 'OUT OF PLAY' : playing ? 'LIVE SIMULATION' : 'PAUSED'
+    out ? 'OUT OF PLAY' :
+    hud.kickoff?.phase === 'awaitingKick' ? 'KICK-OFF · HARBOR' :
+    playing ? 'LIVE SIMULATION' : 'PAUSED'
 
   return (
     <main className="immersive-match">

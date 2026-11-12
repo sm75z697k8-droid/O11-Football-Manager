@@ -3,6 +3,7 @@ import { createRandomStream } from '../core/rng'
 import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
 import type { Formation433Slot } from '../model/team'
+import { openingKickoffPosition, openingKickoffState } from './kickoff'
 import { assertValidMatchSetup } from '../../data/validate'
 import {
   FOUNDATION_ENGINE_VERSION, MATCH_RANDOM_STREAM_IDS, MATCH_STATE_SCHEMA_VERSION,
@@ -52,9 +53,12 @@ export function createInitialMatchState(input: unknown): {
       role: assignment.role,
       duty: assignment.duty,
       participation: 'onField' as const,
-      position: startingPosition(
-        assignment.slot, teamIndex === 0,
-        fixture.pitch.lengthM, fixture.pitch.widthM,
+      position: openingKickoffPosition(
+        fixture, teamIndex, assignment.slot,
+        startingPosition(
+          assignment.slot, teamIndex === 0,
+          fixture.pitch.lengthM, fixture.pitch.widthM,
+        ),
       ),
       velocity: { xMps: 0, yMps: 0 },
       orientationRad: teamIndex === 0 ? 0 : Math.PI,
@@ -73,6 +77,7 @@ export function createInitialMatchState(input: unknown): {
     seed: fixture.seed,
     clock: createSimulationClock(),
     period: 'notStarted',
+    kickoff: openingKickoffState(fixture),
     teams,
     players,
     ball: {

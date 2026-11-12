@@ -170,6 +170,17 @@ export function validateMatchSetup(input: unknown): ValidationResult<MatchSetup>
     errors.push({ path: 'seed', message: 'Expected an unsigned 32-bit seed' })
   }
   validatePitch(input.pitch, errors)
+  // Optional verified opener; do not accept arbitrary unvalidated fixture data.
+  if ('kickoff' in input) {
+    if (!isRecord(input.kickoff) ||
+        Object.keys(input.kickoff).length !== 1 ||
+        !nonEmpty(input.kickoff.teamId) ||
+        !Array.isArray(input.clubs) ||
+        !input.clubs.some((club: unknown) => isRecord(club) &&
+          club.id === (input.kickoff as RecordValue).teamId)) {
+      errors.push({ path: 'kickoff', message: 'Kick-off must name exactly one participating team' })
+    }
+  }
 
   const clubs: unknown[] = Array.isArray(input.clubs) ? input.clubs : []
   if (clubs.length !== 2) errors.push({ path: 'clubs', message: 'Exactly two clubs required' })

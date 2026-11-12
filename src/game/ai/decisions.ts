@@ -23,7 +23,18 @@ function rankToBall(
   players: readonly PlayerMatchState[], state: MatchState,
   definitions: ReadonlyMap<string, PlayerDefinition>,
 ): PlayerMatchState[] {
-  return [...players].filter(p => p.formationSlot !== 'GK').sort((a, b) => {
+  const kickoff = state.kickoff
+  const takerRestricted = kickoff?.phase === 'inPlay' &&
+    state.ball.lastTouchPlayerId === kickoff.kickerId
+  return [...players]
+    .filter(p => p.formationSlot !== 'GK' &&
+      (!takerRestricted || p.playerId !== kickoff.kickerId))
+    .sort((a, b) => {
+    // The designated receiver is first to approach an opening pass.
+    if (takerRestricted) {
+      if (a.playerId === kickoff.receiverId) return -1
+      if (b.playerId === kickoff.receiverId) return 1
+    }
     const pa = definitions.get(a.playerId)
     const pb = definitions.get(b.playerId)
     const score = (p: PlayerMatchState, d: PlayerDefinition | undefined) =>

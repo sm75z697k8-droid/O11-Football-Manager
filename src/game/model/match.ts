@@ -21,4 +21,6 @@ export interface MatchSetup {
   readonly teams: readonly [TeamSheet, TeamSheet]
   /** Exactly 22 unique players for the initial exhibition fixture. */
   readonly players: readonly PlayerDefinition[]
+  /** Optional opening-kickoff rules for the viewer fixture; legacy tests omit it. */
+  readonly kickoff?: { readonly teamId: string }
 }

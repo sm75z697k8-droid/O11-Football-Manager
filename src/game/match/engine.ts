@@ -23,11 +23,14 @@ import type {
 } from './commands'
 import { createInitialMatchState } from './setup'
 import {
+  advanceOpeningKickoff, openingKickoffPass, OPENING_KICKOFF_COMMAND_ID,
+} from './kickoff'
+import {
   FOUNDATION_ENGINE_VERSION, MATCH_RANDOM_STREAM_IDS, MATCH_STATE_SCHEMA_VERSION,
 } from './state'
 import type { MatchState, PressingIntensity } from './state'
 
-export const MATCH_CHECKPOINT_VERSION = 6 as const
+export const MATCH_CHECKPOINT_VERSION = 7 as const
 export const MAX_ADVANCE_STEPS_PER_CALL = 10_000 as const
 
 export interface FoundationMatchCheckpoint {
@@ -417,6 +420,59 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     }
   }
 
+  // Kick-off must be a genuine validated physical kick, followed by
+  // actual centre-ball movement. A forged start or unsupported restart is
+  // rejected, while legacy non-kickoff diagnostic states stay unchanged.
+  if (baseline.kickoff === null) {
+    if (state.kickoff !== null) {
+      throw new Error('Unexpected opening kick-off state in legacy fixture')
+    }
+  } else {
+    const expected = baseline.kickoff
+    const actual = state.kickoff
+    if (!object(actual) ||
+        Object.keys(actual).sort().join(',') !==
+          'kickerId,phase,receiverId,takenTick,teamId' ||
+        actual.teamId !== expected.teamId ||
+        actual.kickerId !== expected.kickerId ||
+        actual.receiverId !== expected.receiverId ||
+        !['awaitingKick', 'inPlay'].includes(actual.phase as string)) {
+      throw new Error('Invalid opening kick-off identity or phase')
+    }
+
+    const request = openingKickoffPass(baseline)
+    const matching = commands.filter(c => c.commandId === OPENING_KICKOFF_COMMAND_ID)
+    if (matching.length > 1 || (matching.length === 1 && (
+      matching[0].type !== 'attemptKick' ||
+      matching[0].teamId !== request.teamId ||
+      matching[0].playerId !== request.playerId ||
+      JSON.stringify(matching[0].target) !== JSON.stringify(request.target) ||
+      matching[0].power !== request.power ||
+      matching[0].lift !== request.lift ||
+      matching[0].requestedTick !== 0 ||
+      matching[0].targetTick !== 1
+    ))) {
+      throw new Error('Opening kick-off does not match the physical pass request')
+    }
+    const contact = state.contactEvents.find(e =>
+      e.commandId === OPENING_KICKOFF_COMMAND_ID &&
+      e.playerId === expected.kickerId && e.outcome === 'kicked')
+    if (actual.phase === 'awaitingKick') {
+      if (actual.takenTick !== null ||
+          (contact && state.clock.tick > contact.tick)) {
+        throw new Error('Opening kick-off is frozen despite a completed kick')
+      }
+    } else {
+      if (!contact || !Number.isSafeInteger(actual.takenTick) ||
+          actual.takenTick !== contact.tick + 1 ||
+          actual.takenTick > state.clock.tick ||
+          matching.length !== 1 ||
+          !state.appliedCommands.some(c => c.commandId === OPENING_KICKOFF_COMMAND_ID)) {
+        throw new Error('Kick-off cannot start without a real physical pass')
+      }
+    }
+  }
+
   const currentPlayers = state.players
   for (let i = 0; i < currentPlayers.length; i += 1) {
     const player = currentPlayers[i]
@@ -544,7 +600,8 @@ export class FoundationMatchEngine {
         : advanceBallPhysics(agents.ball, this.setup.pitch)
       const moved = ball === agents.ball ? agents : { ...agents, ball }
       const contacted = resolveContactAttempts(moved, this.setup)
-      this.state = resolveAutomaticBallContact(this.state, contacted, this.setup)
+      const kickedOff = advanceOpeningKickoff(contacted, this.setup)
+      this.state = resolveAutomaticBallContact(this.state, kickedOff, this.setup)
     }
     return this.getState()
   }

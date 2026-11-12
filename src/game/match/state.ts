@@ -5,8 +5,8 @@ import type { ClubId, PlayerId } from '../model/player'
 import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
-export const MATCH_STATE_SCHEMA_VERSION = 6 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-autonomous-decisions-p5-v1' as const
+export const MATCH_STATE_SCHEMA_VERSION = 7 as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-physical-opening-kickoff-v1' as const
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
   'ball/contact', 'match/referee', 'match/injuries',
@@ -66,6 +66,14 @@ export interface AutomaticContactEvent {
   readonly outcome: 'intercepted' | 'deflected' | 'wonChallenge' | 'heldOff'
   readonly contactFraction: number
 }
+/** The opening state and physical release; no other football restarts yet. */
+export interface KickoffState {
+  readonly teamId: ClubId
+  readonly kickerId: PlayerId
+  readonly receiverId: PlayerId
+  readonly phase: 'awaitingKick' | 'inPlay'
+  readonly takenTick: number | null
+}
 export type AgentAction = 'shape' | 'support' | 'press' | 'pursue' | 'carry'
 export interface AgentDecision {
   readonly tick: number
@@ -92,6 +100,7 @@ export interface MatchState {
   readonly seed: number
   readonly clock: SimulationClock
   readonly period: 'notStarted'
+  readonly kickoff: KickoffState | null
   readonly teams: readonly [TeamMatchState, TeamMatchState]
   readonly players: readonly PlayerMatchState[]
   readonly ball: BallMatchState

@@ -108,6 +108,11 @@ function candidate(
   const pastPlayers = new Map(before.players.map(p => [p.playerId, p]))
   const options: Candidate[] = []
   for (const p of after.players) {
+    // A kick-off taker may not touch the ball again until another player
+    // touches it; skip the taker during this protected opening passage.
+    if (after.kickoff?.phase === 'inPlay' &&
+        before.ball.lastTouchPlayerId === after.kickoff.kickerId &&
+        p.playerId === after.kickoff.kickerId) continue
     if (!p.engagesBall || p.participation !== 'onField' ||
       p.playerId === owner?.playerId ||
       (owner && p.clubId === owner.clubId)) continue

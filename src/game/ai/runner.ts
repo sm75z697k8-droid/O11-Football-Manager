@@ -11,6 +11,9 @@ import {
 export function runAutonomousDecisions(
   state: MatchState, setup: MatchSetup,
 ): MatchState {
+  // Law 8: no autonomous chase or movement until the real opening kick
+  // has clearly moved the stationary centre ball.
+  if (state.kickoff?.phase === 'awaitingKick') return state
   if (!state.ai.enabledTeams.some(Boolean)) return state
   if (state.ai.lastDecisionTick >= 0 &&
       state.clock.tick - state.ai.lastDecisionTick < AI_DECISION_PERIOD_TICKS) {

@@ -1,4 +1,5 @@
 import { makeFictionalMatchSetup } from '../../data/fixtures/fictional-match'
+import { openingKickoffPass } from '../match/kickoff'
 import { createFoundationMatch } from '../match/engine'
 import type { FoundationMatchEngine } from '../match/engine'
 import type { MatchSetup } from '../model/match'
@@ -15,7 +16,11 @@ export class MatchViewerSession {
   private latest: MatchState
 
   constructor() {
-    this.engine = createFoundationMatch(makeFictionalMatchSetup())
+    const fixture = makeFictionalMatchSetup()
+    this.engine = createFoundationMatch({
+      ...fixture,
+      kickoff: { teamId: fixture.clubs[0].id },
+    })
     this.setup = this.engine.getSetup()
     this.latest = this.engine.getState()
     this.prior = this.latest
@@ -28,6 +33,14 @@ export class MatchViewerSession {
         teamId: club.id, type: 'setAutonomousTeam', enabled: true,
       })
       if (!receipt.accepted) throw new Error('Could not enable team simulation: ' + receipt.reason)
+    }
+    // The opening pass is a genuine next-tick attemptKick at the centre
+    // spot. AI remains frozen until the ball actually moves.
+    const opening = this.engine.submitCommand(
+      openingKickoffPass(this.engine.getState()),
+    )
+    if (!opening.accepted) {
+      throw new Error('Failed to schedule physical opening kick-off: ' + opening.reason)
     }
     this.latest = this.engine.getState()
     this.prior = this.latest
