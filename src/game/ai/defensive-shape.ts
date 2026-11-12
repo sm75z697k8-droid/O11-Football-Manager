@@ -108,7 +108,7 @@ function keeperPenalty(player: PlayerMatchState) {
 
 function primaryPressers(
   teammates: readonly PlayerMatchState[], ball: Point2,
-  team: TeamMatchState, setup: MatchSetup,
+  team: TeamMatchState,
 ): PlayerMatchState[] {
   const intensity = team.pressingIntensity
   const desired = intensity === 'high' ? 2 : intensity === 'standard' ? 1 : 1
@@ -172,7 +172,7 @@ export function planDefensiveResponsibilities(
 ): ReadonlyMap<string, DefensiveAssignment> {
   const teammates = state.players.filter(p => p.clubId === team.clubId)
   const opponents = state.players.filter(p => p.clubId !== team.clubId)
-  const pressing = primaryPressers(teammates, ballPoint, team, setup)
+  const pressing = primaryPressers(teammates, ballPoint, team)
   const pressingIds = new Set(pressing.map(p => p.playerId))
   const cover = defensiveCover(
     teammates, ballPoint, team, setup, pressingIds)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MatchSetup } from '../../src/game/model/match'
-import type { MatchState, PlayerMatchState } from '../../src/game/match/state'
+import type { MatchState } from '../../src/game/match/state'
 import { createFoundationMatch, restoreFoundationMatch } from '../../src/game/match/engine'
 import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
 import {
