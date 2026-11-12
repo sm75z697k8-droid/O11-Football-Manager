@@ -23,3 +23,10 @@ Offside is still only approximated for target placement; the match engine does N
 - All existing pass completion, goal, GK handling and iPhone performance limits must survive CI. Run manual iPhone Safari checks after deployment.
 
 This is the first attacking combination layer, not fully realized one-twos, overlapping fullbacks, tactical cutbacks, set pieces, calibrated xG or complete competition football rules.
+
+## Wide-carrier underlapping support
+A complement to third-man play is a **real, physically reachable midfield underlap** when a winger personally controls the ball 12–37m from goal. A same-flank central midfielder (RCM for RW, LCM for LW) may find a 6–9m forward, 7–13m inward outlet. The runner must be physically within 18m of the candidate, respect the normal formation-anchor range and conservative last-defender ceiling, and find sufficient opponent space, a clear passing corridor, and usable shot geometry. These are *candidate* support instructions: the existing multi-player space allocator may still prefer another supporting location. The winger is still free to carry, pass or shoot; possession is never transferred by this planner.
+
+The third-man and underlap candidates share one support slot per team decision, so they do not automatically pull several attackers away from their roles. The outfield ball-contact engine and goalkeeper contact mechanics are unchanged.
+
+The live seeded integration logs actual offered third-man plays, *sampled* underlap opportunity frames, physically kicked shots and recorded goalkeeper catches separately. None of these opportunities is treated as a completed pass, shot or save.
