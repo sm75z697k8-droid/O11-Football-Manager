@@ -7,6 +7,7 @@ import { trackGoalkeeperSaves } from './goal-directed'
 import { chooseGoalkeeperThrow } from './goalkeeper-distribution'
 import { activeGoalkeeperCatch } from '../physics/goalkeeper-handling'
 import { canReleaseControlledBall, evaluateOnBallChoice } from './possession'
+import { FOOT_CONTACT_MAX_HEIGHT_M, FOOT_REACH_M } from '../physics/contact'
 import {
   AI_DECISION_PERIOD_TICKS, choosePossessionRelease, planTeamDecisions,
 } from './decisions'
@@ -34,8 +35,24 @@ export function runAutonomousDecisions(
   // even between the usual 12-tick team planning cycles.
   const receptionReleased = state.ai.passIntent !== null &&
     current.ai.passIntent === null
+  // Previously, repeated HELD OFF contact spam accidentally made carriers
+  // replan every six ticks. Replace that dependency with a REAL geometric
+  // pressure signal: a defender in imminent tackle range gets a promptly
+  // reconsidered pass/carry/shot, without needing a fake new collision.
+  const pressureOwner = current.ball.heightM <= FOOT_CONTACT_MAX_HEIGHT_M
+    ? current.players.find(p =>
+      p.playerId === current.ball.controllerId && p.formationSlot !== 'GK')
+    : undefined
+  const imminentPressure = !!pressureOwner && current.players.some(p =>
+    p.clubId !== pressureOwner.clubId &&
+    p.formationSlot !== 'GK' &&
+    Math.hypot(p.position.xM - pressureOwner.position.xM,
+      p.position.yM - pressureOwner.position.yM) < FOOT_REACH_M + 1.5)
+  const decisionPeriod = imminentPressure
+    ? Math.max(6, AI_DECISION_PERIOD_TICKS / 2)
+    : AI_DECISION_PERIOD_TICKS
   if (current.ai.lastDecisionTick >= 0 &&
-      current.clock.tick - current.ai.lastDecisionTick < AI_DECISION_PERIOD_TICKS &&
+      current.clock.tick - current.ai.lastDecisionTick < decisionPeriod &&
       latestContactTick <= current.ai.lastDecisionTick &&
       !receptionReleased) {
     return current
