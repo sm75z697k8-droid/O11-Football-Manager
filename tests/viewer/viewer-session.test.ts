@@ -10,8 +10,11 @@ describe('Phase 6 real simulation viewer session', () => {
     expect(session.state.ball.position).toEqual({ xM: 52.5, yM: 34 })
     expect(session.state.ai.enabledTeams).toEqual([false, false])
     expect(session.state.pendingCommands.map(c => c.type)).toEqual([
-      'setAutonomousTeam', 'setAutonomousTeam',
+      'setAutonomousTeam', 'setAutonomousTeam', 'attemptKick',
     ])
+    expect(session.state.kickoff).toMatchObject({
+      teamId: 'club_harbor', phase: 'awaitingKick', takenTick: null,
+    })
     expect(session.state.clock.tick).toBe(0)
   })
 
