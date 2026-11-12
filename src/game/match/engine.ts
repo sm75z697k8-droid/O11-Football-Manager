@@ -2,6 +2,7 @@ import { advanceSimulationClock, MAX_SIMULATION_TICK, restoreSimulationClock } f
 import { restoreRandomStream } from '../core/rng'
 import { runAutonomousDecisions } from '../ai/runner'
 import { maintainPassReception } from '../ai/pass-coordination'
+import { adjudicatePhysicalGoal } from './goals'
 import {
   AUTO_CONTACT_COOLDOWN_TICKS, resolveAutomaticBallContact,
 } from '../physics/automatic-contact'
@@ -31,7 +32,7 @@ import {
 } from './state'
 import type { MatchState, PressingIntensity } from './state'
 
-export const MATCH_CHECKPOINT_VERSION = 8 as const
+export const MATCH_CHECKPOINT_VERSION = 9 as const
 export const MAX_ADVANCE_STEPS_PER_CALL = 10_000 as const
 
 export interface FoundationMatchCheckpoint {
@@ -85,6 +86,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       !object(state.ball) || !object(state.randomStreams) ||
       !Array.isArray(state.pendingCommands) || !Array.isArray(state.appliedCommands) ||
       !Array.isArray(state.contactEvents) ||
+      !Array.isArray(state.goalEvents) ||
       !Array.isArray(state.automaticContactEvents) ||
       !Number.isSafeInteger(state.ballContactCooldownUntilTick) ||
       state.ballContactCooldownUntilTick < 0 ||
@@ -97,9 +99,44 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   if (state.teams.some((team, i) =>
     !object(team) || team.clubId !== baseline.teams[i].clubId ||
     team.attackingDirection !== baseline.teams[i].attackingDirection ||
-    team.score !== 0 ||
+    !Number.isSafeInteger(team.score) || team.score < 0 ||
+    team.score !== state.goalEvents.filter(g =>
+      g.scoringTeamId === team.clubId).length ||
     !['low', 'standard', 'high'].includes(team.pressingIntensity))) {
     throw new Error('Invalid team state in checkpoint')
+  }
+  // No restart yet: only one actual goal can conclude this exhibition.
+  // The event is checked against team identity, physical line geometry,
+  // last touch and current stopped ball—not a renderer counter.
+  if (state.goalEvents.length > 1) throw new Error('Goal restarts are not implemented')
+  if (state.goalEvents.length) {
+    const ev = state.goalEvents[0]
+    const scorer = state.players.find(p => p.playerId === ev?.lastTouchPlayerId)
+    const goalTeam = state.teams.find(t => t.clubId === ev?.scoringTeamId)
+    const expectedSide = goalTeam?.attackingDirection === 1 ? 'right' : 'left'
+    const expectedX = expectedSide === 'right'
+      ? setup.pitch.lengthM + BALL_RADIUS_M : -BALL_RADIUS_M
+    if (!object(ev) || Object.keys(ev).sort().join(',') !==
+        'crossingHeightM,crossingY,lastTouchPlayerId,ownGoal,scoringTeamId,side,tick' ||
+        !scorer || !goalTeam || ev.side !== expectedSide ||
+        typeof ev.ownGoal !== 'boolean' ||
+        ev.ownGoal !== (scorer.clubId !== goalTeam.clubId) ||
+        !Number.isSafeInteger(ev.tick) || ev.tick !== state.clock.tick ||
+        ev.tick < 1 ||
+        !Number.isFinite(ev.crossingY) ||
+        !Number.isFinite(ev.crossingHeightM) ||
+        Math.abs(ev.crossingY - setup.pitch.widthM / 2) >
+          setup.pitch.goalWidthM / 2 - BALL_RADIUS_M + 1e-7 ||
+        ev.crossingHeightM < BALL_RADIUS_M - 1e-7 ||
+        ev.crossingHeightM > setup.pitch.goalHeightM - BALL_RADIUS_M + 1e-7 ||
+        !state.ball.outsidePitch ||
+        (expectedSide === 'right'
+          ? state.ball.position.xM < expectedX
+          : state.ball.position.xM > expectedX) ||
+        state.ball.lastTouchPlayerId !== ev.lastTouchPlayerId ||
+        state.kickoff?.phase === 'awaitingKick') {
+      throw new Error('Goal event not supported by physical goalmouth state')
+    }
   }
   if (Object.keys(state.randomStreams).length !== MATCH_RANDOM_STREAM_IDS.length) {
     throw new Error('Unexpected number of RNG streams')
@@ -197,7 +234,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     throw new Error('Invalid autonomous team/checkpoint state')
   }
   const generated = commands.filter(c =>
-    c.type === 'attemptKick' && c.commandId.startsWith('ai-pass-'))
+    c.type === 'attemptKick' && (c.commandId.startsWith('ai-pass-') || c.commandId.startsWith('ai-shot-')))
   const expectedLastPass = generated.length
     ? Math.max(...generated.map(c => c.requestedTick)) : -1000
   if (state.ai.lastPassTick !== expectedLastPass) {
@@ -243,7 +280,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         !player || teamIdx < 0 || player.clubId !== d.clubId ||
         !state.ai.enabledTeams[teamIdx] ||
         !Number.isSafeInteger(d.tick) || d.tick !== state.ai.lastDecisionTick ||
-        !['shape','support','press','pursue','carry','receive','cover','mark','recover'].includes(d.action) ||
+        !['shape','support','press','pursue','carry','receive','cover','mark','recover','shoot','save'].includes(d.action) ||
         typeof d.engage !== 'boolean' ||
         !object(d.target) || !insidePitch(d.target, setup.pitch) ||
         liveDecisions.has(d.playerId)) {
@@ -617,6 +654,7 @@ export class FoundationMatchEngine {
       throw new RangeError('Invalid engine advance step count')
     }
     for (let i = 0; i < steps; i += 1) {
+      if (this.state.goalEvents.length) break
       const clock = advanceSimulationClock(this.state.clock)
       const applied = applyDueMatchCommands({ ...this.state, clock })
       const planned = runAutonomousDecisions(applied, this.setup)
@@ -637,7 +675,8 @@ export class FoundationMatchEngine {
       // earlier in this same tick. Retire stale receiver instructions NOW,
       // rather than letting a teammate chase a ball already lost.
       const resolved = resolveAutomaticBallContact(this.state, kickedOff, this.setup)
-      this.state = maintainPassReception(resolved, this.setup)
+      this.state = adjudicatePhysicalGoal(this.state,
+        maintainPassReception(resolved, this.setup), this.setup)
     }
     return this.getState()
   }

@@ -99,15 +99,19 @@ describe('Context-aware possession without predetermined match outcomes', () => 
     expect(choosePossessionRelease(state, setup)?.target).toEqual(choice.target)
   })
 
-  it('prefers recycling the ball over dribbling through the goal line', () => {
+  it('tries a real shot or safer recycling rather than dribbling across the goal line', () => {
     const { setup, state, receiver } = context(
       { xM: 102, yM: 34 }, { xM: 89, yM: 37 },
     )
     const decision = evaluateOnBallChoice(state, setup)
-    expect(decision?.kind).toBe('pass')
-    if (decision?.kind !== 'pass') return
-    expect(decision.receiverId).toBe(receiver.playerId)
-    expect(decision.target.xM).toBeLessThan(102)
+    expect(['pass','shoot']).toContain(decision?.kind)
+    if (decision?.kind === 'pass') {
+      expect(decision.receiverId).toBe(receiver.playerId)
+      expect(decision.target.xM).toBeLessThan(102)
+    } else if (decision?.kind === 'shoot') {
+      expect(decision.target.xM).toBe(setup.pitch.lengthM)
+      expect(decision.power).toBeGreaterThan(.5)
+    }
   })
 
   it('never generates a carry point on a pitch boundary, even with no pass', () => {

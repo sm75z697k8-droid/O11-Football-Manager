@@ -4,6 +4,7 @@ import { FOOT_CONTACT_MAX_HEIGHT_M, FOOT_REACH_M } from './contact'
 import type { MatchState, BallMatchState, PlayerMatchState, AutomaticContactEvent } from '../match/state'
 import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
+import { activePhysicalShot } from '../ai/goal-directed'
 
 /**
  * Phase 4 — physical detection when an agent has declared intent to contest.
@@ -35,6 +36,8 @@ export function sweptFootContact(
   playerAfter: PlayerMatchState,
   ballBefore: BallMatchState,
   ballAfter: BallMatchState,
+  reachM = FOOT_REACH_M,
+  maxHeightM = FOOT_CONTACT_MAX_HEIGHT_M,
 ): ContactSample | null {
   const x0 = ballBefore.position.xM - playerBefore.position.xM
   const y0 = ballBefore.position.yM - playerBefore.position.yM
@@ -46,12 +49,12 @@ export function sweptFootContact(
   let hi = 1
   const h0 = ballBefore.heightM
   const dh = ballAfter.heightM - h0
-  if (h0 > FOOT_CONTACT_MAX_HEIGHT_M &&
-      ballAfter.heightM > FOOT_CONTACT_MAX_HEIGHT_M) return null
-  if (dh > 0 && h0 > FOOT_CONTACT_MAX_HEIGHT_M) return null
-  if (dh < 0 && ballAfter.heightM > FOOT_CONTACT_MAX_HEIGHT_M) return null
-  if (dh > 0) hi = Math.min(hi, (FOOT_CONTACT_MAX_HEIGHT_M - h0) / dh)
-  if (dh < 0) lo = Math.max(lo, (FOOT_CONTACT_MAX_HEIGHT_M - h0) / dh)
+  if (h0 > maxHeightM &&
+      ballAfter.heightM > maxHeightM) return null
+  if (dh > 0 && h0 > maxHeightM) return null
+  if (dh < 0 && ballAfter.heightM > maxHeightM) return null
+  if (dh > 0) hi = Math.min(hi, (maxHeightM - h0) / dh)
+  if (dh < 0) lo = Math.max(lo, (maxHeightM - h0) / dh)
   lo = Math.max(0, lo)
   hi = Math.min(1, hi)
   if (lo > hi) return null
@@ -60,12 +63,12 @@ export function sweptFootContact(
   const closest = dd > 1e-12 ? -(x0 * rx + y0 * ry) / dd : lo
   const nearest = Math.min(hi, Math.max(lo, closest))
   const minDistance = Math.hypot(x0 + nearest * rx, y0 + nearest * ry)
-  if (minDistance > FOOT_REACH_M) return null
+  if (minDistance > reachM) return null
 
   // Earliest entry into the reachable radius, not merely closest approach.
   // This ensures simultaneous candidates are sorted by physical impact time.
   const b = 2 * (x0 * rx + y0 * ry)
-  const c = x0 * x0 + y0 * y0 - FOOT_REACH_M * FOOT_REACH_M
+  const c = x0 * x0 + y0 * y0 - reachM * reachM
   const disc = Math.max(0, b * b - 4 * dd * c)
   const entry = dd > 1e-12 ? (-b - Math.sqrt(disc)) / (2 * dd) : lo
   const fraction = Math.max(lo, Math.min(nearest, entry))
@@ -107,6 +110,8 @@ function candidate(
 ): Candidate | null {
   const pastPlayers = new Map(before.players.map(p => [p.playerId, p]))
   const options: Candidate[] = []
+  const shot = activePhysicalShot(after)
+  const shooter = shot && after.players.find(p => p.playerId === shot.shooterId)
   for (const p of after.players) {
     // A kick-off taker may not touch the ball again until another player
     // touches it; skip the taker during this protected opening passage.
@@ -118,7 +123,13 @@ function candidate(
       (owner && p.clubId === owner.clubId)) continue
     const old = pastPlayers.get(p.playerId)
     if (!old) continue
-    const result = sweptFootContact(old, p, before.ball, after.ball)
+    // Keepers use a modest aerial hand-reach envelope ONLY while responding
+    // to a confirmed opposition shot. The sweep still checks real motion.
+    const goalkeeperSave = p.formationSlot === 'GK' &&
+      !!shooter && shooter.clubId !== p.clubId
+    const result = sweptFootContact(old, p, before.ball, after.ball,
+      goalkeeperSave ? 1.55 : FOOT_REACH_M,
+      goalkeeperSave ? 2.17 : FOOT_CONTACT_MAX_HEIGHT_M)
     if (!result) continue
     options.push({ player: p, sample: result })
   }
@@ -186,17 +197,22 @@ export function resolveAutomaticBallContact(
     }
   } else {
     kind = 'interception'
-    const quality =
-      0.50 * definition.abilities.technical.firstTouch +
-      0.30 * definition.abilities.technical.technique +
-      0.20 * definition.abilities.mental.anticipation
+    const keeperSave = player.formationSlot === 'GK' &&
+      !!definition.abilities.goalkeeping && !!activePhysicalShot(after)
+    const quality = keeperSave && definition.abilities.goalkeeping
+      ? 0.45 * definition.abilities.goalkeeping.reflexes +
+        0.35 * definition.abilities.goalkeeping.handling +
+        0.20 * definition.abilities.goalkeeping.positioning
+      : 0.50 * definition.abilities.technical.firstTouch +
+        0.30 * definition.abilities.technical.technique +
+        0.20 * definition.abilities.mental.anticipation
     const relativeSpeed = Math.hypot(
       before.ball.velocity.xMps - player.velocity.xMps,
       before.ball.velocity.yMps - player.velocity.yMps,
     )
-    const challengeDifficulty = 1.6 * relativeSpeed +
-      9 * sample.distanceM / FOOT_REACH_M
-    if (quality - challengeDifficulty >= 24) {
+    const challengeDifficulty = (keeperSave ? 1.12 : 1.6) * relativeSpeed +
+      9 * sample.distanceM / (keeperSave ? 1.55 : FOOT_REACH_M)
+    if (quality - challengeDifficulty >= (keeperSave ? 15 : 24)) {
       ball = attachTo(ball, player, sample.impact, setup.pitch)
       outcome = 'intercepted'
     } else {

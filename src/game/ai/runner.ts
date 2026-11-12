@@ -3,6 +3,7 @@ import type { MatchSetup } from '../model/match'
 import { MAX_COMMANDS_PER_MATCH, scheduleMatchCommand } from '../match/commands'
 import { maintainPassReception } from './pass-coordination'
 import { followMovingLooseBall } from './loose-ball'
+import { trackGoalkeeperSaves } from './goal-directed'
 import {
   AI_DECISION_PERIOD_TICKS, choosePossessionRelease, planTeamDecisions,
 } from './decisions'
@@ -16,8 +17,8 @@ export function runAutonomousDecisions(
   // Law 8: no autonomous chase or movement until the real opening kick
   // has clearly moved the stationary centre ball.
   if (state.kickoff?.phase === 'awaitingKick') return state
-  const current = maintainPassReception(
-    followMovingLooseBall(state, setup), setup)
+  const current = trackGoalkeeperSaves(maintainPassReception(
+    followMovingLooseBall(state, setup), setup), setup)
   if (!current.ai.enabledTeams.some(Boolean)) return current
   // A real kick, interception, deflection or challenge invalidates the
   // prior tactical phase immediately. Do not wait 0.6s for another decision.
@@ -62,7 +63,8 @@ export function runAutonomousDecisions(
     c.type === 'attemptKick' && c.commandId.startsWith('ai-pass-'))
   if (attempt && !alreadyPending &&
       result.nextCommandSequence <= MAX_COMMANDS_PER_MATCH) {
-    const commandId = 'ai-pass-' + result.clock.tick + '-' + attempt.playerId
+    const commandId = 'ai-' + attempt.kind + '-' + result.clock.tick +
+      '-' + attempt.playerId
     const receipt = scheduleMatchCommand(result, {
       commandId,
       type: 'attemptKick',
@@ -78,13 +80,14 @@ export function runAutonomousDecisions(
         ai: {
           ...result.ai,
           lastPassTick: result.clock.tick,
-          passIntent: {
-            commandId, teamId: attempt.teamId,
-            passerId: attempt.playerId,
-            receiverId: attempt.receiverId,
-            requestedTick: result.clock.tick,
-            target: { ...attempt.target },
-          },
+          passIntent: attempt.kind === 'pass' && attempt.receiverId
+            ? {
+              commandId, teamId: attempt.teamId,
+              passerId: attempt.playerId,
+              receiverId: attempt.receiverId,
+              requestedTick: result.clock.tick,
+              target: { ...attempt.target },
+            } : null,
         },
       }, setup)
     }

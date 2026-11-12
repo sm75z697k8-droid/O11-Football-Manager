@@ -78,6 +78,7 @@ export function createInitialMatchState(input: unknown): {
     clock: createSimulationClock(),
     period: 'notStarted',
     kickoff: openingKickoffState(fixture),
+    goalEvents: [],
     teams,
     players,
     ball: {

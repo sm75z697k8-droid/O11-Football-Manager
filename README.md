@@ -1,3 +1,11 @@
+## Phase 6.7 — Attacking purpose, shots and real goal-line results
+
+O11 now evaluates **carry, pass and shoot** using player attributes, space, shooting angle, line-of-sight and whether a pass produces a better chance than its alternatives. A shot is a real physics kick weighted toward Finishing; goalkeepers move to meet incoming shots and can make a physically swept interception or deflection. A score is recorded **only when the actual ball entirely crosses the goal line between the posts and below the bar**; real own goals are identified from the last toucher. No random xG roll creates a goal.
+
+The match viewer now shows the actual score and a GOAL announcement. After a goal, the exhibition stops instead of faking a restart. Throw-ins, corners, goal kicks, official periods, comprehensive goalkeeping and full football rules are not implemented. These remains estimated, deterministic football heuristics rather than Football Manager-equivalent AI. Match/checkpoint schema v9 prevents old replay versions from silently mixing.
+
+See [Phase 6.7 technical notes](docs/design/phase-6-7-attacking-and-goals.md).
+
 ## Phase 6.6 — Reactive loose-ball intelligence
 
 After a misplaced pass or failed first touch, **last touch no longer counts as possession**. Players on both teams respond to a physical recovery race; the nearest viable challengers adjust toward the moving ball while teammates hold coordinated support/cover responsibilities. A new kick, deflection or interception triggers an immediate next-tick AI reassessment rather than up to 0.6 seconds of outdated instructions. Short passing combinations are permitted after 0.6 simulated seconds, still depending on actual defensive space, player attributes and physical kicking.

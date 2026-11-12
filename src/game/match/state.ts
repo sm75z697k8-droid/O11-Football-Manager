@@ -5,8 +5,8 @@ import type { ClubId, PlayerId } from '../model/player'
 import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
-export const MATCH_STATE_SCHEMA_VERSION = 8 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-contested-ball-recovery-p66-v1' as const
+export const MATCH_STATE_SCHEMA_VERSION = 9 as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-real-goals-and-attacking-decisions-p67-v1' as const
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
   'ball/contact', 'match/referee', 'match/injuries',
@@ -74,7 +74,7 @@ export interface KickoffState {
   readonly phase: 'awaitingKick' | 'inPlay'
   readonly takenTick: number | null
 }
-export type AgentAction = 'shape' | 'support' | 'press' | 'pursue' | 'carry' | 'receive' | 'cover' | 'mark' | 'recover'
+export type AgentAction = 'shape' | 'support' | 'press' | 'pursue' | 'carry' | 'receive' | 'cover' | 'mark' | 'recover' | 'shoot' | 'save'
 export interface AgentDecision {
   readonly tick: number
   readonly playerId: PlayerId
@@ -94,6 +94,16 @@ export interface CoordinatedPassIntent {
   readonly requestedTick: number
   readonly target: Point2
 }
+/** A score can only arise from actual whole-ball goal-line crossing. */
+export interface GoalEvent {
+  readonly tick: number
+  readonly side: 'left' | 'right'
+  readonly scoringTeamId: ClubId
+  readonly lastTouchPlayerId: PlayerId
+  readonly ownGoal: boolean
+  readonly crossingY: number
+  readonly crossingHeightM: number
+}
 export interface AIState {
   readonly passIntent: CoordinatedPassIntent | null
   readonly enabledTeams: readonly [boolean, boolean]
@@ -104,7 +114,7 @@ export interface AIState {
   /** Fixed from the validated starting setup, independent of player motion. */
   readonly formationPositions: Readonly<Record<PlayerId, Point2>>
 }
-/** No match clock, goals, competition rules or full tactical AI yet. */
+/** Experimental goal event log; no full match period/referee/restarts yet. */
 export interface MatchState {
   readonly schemaVersion: typeof MATCH_STATE_SCHEMA_VERSION
   readonly engineVersion: typeof FOUNDATION_ENGINE_VERSION
@@ -113,6 +123,7 @@ export interface MatchState {
   readonly clock: SimulationClock
   readonly period: 'notStarted'
   readonly kickoff: KickoffState | null
+  readonly goalEvents: readonly GoalEvent[]
   readonly teams: readonly [TeamMatchState, TeamMatchState]
   readonly players: readonly PlayerMatchState[]
   readonly ball: BallMatchState

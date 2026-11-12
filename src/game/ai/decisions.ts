@@ -4,6 +4,7 @@ import type { MatchState, PlayerMatchState, AgentDecision } from '../match/state
 import { activePassIntent, intendedReceiverTarget } from './pass-coordination'
 import { chooseDynamicSupport } from './support-space'
 import { planDefensiveResponsibilities } from './defensive-shape'
+import { planGoalkeeperSave } from './goal-directed'
 import { assessLooseBallRace } from './loose-ball'
 import {
   AI_PASS_MIN_INTERVAL_TICKS, evaluateOnBallChoice,
@@ -114,11 +115,17 @@ export function planTeamDecisions(
       let target: Point2 = shape
       let engage = false
 
-      if (player.playerId === owner?.playerId) {
+      const keeperSave = player.formationSlot === 'GK' && isDefending
+        ? planGoalkeeperSave(state, setup, player, team) : null
+      if (keeperSave) {
+        action = 'save'
+        engage = keeperSave.engage
+        target = keeperSave.target
+      } else if (player.playerId === owner?.playerId) {
         const canPass = state.clock.tick - state.ai.lastPassTick >=
           AI_PASS_MIN_INTERVAL_TICKS
         const choice = evaluateOnBallChoice(state, setup, canPass)
-        action = 'carry'
+        action = choice?.kind === 'shoot' ? 'shoot' : 'carry'
         engage = true
         target = choice?.kind === 'carry'
           ? choice.target : { ...player.position }
@@ -163,17 +170,18 @@ export function planTeamDecisions(
  */
 export function choosePossessionRelease(
   state: MatchState, setup: MatchSetup,
-): { teamId: string; playerId: string; receiverId: string; target: Point2; power: number; lift: number } | null {
+): { kind: 'pass' | 'shoot'; teamId: string; playerId: string; receiverId?: string; target: Point2; power: number; lift: number } | null {
   const owner = state.players.find(p => p.playerId === state.ball.controllerId)
   if (!owner || state.ball.outsidePitch || state.ball.heightM > .45 ||
       state.clock.tick - state.ai.lastPassTick < AI_PASS_MIN_INTERVAL_TICKS) return null
   const index = state.teams.findIndex(t => t.clubId === owner.clubId)
   if (index < 0 || !state.ai.enabledTeams[index]) return null
   const choice = evaluateOnBallChoice(state, setup)
-  return choice?.kind === 'pass'
+  return choice?.kind === 'pass' || choice?.kind === 'shoot'
     ? {
+      kind: choice.kind,
       teamId: owner.clubId, playerId: owner.playerId,
-      receiverId: choice.receiverId,
+      ...(choice.kind === 'pass' ? { receiverId: choice.receiverId } : {}),
       target: choice.target, power: choice.power, lift: choice.lift,
     } : null
 }

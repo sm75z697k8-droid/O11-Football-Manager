@@ -1,14 +1,17 @@
 import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
 import type { PlayerDefinition } from '../model/player'
-import type { MatchState, PlayerMatchState } from '../match/state'
+import type { MatchState, PlayerMatchState, TeamMatchState } from '../match/state'
+import {
+  attackingOpportunityAt, evaluateShootingOpportunity,
+} from './goal-directed'
 
 /**
  * Context-aware on-ball choices: estimate opportunities, NEVER match results.
  * This is a bounded, deterministic utility planner on the existing metric pitch.
  * All weights are uncalibrated game-design estimates, not learned probabilities.
  */
-export const POSSESSION_PLANNER_VERSION = 'contested-ball-and-linkplay-v3'
+export const POSSESSION_PLANNER_VERSION = 'goal-directed-possession-v4'
 export const AI_SAFE_EDGE_MARGIN_M = 3.1
 export const AI_PASS_MIN_INTERVAL_TICKS = 12
 
@@ -19,6 +22,8 @@ const distance = (a: Point2, b: Point2) =>
   Math.hypot(a.xM - b.xM, a.yM - b.yM)
 
 export type PossessionChoice =
+  | { readonly kind: 'shoot'; readonly target: Point2;
+      readonly power: number; readonly lift: number; readonly utility: number }
   | { readonly kind: 'carry'; readonly target: Point2; readonly utility: number }
   | { readonly kind: 'pass'; readonly target: Point2; readonly receiverId: string;
       readonly power: number; readonly lift: number; readonly utility: number }
@@ -102,12 +107,12 @@ function carryCandidates(
       target.xM, setup.pitch.lengthM - target.xM,
       target.yM, setup.pitch.widthM - target.yM,
     )
-    // Extra forward movement at the opponent goal line is not a useful play
-    // while goal adjudication/shooting are unimplemented.
+    // Stop carriers trying to run THROUGH the goal line instead of using
+    // a real shot; near the box, goalward movement is still valuable.
     const goalSpace = direction === 1 ?
       setup.pitch.lengthM - xM : xM
-    const goallinePenalty = progress > .5 && goalSpace < 13
-      ? (13 - goalSpace) * 2.7 : 0
+    const goallinePenalty = progress > .5 && goalSpace < 5
+      ? (5 - goalSpace) * 3.5 : 0
     const pressurePenalty = max(0, 5 - space) * (2.1 - control / 120)
     const utility =
       8 + .86 * progress + 1.05 * min(space, 12) +
@@ -125,9 +130,10 @@ function passCandidates(
   carrier: PlayerMatchState,
   teammates: readonly PlayerMatchState[],
   opponents: readonly PlayerMatchState[],
-  setup: MatchSetup, direction: 1 | -1, def: PlayerDefinition,
+  setup: MatchSetup, team: TeamMatchState, def: PlayerDefinition,
 ): PossessionChoice[] {
   const options: PossessionChoice[] = []
+  const direction = team.attackingDirection
   const passing = def.abilities.technical.passing
   const vision = def.abilities.mental.vision
   const decisions = def.abilities.mental.decisions
@@ -163,6 +169,18 @@ function passCandidates(
     // assumed to guarantee a completed pass.
     const receiverMovementBonus = unobstructedOutlet
       ? min(1.6, runnerSpeed * .28) : 0
+    // Passing is useful when it improves the next footballer's ability to
+    // attack the goal. Endless sideways/backward recycling while unpressed
+    // must not outrank carrying into a shooting position.
+    const previousChance = attackingOpportunityAt(
+      carrier.position, team, setup, opponents)
+    const newChance = attackingOpportunityAt(
+      aimed, team, setup, opponents)
+    const chanceCreation = clamp((newChance - previousChance) * 1.5, -14, 16)
+    const distanceToGoalLine = direction === 1
+      ? setup.pitch.lengthM - carrier.position.xM : carrier.position.xM
+    const sterileRecyclePenalty = distanceToGoalLine < 39 &&
+      progress < 3 && widePressure > 5 ? 12 : 0
     const pressureReleaseBonus = widePressure < 8
       ? (8 - widePressure) * .55 : 0
     // A back pass is reasonable under pressure but should not become the
@@ -174,7 +192,8 @@ function passCandidates(
       .018 * composure -
       .13 * separation - obstruction * 2.7 - danger -
       difficulty - veryDeepRecycle +
-      safeOutletBonus + receiverMovementBonus + pressureReleaseBonus
+      safeOutletBonus + receiverMovementBonus + pressureReleaseBonus +
+      chanceCreation - sterileRecyclePenalty
     // Match the actual foot-contact kick speed equation. An old minimum
     // power of .17 severely overhit short ground passes; the receiver had
     // little time to meet the ball before it raced into empty space.
@@ -198,6 +217,7 @@ function passCandidates(
 }
 
 function choiceKey(choice: PossessionChoice): string {
+  if (choice.kind === 'shoot') return 'shoot:' + choice.target.yM.toFixed(2)
   if (choice.kind === 'pass') return 'pass:' + choice.receiverId
   return 'carry:' + choice.target.xM.toFixed(3) + ',' + choice.target.yM.toFixed(3)
 }
@@ -216,17 +236,29 @@ export function evaluateOnBallChoice(
   if (!team || !definition) return null
   const teammates = state.players.filter(p => p.clubId === owner.clubId)
   const opponents = state.players.filter(p => p.clubId !== owner.clubId)
-  const options = carryCandidates(owner, opponents, setup, team.attackingDirection, definition)
+  const carrying = carryCandidates(owner, opponents,
+    setup, team.attackingDirection, definition)
+  const currentChance = attackingOpportunityAt(
+    owner.position, team, setup, opponents)
+  const options: PossessionChoice[] = carrying.map(choice => ({
+    ...choice,
+    // Dribbling is valuable if it materially improves sight of goal.
+    utility: choice.utility + clamp((
+      attackingOpportunityAt(choice.target, team, setup, opponents) -
+      currentChance) * .95, -4, 13),
+  }))
   if (allowPass) {
     options.push(...passCandidates(owner, teammates, opponents,
-      setup, team.attackingDirection, definition))
+      setup, team, definition))
   }
-  // Compare carry against truly open outlets rather than applying a blanket
-  // "always dribble" bias. A narrow tie still favors carrying, and blocked
-  // passes receive no free bonus because their corridor risk is already scored.
-  const distanceToGoal = team.attackingDirection === 1
-    ? setup.pitch.lengthM - owner.position.xM : owner.position.xM
-  const adjustment = distanceToGoal < 11 ? 5.5 : -0.6
+  const shot = evaluateShootingOpportunity(owner, definition, opponents, team, setup)
+  if (shot) options.push({
+    kind: 'shoot', target: shot.target,
+    power: shot.power, lift: shot.lift, utility: shot.utility,
+  })
+  // A shot must beat alternative opportunity utilities, not fire blindly.
+  // A routine lateral pass gets no automatic positive bonus.
+  const adjustment = -0.6
   options.sort((a, b) => {
     const adjusted = (v: PossessionChoice) => v.utility +
       (v.kind === 'pass' ? adjustment : 0)

@@ -174,7 +174,15 @@ export function resolveContactAttempts(
       continue
     }
     const a = definition.abilities
-    const accuracy = (
+    // A physical shot uses finishing/long-shots instead of a pass-only
+    // rating. It still has seeded angular error and real flight physics.
+    const shooting = command.commandId.startsWith('ai-shot-')
+    const accuracy = shooting ? (
+      0.50 * a.technical.finishing +
+      0.20 * a.technical.longShots +
+      0.20 * a.technical.technique +
+      0.10 * a.mental.composure
+    ) / 100 : (
       0.50 * a.technical.passing +
       0.30 * a.technical.technique +
       0.20 * a.mental.composure
