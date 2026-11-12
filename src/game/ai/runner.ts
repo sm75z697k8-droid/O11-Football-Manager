@@ -4,6 +4,8 @@ import { MAX_COMMANDS_PER_MATCH, scheduleMatchCommand } from '../match/commands'
 import { maintainPassReception } from './pass-coordination'
 import { followMovingLooseBall } from './loose-ball'
 import { trackGoalkeeperSaves } from './goal-directed'
+import { chooseGoalkeeperThrow } from './goalkeeper-distribution'
+import { activeGoalkeeperCatch } from '../physics/goalkeeper-handling'
 import { canReleaseControlledBall, evaluateOnBallChoice } from './possession'
 import {
   AI_DECISION_PERIOD_TICKS, choosePossessionRelease, planTeamDecisions,
@@ -45,11 +47,14 @@ export function runAutonomousDecisions(
     p.playerId === current.ball.controllerId)
   const index = current.teams.findIndex(t => t.clubId === owner?.clubId)
   const ownerActive = owner && index >= 0 && current.ai.enabledTeams[index]
-  const choice = ownerActive
+  const holding = activeGoalkeeperCatch(current) !== null
+  const choice = ownerActive && !holding
     ? evaluateOnBallChoice(current, setup,
       canReleaseControlledBall(current, setup), true)
     : null
-  const attempt = choosePossessionRelease(current, setup, choice)
+  const attempt = ownerActive && holding
+    ? chooseGoalkeeperThrow(current, setup)
+    : choosePossessionRelease(current, setup, choice)
   const snapshot = planTeamDecisions(current, setup, choice)
   const byId = new Map(snapshot.map((decision) => [decision.playerId, decision]))
   const players = current.players.map(player => {
@@ -78,31 +83,33 @@ export function runAutonomousDecisions(
     },
   }
   const alreadyPending = result.pendingCommands.some(c =>
-    c.type === 'attemptKick' &&
+    (c.type === 'attemptKick' || c.type === 'attemptGoalkeeperThrow') &&
     (c.commandId.startsWith('ai-pass-') ||
       c.commandId.startsWith('ai-shot-')))
   if (attempt && !alreadyPending &&
       result.nextCommandSequence <= MAX_COMMANDS_PER_MATCH) {
     // The physical contact and goalkeeper systems recognize ai-shot-;
     // 'shoot' is the decision enum, not the command namespace.
-    const commandId = (attempt.kind === 'shoot' ? 'ai-shot-' : 'ai-pass-') +
+    const commandId = (attempt.kind === 'shoot' ? 'ai-shot-' :
+      attempt.kind === 'throw' ? 'ai-pass-throw-' : 'ai-pass-') +
       result.clock.tick + '-' + attempt.playerId
-    const receipt = scheduleMatchCommand(result, {
-      commandId,
-      type: 'attemptKick',
-      teamId: attempt.teamId,
-      playerId: attempt.playerId,
-      target: attempt.target,
-      power: attempt.power,
-      lift: attempt.lift,
-    }, setup.pitch)
+    const command = attempt.kind === 'throw' ? {
+      commandId, type: 'attemptGoalkeeperThrow' as const,
+      teamId: attempt.teamId, playerId: attempt.playerId,
+      target: attempt.target, power: attempt.power,
+    } : {
+      commandId, type: 'attemptKick' as const,
+      teamId: attempt.teamId, playerId: attempt.playerId,
+      target: attempt.target, power: attempt.power, lift: attempt.lift,
+    }
+    const receipt = scheduleMatchCommand(result, command, setup.pitch)
     if (receipt.receipt.accepted) {
       result = maintainPassReception({
         ...receipt.state,
         ai: {
           ...result.ai,
           lastPassTick: result.clock.tick,
-          passIntent: attempt.kind === 'pass' && attempt.receiverId
+          passIntent: (attempt.kind === 'pass' || attempt.kind === 'throw') && attempt.receiverId
             ? {
               commandId, teamId: attempt.teamId,
               passerId: attempt.playerId,
