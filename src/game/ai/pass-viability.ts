@@ -5,7 +5,7 @@ import type { BallMatchState, PlayerMatchState } from '../match/state'
 import { BALL_RADIUS_M, advanceBallPhysics } from '../physics/ball'
 import { sweptFootContact } from '../physics/automatic-contact'
 import { deriveMotionLimits, projectPlayerToward } from '../physics/locomotion'
-import { contactAccuracy, kickAngleErrorRange } from '../physics/contact'
+import { FOOT_REACH_M, contactAccuracy, kickAngleErrorRange } from '../physics/contact'
 import {
   boundedTarget, estimateInterception, predictBallAt,
 } from './coordination'
@@ -15,7 +15,7 @@ import {
  * cosmetic empty-space kick. This is a conservative tactical preview:
  * actual pass error, interceptions and control remain authoritative.
  */
-export const PASS_CONNECTION_VERSION = 'kinematic-reception-preview-v2'
+export const PASS_CONNECTION_VERSION = 'control-aware-reception-preview-v3'
 export const PASS_REHEARSAL_MAX_TICKS = 60
 
 export interface PassViability {
@@ -111,8 +111,24 @@ export function previewPhysicalPass(
         contact.impact.xM <= setup.pitch.lengthM &&
         contact.impact.yM >= 0 &&
         contact.impact.yM <= setup.pitch.widthM) {
-      arrival = tick * .05
-      meeting = contact.impact
+      // Merely touching a ball is not the same as controlling it. The
+      // authoritative automatic-contact resolver deflects first touches
+      // that fail this exact outfield quality/speed/distance threshold.
+      // A failed first touch changes the actual ball trajectory, so this
+      // nominal preview must stop rather than pretend it carries on.
+      const skill = definition.abilities
+      const quality = .50 * skill.technical.firstTouch +
+        .30 * skill.technical.technique +
+        .20 * skill.mental.anticipation
+      const relativeSpeed = Math.hypot(
+        ballAt.velocity.xMps - moving.velocity.xMps,
+        ballAt.velocity.yMps - moving.velocity.yMps)
+      const challengeDifficulty = 1.6 * relativeSpeed +
+        9 * contact.distanceM / FOOT_REACH_M
+      if (quality - challengeDifficulty >= 24) {
+        arrival = tick * .05
+        meeting = contact.impact
+      }
       break
     }
     if (nextBall.outsidePitch) break
