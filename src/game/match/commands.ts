@@ -42,6 +42,15 @@ export interface AttemptKickRequest {
   readonly power: number
   readonly lift: number
 }
+/** Physically release a ball held in a goalkeeper's hands. */
+export interface AttemptGoalkeeperThrowRequest {
+  readonly commandId: string
+  readonly teamId: string
+  readonly type: 'attemptGoalkeeperThrow'
+  readonly playerId: string
+  readonly target: Point2
+  readonly power: number
+}
 /** Toggle physical contact intent; physics handles entry automatically thereafter. */
 export interface SetBallEngagementRequest {
   readonly commandId: string
@@ -60,6 +69,7 @@ export interface SetAutonomousTeamRequest {
 export type MatchCommandRequest =
   | SetPressingCommandRequest | SetMovementTargetRequest
   | DiagnosticBallLaunchRequest | AttemptFirstTouchRequest | AttemptKickRequest
+  | AttemptGoalkeeperThrowRequest
   | SetBallEngagementRequest | SetAutonomousTeamRequest
 export type ScheduledMatchCommand = MatchCommandRequest & {
   readonly requestedTick: number
@@ -77,6 +87,7 @@ const MOVEMENT_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target']
 const BALL_LAUNCH_FIELDS = ['commandId', 'teamId', 'type', 'velocity']
 const FIRST_TOUCH_FIELDS = ['commandId', 'teamId', 'type', 'playerId']
 const KICK_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target', 'power', 'lift']
+const THROW_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target', 'power']
 const ENGAGEMENT_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'enabled']
 const AUTONOMY_FIELDS = ['commandId', 'teamId', 'type', 'enabled']
 
@@ -161,6 +172,24 @@ export function parseMatchCommandRequest(
       playerId: value.playerId,
     } }
   }
+  if (value.type === 'attemptGoalkeeperThrow') {
+    const point = value.target
+    if (Object.keys(value).some(k => !THROW_FIELDS.includes(k)) ||
+        typeof value.playerId !== 'string' || !value.playerId.trim() ||
+        !point || typeof point !== 'object' || Array.isArray(point) ||
+        Object.keys(point).some(k => k !== 'xM' && k !== 'yM') ||
+        !insidePitch(point as Point2, pitch) ||
+        typeof value.power !== 'number' || !Number.isFinite(value.power) ||
+        value.power < .05 || value.power > 1) {
+      return { reason: 'Invalid goalkeeper throw attempt', commandId }
+    }
+    const p = point as Point2
+    return { request: {
+      commandId, teamId: value.teamId, type: 'attemptGoalkeeperThrow',
+      playerId: value.playerId, target: { xM: p.xM, yM: p.yM },
+      power: value.power,
+    } }
+  }
   if (value.type === 'attemptKick') {
     const point = value.target
     if (Object.keys(value).some((k) => !KICK_FIELDS.includes(k)) ||
@@ -201,6 +230,7 @@ export function scheduleMatchCommand(
   if (!state.teams.some((team) => team.clubId === req.teamId)) return reject('Unknown match team')
   if ((req.type === 'setMovementTarget' ||
        req.type === 'attemptFirstTouch' || req.type === 'attemptKick' ||
+       req.type === 'attemptGoalkeeperThrow' ||
        req.type === 'setBallEngagement') &&
       !state.players.some((p) => p.playerId === req.playerId && p.clubId === req.teamId)) {
     return reject('Player does not belong to the specified team')
