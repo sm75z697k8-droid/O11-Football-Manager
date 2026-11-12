@@ -97,6 +97,22 @@ describe('Phase 6.9E real goalkeeper catches, parries and held-ball release',()=
     expect(a!.power).toBeLessThanOrEqual(1)
     expect(chooseGoalkeeperThrow(later,setup)).toEqual(a)
   })
+  it('makes a goalkeeper assess a foot-level first touch before passing',()=>{
+    const {setup,before,keeper}=incomingShot(8)
+    const keeperFeet:MatchState={...before,clock:{...before.clock,tick:26},
+      ball:{...before.ball,heightM:.11,
+        position:{...keeper.position},velocity:{xMps:0,yMps:0,zMps:0},
+        controllerId:keeper.playerId,controlOffset:{xM:0,yM:0},
+        lastTouchPlayerId:keeper.playerId},
+      automaticContactEvents:[{
+        playerId:keeper.playerId,tick:24,kind:'interception',
+        outcome:'intercepted',contactFraction:0,
+      }],
+    }
+    expect(canReleaseControlledBall(keeperFeet,setup)).toBe(false)
+    const later={...keeperFeet,clock:{...keeperFeet.clock,tick:48}}
+    expect(canReleaseControlledBall(later,setup)).toBe(true)
+  })
   it('preserves checkpoint replay of unmodified matches',()=>{
     const setup=makeFictionalMatchSetup()
     const engine=createFoundationMatch(setup)
