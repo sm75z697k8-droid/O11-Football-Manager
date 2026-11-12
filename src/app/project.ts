@@ -29,5 +29,5 @@ export const FOUNDATION_STAGES = [
   { id: '6.9F', title: 'Attacking half-space runs', summary: 'Situation-aware wide forward movement to improve natural shots and goalkeeper involvement' },
   { id: '6.9G', title: 'Third-man attacking combinations', summary: 'One supporting attacker finds a real open lane behind an actively kicked pass' },
   { id: '6.9H', title: 'Intelligent follow-up decisions', summary: 'Value physically reachable passes by credible receiver shots, carries and combinations' },
-  { id: '6.9I', title: 'Contact-loop stability', summary: 'Re-arm repeated failed tackles only after real re-entry; reduce mobile event-log work' },
+  { id: '6.9I', title: 'Contact-loop stability', summary: 'Re-arm failed tackles after renewed contact; maintain pressure-aware AI decisions and bound mobile event-feed work' },
 ] as const
