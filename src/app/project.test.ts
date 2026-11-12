@@ -5,7 +5,7 @@ describe('Project development status', () => {
   it('keeps the match engine clearly marked as non-playable autonomous behavior', () => {
     expect(PROJECT_NAME).toBe('O11 Football Manager')
     expect(PROJECT_PHASE).toBe('5')
-    expect(ENGINE_STATUS).toBe('basic-autonomous-decisions'
+    expect(ENGINE_STATUS).toBe('basic-autonomous-decisions')
   })
 
   it('defines unique and sequential foundation milestones', () => {
