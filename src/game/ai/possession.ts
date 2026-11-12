@@ -6,13 +6,15 @@ import {
   attackingOpportunityAt, evaluateShootingOpportunity,
 } from './goal-directed'
 import { chooseSeededOption } from './decision-variation'
+import { reviewOnBallActions } from './short-horizon'
+import type { ActionAssessment } from './short-horizon'
 
 /**
  * Context-aware on-ball choices: estimate opportunities, NEVER match results.
  * This is a bounded, deterministic utility planner on the existing metric pitch.
  * All weights are uncalibrated game-design estimates, not learned probabilities.
  */
-export const POSSESSION_PLANNER_VERSION = 'seeded-goal-directed-possession-v5'
+export const POSSESSION_PLANNER_VERSION = 'short-horizon-judgment-p69a-v1'
 export const AI_SAFE_EDGE_MARGIN_M = 3.1
 export const AI_PASS_MIN_INTERVAL_TICKS = 12
 
@@ -223,20 +225,31 @@ function choiceKey(choice: PossessionChoice): string {
   return 'carry:' + choice.target.xM.toFixed(3) + ',' + choice.target.yM.toFixed(3)
 }
 
-/** The default pure evaluator preserves strict best-utility comparison for
- * tools and older tactical tests. Autonomous match decisions explicitly turn
- * on bounded, seed-derived choice variation within near-equal options.
+/** Explainable tactical evaluation. The pure baseline remains available for
+ * older test fixtures; in live AI mode, movement/flight forecasts determine
+ * the utility before bounded seed-aware judgment.
  */
-export function evaluateOnBallChoice(
+export interface OnBallPlan {
+  readonly choice: PossessionChoice | null
+  readonly assessments: readonly ActionAssessment[]
+  readonly selectedReason: string
+}
+
+export function evaluateOnBallPlan(
   state: MatchState, setup: MatchSetup, allowPass = true,
   seededVariation = false,
-): PossessionChoice | null {
-  if (state.ball.outsidePitch || state.kickoff?.phase === 'awaitingKick') return null
+): OnBallPlan {
+  if (state.ball.outsidePitch || state.kickoff?.phase === 'awaitingKick')
+    return { choice: null, assessments: [], selectedReason: 'Ball not in play' }
   const owner = state.players.find(p => p.playerId === state.ball.controllerId)
-  if (!owner) return null
+  if (!owner) return {
+    choice: null, assessments: [], selectedReason: 'Nobody controls the ball',
+  }
   const team = state.teams.find(t => t.clubId === owner.clubId)
   const definition = setup.players.find(p => p.id === owner.playerId)
-  if (!team || !definition) return null
+  if (!team || !definition) return {
+    choice: null, assessments: [], selectedReason: 'Unavailable player data',
+  }
   const teammates = state.players.filter(p => p.clubId === owner.clubId)
   const opponents = state.players.filter(p => p.clubId !== owner.clubId)
   const carrying = carryCandidates(owner, opponents,
@@ -268,11 +281,33 @@ export function evaluateOnBallChoice(
     return adjusted(b) - adjusted(a) ||
       (choiceKey(a) < choiceKey(b) ? -1 : choiceKey(a) > choiceKey(b) ? 1 : 0)
   })
-  if (!seededVariation) return options[0] ?? null
+  if (!seededVariation) return {
+    choice: options[0] ?? null, assessments: [],
+    selectedReason: 'Highest immediate spatial utility',
+  }
+  const review = reviewOnBallActions(state, setup, options)
   const mental = definition.abilities.mental
-  return chooseSeededOption(
-    options, state.seed, owner.playerId, state.clock.tick,
+  // Only already-scored forecast candidates may vary; never add two
+  // unrelated randomness rolls or ignore an obvious shot opportunity.
+  const offered = review.assessments.map(assessment => ({
+    kind: assessment.choice.kind, utility: assessment.utility, assessment,
+  }))
+  const selected = chooseSeededOption(
+    offered, state.seed, owner.playerId, state.clock.tick,
     mental.decisions, mental.composure, mental.vision,
-    candidate => candidate.kind === 'pass' ? adjustment : 0,
-  )
+  )?.assessment
+  return {
+    choice: selected?.choice ?? null,
+    assessments: review.assessments,
+    selectedReason: selected?.reasons.join(' · ') ??
+      'No credible on-ball action',
+  }
+}
+
+/** Compatibility API used throughout the existing tactical integration. */
+export function evaluateOnBallChoice(
+  state: MatchState, setup: MatchSetup, allowPass = true,
+  seededVariation = false,
+): PossessionChoice | null {
+  return evaluateOnBallPlan(state, setup, allowPass, seededVariation).choice
 }

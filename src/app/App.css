@@ -372,3 +372,22 @@ button:focus-visible,select:focus-visible,canvas:focus-visible{outline:2px solid
 @media (prefers-reduced-motion:reduce){
   .stoppage-overlay,.overlay-drawer{transition:none;}
 }
+
+/* On-demand tactical explanation in the mobile inspector, not an overlay
+   on the moving pitch. Compact enough for landscape iPhone. */
+.drawer-ai-forecast{
+  margin-top:10px;padding:10px;border-radius:9px;
+  background:rgba(27,56,47,.85);border:1px solid #6fa48649;
+}
+.drawer-ai-forecast>small{display:block;font-size:8px;
+  color:#9fbfad;letter-spacing:.05em;line-height:1.5;}
+.drawer-ai-forecast>strong{display:block;font-size:13px;
+  color:#e0fae6;margin-top:6px;}
+.drawer-ai-forecast>p{font-size:10px;line-height:1.55;
+  color:#b5d3c0;margin:6px 0;}
+.drawer-ai-alternatives{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;}
+.drawer-ai-alternatives>span{font-size:9px;letter-spacing:.01em;
+  background:#18342f;border:1px solid #476859;border-radius:6px;
+  padding:5px 6px;font-weight:750;}
+.drawer-ai-alternatives small{margin-left:4px;font-size:8px;
+  color:#9bb5a5;}

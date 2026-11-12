@@ -1,3 +1,13 @@
+## Phase 6.9A — Intelligent On-Ball Anticipation
+
+The autonomous 2D football AI now forecasts up to **1.6 simulated seconds** when considering passing, carrying or shooting. Passes are checked against moving defenders and anticipated receiver position (not just today's open-looking lane). Carry choices consider defenders arriving near the planned route, attacking progress and safe continuity rather than zigzagging across repeated decisions. Shots remain selected by credible chance and physically executed. A newly consolidated snapshot ensures the AI's kick-release selection and its movement instruction see the same world.
+
+Select the **player currently on the ball** in the Player Inspector to see an **AI THINKING** diagnosis: expected action, reasons, and its three closest tactical alternatives. The forecast is a heuristic, not a simulated event or pass-completion probability. It is generated on demand, not for every Canvas frame.
+
+Replay and New Match retain their Phase 6.8 seed behavior. No additional telemetry is persisted or sent over the internet. Deterministic checkpoint engine version is updated while the schema stays v9. The exhibition still stops at goals/out-of-play, with no real restarts, clock, referee, league management or a complete FM-quality tactical system.
+
+See [Phase 6.9A on-ball planning notes](docs/design/phase-6-9a-short-horizon-football-decisions.md).
+
 ## Phase 6.8 — New Match versus exact Replay
 
 The match viewer now offers separate **REPLAY** and **NEW MATCH** controls, including after a goal or out-of-play event. **REPLAY** uses exactly the current match seed and reproduces the same physical decisions and outcome for testing. **NEW MATCH** generates a different 32-bit seed with Web Crypto on the iPhone and starts a new exhibition with the same teams; the seed is visible on the viewer.

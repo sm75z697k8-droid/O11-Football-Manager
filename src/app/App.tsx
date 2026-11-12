@@ -3,6 +3,7 @@ import type { MouseEvent } from 'react'
 import type { MatchState } from '../game/match/state'
 import { MatchViewerSession } from '../game/viewer/session'
 import { distinctMatchSeed } from '../game/core/match-variation'
+import { AI_PASS_MIN_INTERVAL_TICKS, evaluateOnBallPlan } from '../game/ai/possession'
 import { findPlayerAt, projectPitch } from '../game/viewer/geometry'
 import { renderMatchFrame } from '../game/viewer/renderer'
 import { calculateFrameAdvance, formatDiagnosticTime } from '../game/viewer/pacing'
@@ -221,6 +222,13 @@ export default function App() {
   const selectedDefinition = session.setup.players.find(player => player.id === selectedId)
   const decision = hud.ai.decisionSnapshot.find(item => item.playerId === selectedId)
   const owner = hud.players.find(player => player.playerId === hud.ball.controllerId)
+  // Only inspect on demand. The normal iPhone Canvas playback never invokes
+  // this extra tactical evaluation when the player drawer is closed.
+  const forecast = panel === 'players' && selected &&
+      selected.playerId === hud.ball.controllerId && !hud.ball.outsidePitch
+    ? evaluateOnBallPlan(hud, session.setup,
+      hud.clock.tick - hud.ai.lastPassTick >= AI_PASS_MIN_INTERVAL_TICKS, true)
+    : null
   const ownerClub = session.setup.clubs.find(club => club.id === owner?.clubId)
   const events = physicalEvents(hud)
   const goal = hud.goalEvents.at(-1)
@@ -347,6 +355,27 @@ export default function App() {
                     <div><small>ACTION</small><b>{decision?.action.toUpperCase() ?? 'IDLE'}</b></div>
                     <div><small>RUNNING SPEED</small><b>{Math.hypot(selected.velocity.xMps, selected.velocity.yMps).toFixed(1)} m/s</b></div>
                   </div>
+                  {forecast?.choice && (
+                    <div className="drawer-ai-forecast" aria-label="Estimated short-horizon AI reasoning">
+                      <small>AI THINKING · ESTIMATED, NOT A GUARANTEED RESULT</small>
+                      <strong>{forecast.choice.kind.toUpperCase()}
+                        {forecast.choice.kind === 'pass'
+                          ? ' · ' + (hud.players.find(p => p.playerId ===
+                            (forecast.choice?.kind === 'pass'
+                              ? forecast.choice.receiverId : ''))?.shirtNumber ?? '?')
+                          : ''}
+                      </strong>
+                      <p>{forecast.selectedReason}</p>
+                      <div className="drawer-ai-alternatives">
+                        {forecast.assessments.slice(0, 3).map((item, index) => (
+                          <span key={index}>
+                            {item.choice.kind.toUpperCase()} {item.utility.toFixed(1)}
+                            <small>{item.horizonSeconds.toFixed(1)}s</small>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : <p className="drawer-muted">Tap a player on the pitch or choose one above.</p>}
               <div className="drawer-divider" />

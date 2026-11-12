@@ -31,6 +31,10 @@ export function runAutonomousDecisions(
       latestContactTick <= current.ai.lastDecisionTick) {
     return current
   }
+  // Evaluate movement intent and kick release on the SAME physical world
+  // snapshot. Re-evaluating after writing tactical intentions could change
+  // the selected action despite no new physical event.
+  const attempt = choosePossessionRelease(current, setup)
   const snapshot = planTeamDecisions(current, setup)
   const byId = new Map(snapshot.map((decision) => [decision.playerId, decision]))
   const players = current.players.map(player => {
@@ -58,7 +62,6 @@ export function runAutonomousDecisions(
       decisionSnapshot: snapshot,
     },
   }
-  const attempt = choosePossessionRelease(result, setup)
   const alreadyPending = result.pendingCommands.some(c =>
     c.type === 'attemptKick' &&
     (c.commandId.startsWith('ai-pass-') ||
