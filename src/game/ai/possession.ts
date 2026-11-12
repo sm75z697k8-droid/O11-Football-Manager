@@ -8,9 +8,9 @@ import type { MatchState, PlayerMatchState } from '../match/state'
  * This is a bounded, deterministic utility planner on the existing metric pitch.
  * All weights are uncalibrated game-design estimates, not learned probabilities.
  */
-export const POSSESSION_PLANNER_VERSION = 'contextual-support-aware-v2'
+export const POSSESSION_PLANNER_VERSION = 'contested-ball-and-linkplay-v3'
 export const AI_SAFE_EDGE_MARGIN_M = 3.1
-export const AI_PASS_MIN_INTERVAL_TICKS = 24
+export const AI_PASS_MIN_INTERVAL_TICKS = 12
 
 const min = Math.min
 const max = Math.max
@@ -148,6 +148,7 @@ function passCandidates(
     const danger = max(0, 4.3 - receiverSpace) * 2.1
     const difficulty = max(0, separation - 18) * .32
     const widePressure = nearestOpponent(carrier.position, opponents)
+    const runnerSpeed = Math.hypot(receiver.velocity.xMps, receiver.velocity.yMps)
     // Forward progress is valuable but cannot override a blocked passing
     // lane or a tightly marked receiver. Backwards outlets remain eligible.
     // A teammate offering an open, reachable passing lane is a meaningful
@@ -157,6 +158,11 @@ function passCandidates(
       obstruction < 1.2 && separation <= 29
     const safeOutletBonus = unobstructedOutlet
       ? 3.4 + min(2.5, (receiverSpace - 5.2) * .32) : 0
+    // A teammate moving into the open lane is a stronger outlet than a
+    // standing marker; however, sprinting away at speed is not magically
+    // assumed to guarantee a completed pass.
+    const receiverMovementBonus = unobstructedOutlet
+      ? min(1.6, runnerSpeed * .28) : 0
     const pressureReleaseBonus = widePressure < 8
       ? (8 - widePressure) * .55 : 0
     // A back pass is reasonable under pressure but should not become the
@@ -168,7 +174,7 @@ function passCandidates(
       .018 * composure -
       .13 * separation - obstruction * 2.7 - danger -
       difficulty - veryDeepRecycle +
-      safeOutletBonus + pressureReleaseBonus
+      safeOutletBonus + receiverMovementBonus + pressureReleaseBonus
     // Match the actual foot-contact kick speed equation. An old minimum
     // power of .17 severely overhit short ground passes; the receiver had
     // little time to meet the ball before it raced into empty space.

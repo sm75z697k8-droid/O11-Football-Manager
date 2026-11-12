@@ -2,6 +2,7 @@ import type { MatchState } from '../match/state'
 import type { MatchSetup } from '../model/match'
 import { MAX_COMMANDS_PER_MATCH, scheduleMatchCommand } from '../match/commands'
 import { maintainPassReception } from './pass-coordination'
+import { followMovingLooseBall } from './loose-ball'
 import {
   AI_DECISION_PERIOD_TICKS, choosePossessionRelease, planTeamDecisions,
 } from './decisions'
@@ -15,10 +16,18 @@ export function runAutonomousDecisions(
   // Law 8: no autonomous chase or movement until the real opening kick
   // has clearly moved the stationary centre ball.
   if (state.kickoff?.phase === 'awaitingKick') return state
-  const current = maintainPassReception(state, setup)
+  const current = maintainPassReception(
+    followMovingLooseBall(state, setup), setup)
   if (!current.ai.enabledTeams.some(Boolean)) return current
+  // A real kick, interception, deflection or challenge invalidates the
+  // prior tactical phase immediately. Do not wait 0.6s for another decision.
+  const latestContactTick = Math.max(
+    current.contactEvents.at(-1)?.tick ?? -1,
+    current.automaticContactEvents.at(-1)?.tick ?? -1,
+  )
   if (current.ai.lastDecisionTick >= 0 &&
-      current.clock.tick - current.ai.lastDecisionTick < AI_DECISION_PERIOD_TICKS) {
+      current.clock.tick - current.ai.lastDecisionTick < AI_DECISION_PERIOD_TICKS &&
+      latestContactTick <= current.ai.lastDecisionTick) {
     return current
   }
   const snapshot = planTeamDecisions(current, setup)

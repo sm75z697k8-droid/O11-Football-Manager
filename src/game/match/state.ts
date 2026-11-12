@@ -6,7 +6,7 @@ import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
 export const MATCH_STATE_SCHEMA_VERSION = 8 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-defensive-team-shape-p65-v1' as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-contested-ball-recovery-p66-v1' as const
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
   'ball/contact', 'match/referee', 'match/injuries',

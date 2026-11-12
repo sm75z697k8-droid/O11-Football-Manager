@@ -1,3 +1,11 @@
+## Phase 6.6 — Reactive loose-ball intelligence
+
+After a misplaced pass or failed first touch, **last touch no longer counts as possession**. Players on both teams respond to a physical recovery race; the nearest viable challengers adjust toward the moving ball while teammates hold coordinated support/cover responsibilities. A new kick, deflection or interception triggers an immediate next-tick AI reassessment rather than up to 0.6 seconds of outdated instructions. Short passing combinations are permitted after 0.6 simulated seconds, still depending on actual defensive space, player attributes and physical kicking.
+
+The existing full-screen 2D viewer, genuine opening kickoff, goalkeeper conservatism and previous defensive shape are preserved. No completed passes, interceptions or results are fabricated. This remains a limited deterministic utility system, **not Football Manager-level tactical intelligence**. Goals, shots, refereeing, offside and throw-ins/corners remain unfinished.
+
+See [Phase 6.6 technical design](docs/design/phase-6-6-reactive-loose-balls.md).
+
 ## Phase 6.5 — Defensive team intelligence
 
 **Updated defensive recovery for every outfield role.** Players no longer automatically mark the nearest opponent to an old formation anchor. Instead, the defending XI has a collective set of responsibilities: nearby pressers, one goal-side cover player, compact midfield and backline recovery, selective nearby marking of genuinely dangerous attacking opponents, and wingers staying on their team-relative sides. The goalkeeper stays near its goal.

@@ -108,7 +108,7 @@ function keeperPenalty(player: PlayerMatchState) {
 
 function primaryPressers(
   teammates: readonly PlayerMatchState[], ball: Point2,
-  team: TeamMatchState,
+  team: TeamMatchState, preferredPlayerId?: string,
 ): PlayerMatchState[] {
   const intensity = team.pressingIntensity
   const desired = intensity === 'high' ? 2 : intensity === 'standard' ? 1 : 1
@@ -118,7 +118,8 @@ function primaryPressers(
     separationM(p.position, ball) <= radius)
     .sort((a, b) => {
       const score = (p: PlayerMatchState) =>
-        separationM(p.position, ball) / 6.5 + keeperPenalty(p)
+        separationM(p.position, ball) / 6.5 + keeperPenalty(p) -
+        (p.playerId === preferredPlayerId ? 5 : 0)
       return score(a) - score(b) ||
         (a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0)
     })
@@ -168,11 +169,11 @@ function markTargetNearBlock(
  */
 export function planDefensiveResponsibilities(
   state: MatchState, setup: MatchSetup, team: TeamMatchState,
-  ballPoint: Point2,
+  ballPoint: Point2, preferredRecoveryId?: string,
 ): ReadonlyMap<string, DefensiveAssignment> {
   const teammates = state.players.filter(p => p.clubId === team.clubId)
   const opponents = state.players.filter(p => p.clubId !== team.clubId)
-  const pressing = primaryPressers(teammates, ballPoint, team)
+  const pressing = primaryPressers(teammates, ballPoint, team, preferredRecoveryId)
   const pressingIds = new Set(pressing.map(p => p.playerId))
   const cover = defensiveCover(
     teammates, ballPoint, team, setup, pressingIds)
