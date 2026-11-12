@@ -124,7 +124,7 @@ export function planTeamDecisions(
       } else if (player.playerId === owner?.playerId) {
         const canPass = state.clock.tick - state.ai.lastPassTick >=
           AI_PASS_MIN_INTERVAL_TICKS
-        const choice = evaluateOnBallChoice(state, setup, canPass)
+        const choice = evaluateOnBallChoice(state, setup, canPass, true)
         action = choice?.kind === 'shoot' ? 'shoot' : 'carry'
         engage = true
         target = choice?.kind === 'carry'
@@ -176,7 +176,7 @@ export function choosePossessionRelease(
       state.clock.tick - state.ai.lastPassTick < AI_PASS_MIN_INTERVAL_TICKS) return null
   const index = state.teams.findIndex(t => t.clubId === owner.clubId)
   if (index < 0 || !state.ai.enabledTeams[index]) return null
-  const choice = evaluateOnBallChoice(state, setup)
+  const choice = evaluateOnBallChoice(state, setup, true, true)
   return choice?.kind === 'pass' || choice?.kind === 'shoot'
     ? {
       kind: choice.kind,

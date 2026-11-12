@@ -230,9 +230,13 @@ button:focus-visible,select:focus-visible,canvas:focus-visible{outline:2px solid
 }
 .stoppage-overlay>strong{display:block;font-size:19px;letter-spacing:-.04em;}
 .stoppage-overlay>p{font-size:11px;color:#a6c3b1;line-height:1.45;margin:8px auto 13px;max-width:290px;}
-.stoppage-overlay>button{
-  background:#d2f5db;color:#0c2c22;border:0;border-radius:8px;
-  padding:9px 17px;min-height:36px;font-size:11px;font-weight:900;
+.stoppage-actions{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:9px;}
+.stoppage-actions>button{
+  background:#1e3b32;color:#e8fff1;border:1px solid #527364;border-radius:8px;
+  padding:9px 15px;min-height:36px;font-size:11px;font-weight:900;
+}
+.stoppage-actions>button.stoppage-new-match{
+  color:#0b2820;background:#d2f5db;border-color:#d2f5db;
 }
 .floating-transport{
   position:absolute;z-index:6;
@@ -275,10 +279,16 @@ button:focus-visible,select:focus-visible,canvas:focus-visible{outline:2px solid
 }
 .transport-speeds button.speed-on{background:#355f4c;color:#efffea;}
 .transport-divider{height:25px;width:1px;background:#66887949;margin:0 3px;}
-.transport-reset{
-  width:36px;padding:0;background:#17302d;color:#e1f3e7;
-  border:1px solid #3e5c50;font-size:23px;
+.transport-replay,.transport-new-match{
+  padding:0 10px;font-size:10px;letter-spacing:.015em;
+  border:1px solid #3e5c50;
 }
+.transport-replay{background:#17302d;color:#dcefe5;}
+.transport-new-match{
+  background:#c5f6d3;color:#12382b;border-color:#d6f6de;
+}
+.match-seed{font-variant-numeric:tabular-nums;font-weight:750;color:#a8cdc1;}
+
 .transport-tail{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right;white-space:nowrap;}
 .transport-tail>span{font-size:10px;font-weight:900;color:#bdf6c6;letter-spacing:.04em;}
 .orientation-overlay{display:none;}
@@ -309,7 +319,7 @@ button:focus-visible,select:focus-visible,canvas:focus-visible{outline:2px solid
   .transport-secondary{padding:0 7px;font-size:9px;}
   .transport-speeds button{min-height:26px;padding:0 7px;font-size:10px;}
   .transport-divider{height:20px;margin:0 1px;}
-  .transport-reset{width:31px;font-size:20px;}
+  .transport-replay,.transport-new-match{padding:0 7px;font-size:9px;}
   .quick-player{bottom:calc(env(safe-area-inset-bottom) + 60px);}
   .overlay-drawer{
     top:calc(env(safe-area-inset-top) + 55px);

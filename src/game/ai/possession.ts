@@ -5,13 +5,14 @@ import type { MatchState, PlayerMatchState, TeamMatchState } from '../match/stat
 import {
   attackingOpportunityAt, evaluateShootingOpportunity,
 } from './goal-directed'
+import { chooseSeededOption } from './decision-variation'
 
 /**
  * Context-aware on-ball choices: estimate opportunities, NEVER match results.
  * This is a bounded, deterministic utility planner on the existing metric pitch.
  * All weights are uncalibrated game-design estimates, not learned probabilities.
  */
-export const POSSESSION_PLANNER_VERSION = 'goal-directed-possession-v4'
+export const POSSESSION_PLANNER_VERSION = 'seeded-goal-directed-possession-v5'
 export const AI_SAFE_EDGE_MARGIN_M = 3.1
 export const AI_PASS_MIN_INTERVAL_TICKS = 12
 
@@ -222,11 +223,13 @@ function choiceKey(choice: PossessionChoice): string {
   return 'carry:' + choice.target.xM.toFixed(3) + ',' + choice.target.yM.toFixed(3)
 }
 
-/** One decision at a fixed logical tick. Same world state -> same choice.
- * No Math.random(), result lookup, predetermined pass or forced scoring.
+/** The default pure evaluator preserves strict best-utility comparison for
+ * tools and older tactical tests. Autonomous match decisions explicitly turn
+ * on bounded, seed-derived choice variation within near-equal options.
  */
 export function evaluateOnBallChoice(
   state: MatchState, setup: MatchSetup, allowPass = true,
+  seededVariation = false,
 ): PossessionChoice | null {
   if (state.ball.outsidePitch || state.kickoff?.phase === 'awaitingKick') return null
   const owner = state.players.find(p => p.playerId === state.ball.controllerId)
@@ -265,5 +268,11 @@ export function evaluateOnBallChoice(
     return adjusted(b) - adjusted(a) ||
       (choiceKey(a) < choiceKey(b) ? -1 : choiceKey(a) > choiceKey(b) ? 1 : 0)
   })
-  return options[0] ?? null
+  if (!seededVariation) return options[0] ?? null
+  const mental = definition.abilities.mental
+  return chooseSeededOption(
+    options, state.seed, owner.playerId, state.clock.tick,
+    mental.decisions, mental.composure, mental.vision,
+    candidate => candidate.kind === 'pass' ? adjustment : 0,
+  )
 }

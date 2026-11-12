@@ -15,12 +15,15 @@ export class MatchViewerSession {
   private prior: MatchState
   private latest: MatchState
 
-  constructor() {
-    const fixture = makeFictionalMatchSetup()
-    this.engine = createFoundationMatch({
-      ...fixture,
-      kickoff: { teamId: fixture.clubs[0].id },
-    })
+  /** Explicit seed enables exact replay; omitted seed retains the test fixture. */
+  constructor(seed?: number) {
+    const template = makeFictionalMatchSetup()
+    const fixture = {
+      ...template,
+      seed: seed ?? template.seed,
+      kickoff: { teamId: template.clubs[0].id },
+    }
+    this.engine = createFoundationMatch(fixture)
     this.setup = this.engine.getSetup()
     this.latest = this.engine.getState()
     this.prior = this.latest

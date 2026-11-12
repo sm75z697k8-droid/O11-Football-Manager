@@ -1,7 +1,7 @@
 /** O11 project metadata. Real-time landscape Canvas now visualizes the authoritative headless engine; no official match rules or results yet. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = '6.7' as const
-export const ENGINE_STATUS = 'physical-shots-and-goals-exhibition' as const
+export const PROJECT_PHASE = '6.8' as const
+export const ENGINE_STATUS = 'seeded-diverse-match-simulation' as const
 
 export const FOUNDATION_STAGES = [
   { id: '0A', title: 'Project foundation', summary: 'App, TypeScript, tests and deployment' },
@@ -21,4 +21,5 @@ export const FOUNDATION_STAGES = [
   { id: '6.5', title: 'Team-wide defensive intelligence', summary: 'Compact recovery, zonal threats, pressing and goal-side cover for both teams' },
   { id: '6.6', title: 'Reactive ball recovery', summary: 'Contested loose balls, instant turnover responses and faster link play' },
   { id: '6.7', title: 'Goal-directed attacking', summary: 'Chance creation, physical shots, keeper saves and real goalmouth adjudication' },
+  { id: '6.8', title: 'Seeded match variation', summary: 'New unique match seeds, exact replay and bounded attribute-aware decision variety' },
 ] as const

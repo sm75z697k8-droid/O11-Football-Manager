@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { MouseEvent } from 'react'
 import type { MatchState } from '../game/match/state'
 import { MatchViewerSession } from '../game/viewer/session'
+import { distinctMatchSeed } from '../game/core/match-variation'
 import { findPlayerAt, projectPitch } from '../game/viewer/geometry'
 import { renderMatchFrame } from '../game/viewer/renderer'
 import { calculateFrameAdvance, formatDiagnosticTime } from '../game/viewer/pacing'
@@ -163,8 +164,8 @@ export default function App() {
     }
   }, [playing, speed, selectedId, renderRevision])
 
-  const reset = () => {
-    const fresh = new MatchViewerSession()
+  const restartWithSeed = (seed: number) => {
+    const fresh = new MatchViewerSession(seed)
     sessionRef.current = fresh
     setPlaying(false)
     setFailure(null)
@@ -173,6 +174,25 @@ export default function App() {
     setHud(fresh.state)
     setRenderRevision(revision => revision + 1)
   }
+
+  const replaySameMatch = () => {
+    restartWithSeed(sessionRef.current!.state.seed)
+  }
+
+  const startNewMatch = () => {
+    try {
+      // Only the user's NEW MATCH click uses external entropy. Simulation
+      // and REPLAY are fully seeded and never depend on wall-clock time.
+      const value = window.crypto.getRandomValues(new Uint32Array(1))[0]
+      const newSeed = distinctMatchSeed(sessionRef.current!.state.seed, value)
+      restartWithSeed(newSeed)
+    } catch {
+      setFailure('A secure browser random seed is unavailable. You can still replay this match.')
+      setPlaying(false)
+    }
+  }
+
+  const seedCode = hud.seed.toString(16).toUpperCase().padStart(8, '0')
 
   const stepOne = () => {
     if (playing || failure || hud.ball.outsidePitch) return
@@ -275,6 +295,8 @@ export default function App() {
         {statuses}
         <span className="caption-divider">/</span>
         PHYSICS ENGINE
+        <span className="caption-divider">/</span>
+        <span className="match-seed">SEED {seedCode}</span>
       </div>
 
       <div className="match-corner-left">
@@ -356,14 +378,18 @@ export default function App() {
               (goalScorer ? ' · #' + goalScorer.shirtNumber : '') +
               ' · The full ball crossed between the posts and under the bar. Restart rules are not implemented yet.'
             : 'The ball left the playing field. Throw-ins, corners and goal kicks are not implemented yet.')}</p>
-          <button type="button" onClick={reset}>↺ Reset simulation</button>
+          <div className="stoppage-actions">
+            <button type="button" onClick={replaySameMatch}>↺ Replay same</button>
+            <button type="button" className="stoppage-new-match"
+              onClick={startNewMatch}>New match</button>
+          </div>
         </section>
       )}
 
       <footer className="floating-transport">
         <div className="transport-identity">
           <span className="transport-title">O11 <span>/</span> SIM</span>
-          <span className="transport-subtitle">EARLY ENGINE PREVIEW</span>
+          <span className="transport-subtitle">SEED {seedCode}</span>
         </div>
         <div className="transport-controls" aria-label="Simulation playback">
           <button type="button" className={playing ? 'transport-primary playing' : 'transport-primary'}
@@ -385,8 +411,14 @@ export default function App() {
             ))}
           </div>
           <div className="transport-divider" aria-hidden="true" />
-          <button type="button" className="transport-reset"
-            onClick={reset} aria-label="Restart simulation from the beginning">↺</button>
+          <button type="button" className="transport-replay"
+            onClick={replaySameMatch}
+            title="Same seed, exactly the same match"
+            aria-label="Replay the same seeded match">↺ REPLAY</button>
+          <button type="button" className="transport-new-match"
+            onClick={startNewMatch}
+            title="New seed, new possible match sequence"
+            aria-label="Start a new match with a different simulation seed">NEW MATCH</button>
         </div>
         <div className="transport-tail">
           <span>{goal ? 'PHYSICAL GOAL' : hud.ball.outsidePitch ? 'OUT OF PLAY' : '20 HZ PHYSICS'}</span>

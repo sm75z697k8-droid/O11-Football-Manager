@@ -3,6 +3,7 @@ import type { Point2 } from '../model/pitch'
 import type { Formation433Slot } from '../model/team'
 import type { KickoffState, MatchState } from './state'
 import type { AttemptKickRequest } from './commands'
+import { createRandomStream } from '../core/rng'
 
 /** Opening kick-off only. Other match restarts remain separate future work.
  * Law 8: all other players remain within their own halves, and opponents
@@ -67,10 +68,15 @@ export function openingKickoffState(setup: MatchSetup): KickoffState | null {
       const a = definition.abilities
       // Choice of recipient is an estimated football judgment; execution
       // still uses normal seeded contact/ball physics.
-      const score = .48 * a.technical.firstTouch +
+      const ability = .48 * a.technical.firstTouch +
         .27 * a.technical.technique +
         .25 * a.mental.anticipation
-      return { playerId: assignment.playerId, score }
+      // Within near-equal options, changing the match seed can alter the
+      // recipient immediately. Superior footballers keep their advantage.
+      const uncertainty = (createRandomStream(setup.seed,
+        'kickoff/recipient/' + assignment.playerId.slice(0, 48))
+        .nextFloat() - .5) * 4.4
+      return { playerId: assignment.playerId, score: ability + uncertainty }
     })
     .sort((a, b) => b.score - a.score ||
       (a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0))
