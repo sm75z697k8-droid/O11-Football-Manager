@@ -1,3 +1,11 @@
+## Phase 6.2 — Context-aware football AI
+
+The ball carrier now evaluates genuine **passing lanes, nearby pressure, safe space and boundary risk** rather than always running toward goal. Forward, sideways and backward passes can be selected when preferable; otherwise players choose an open carry direction through existing movement physics. Attributes influence the decisions, and kicks are still executed through real ball/contact physics, never awarded automatically.
+
+This is a **deterministic estimated utility planner**, not machine learning or Football Manager-level tactical intelligence. The opening kick-off and full-screen match viewer are preserved. Goals, shooting and out-of-play restarts are still **not** implemented. Engine behavior changed, so the engine-version string was bumped even though state schema v7 remains the same.
+
+See [Phase 6.2 decision architecture](docs/design/phase-6-context-aware-ai.md).
+
 ## Phase 6 — Physical opening kick-off correction
 
 The two fictional teams now start the *viewer fixture* in their own halves. The opposing team stays at least 9.15m from the centre ball, which is stationary before kick-off. Pressing Play executes an actual short pass toward a supporting midfielder through the same physical kick/contact system used elsewhere. The AI waits for that physical kick and ball movement before chasing, and the designated receiver—not the kicker—pursues the opening ball.
