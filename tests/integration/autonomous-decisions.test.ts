@@ -153,8 +153,17 @@ describe('Phase 5 opt-in tactical decision system', () => {
     const pass = choosePossessionRelease(state, setup())
     expect(pass?.teamId).toBe('club_harbor')
     expect(pass?.playerId).toBe(owner.playerId)
-    expect(pass?.target.xM).toBeGreaterThan(owner.position.xM)
-    expect(pass?.power).toBeGreaterThan(0)
+    // A pressured footballer may sensibly recycle backwards or sideways:
+    // the target must match a real teammate, not a forced forward vector.
+    expect(pass).not.toBeNull()
+    if (!pass) return
+    expect(players.some(player =>
+      player.clubId === owner.clubId &&
+      player.playerId !== owner.playerId &&
+      Math.hypot(player.position.xM - pass.target.xM,
+        player.position.yM - pass.target.yM) <= 2,
+    )).toBe(true)
+    expect(pass.power).toBeGreaterThan(0)
   })
 
   it('replays autonomous motion, contact and attempted releases byte-for-byte', () => {
