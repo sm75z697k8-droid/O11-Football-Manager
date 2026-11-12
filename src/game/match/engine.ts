@@ -1,5 +1,6 @@
 import { advanceSimulationClock, MAX_SIMULATION_TICK, restoreSimulationClock } from '../core/clock'
 import { restoreRandomStream } from '../core/rng'
+import { runAutonomousDecisions } from '../ai/runner'
 import {
   AUTO_CONTACT_COOLDOWN_TICKS, resolveAutomaticBallContact,
 } from '../physics/automatic-contact'
@@ -26,7 +27,7 @@ import {
 } from './state'
 import type { MatchState, PressingIntensity } from './state'
 
-export const MATCH_CHECKPOINT_VERSION = 5 as const
+export const MATCH_CHECKPOINT_VERSION = 6 as const
 export const MAX_ADVANCE_STEPS_PER_CALL = 10_000 as const
 
 export interface FoundationMatchCheckpoint {
@@ -82,7 +83,10 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       !Array.isArray(state.contactEvents) ||
       !Array.isArray(state.automaticContactEvents) ||
       !Number.isSafeInteger(state.ballContactCooldownUntilTick) ||
-      state.ballContactCooldownUntilTick < 0) {
+      state.ballContactCooldownUntilTick < 0 ||
+      !object(state.ai) || !Array.isArray(state.ai.enabledTeams) ||
+      !Array.isArray(state.ai.decisionSnapshot) ||
+      !object(state.ai.formationPositions)) {
     throw new Error('Incomplete match state checkpoint')
   }
   const baseline = createInitialMatchState(setup).state
@@ -154,6 +158,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   )
   const lastMotion = new Map<string, Extract<AppliedMatchCommand, {type: 'setMovementTarget'}>>()
   const engagement = new Map(setup.players.map(p => [p.id, false]))
+  const everAutonomous = new Set<string>()
+  const expectedAIEnabled: [boolean, boolean] = [false, false]
   for (const command of orderedApplied) {
     if (command.type === 'setPressingIntensity') {
       tactics[command.teamId] = command.intensity
@@ -161,10 +167,68 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       lastMotion.set(command.playerId, command as Extract<AppliedMatchCommand, {type: 'setMovementTarget'}>)
     } else if (command.type === 'setBallEngagement') {
       engagement.set(command.playerId, command.enabled)
+    } else if (command.type === 'setAutonomousTeam') {
+      const index = state.teams.findIndex(team => team.clubId === command.teamId)
+      if (index < 0) throw new Error('AI command points to an absent team')
+      expectedAIEnabled[index] = command.enabled
+      if (command.enabled) everAutonomous.add(command.teamId)
     }
   }
   if (state.teams.some((team) => team.pressingIntensity !== tactics[team.clubId])) {
     throw new Error('Tactical state disagrees with command history')
+  }
+
+  // Team AI only becomes authoritative after an applied opt-in command.
+  // The fixture anchors must remain exactly the validated initial positions.
+  if (state.ai.enabledTeams.length !== 2 ||
+      state.ai.enabledTeams.some((v,i) => v !== expectedAIEnabled[i]) ||
+      JSON.stringify(state.ai.formationPositions) !==
+        JSON.stringify(baseline.ai.formationPositions) ||
+      !Number.isSafeInteger(state.ai.lastDecisionTick) ||
+      state.ai.lastDecisionTick < -1 ||
+      state.ai.lastDecisionTick > state.clock.tick ||
+      !Number.isSafeInteger(state.ai.lastPassTick) ||
+      state.ai.lastPassTick < -1000 ||
+      state.ai.lastPassTick > state.clock.tick) {
+    throw new Error('Invalid autonomous team/checkpoint state')
+  }
+  const generated = commands.filter(c =>
+    c.type === 'attemptKick' && c.commandId.startsWith('ai-pass-'))
+  const expectedLastPass = generated.length
+    ? Math.max(...generated.map(c => c.requestedTick)) : -1000
+  if (state.ai.lastPassTick !== expectedLastPass) {
+    throw new Error('AI pass checkpoint does not match the physical kick commands')
+  }
+  const liveDecisions = new Set<string>()
+  for (const d of state.ai.decisionSnapshot) {
+    const teamIdx = state.teams.findIndex(t => t.clubId === d?.clubId)
+    const player = state.players.find(p => p.playerId === d?.playerId)
+    if (!d || typeof d !== 'object' ||
+        Object.keys(d).sort().join(',') !==
+          'action,clubId,engage,playerId,target,tick' ||
+        !player || teamIdx < 0 || player.clubId !== d.clubId ||
+        !state.ai.enabledTeams[teamIdx] ||
+        !Number.isSafeInteger(d.tick) || d.tick !== state.ai.lastDecisionTick ||
+        !['shape','support','press','pursue','carry'].includes(d.action) ||
+        typeof d.engage !== 'boolean' ||
+        !object(d.target) || !insidePitch(d.target, setup.pitch) ||
+        liveDecisions.has(d.playerId)) {
+      throw new Error('Invalid autonomous decision snapshot')
+    }
+    liveDecisions.add(d.playerId)
+  }
+  if (!everAutonomous.size &&
+      (state.ai.lastDecisionTick !== -1 ||
+        state.ai.decisionSnapshot.length !== 0 ||
+        state.ai.lastPassTick !== -1000)) {
+    throw new Error('Autonomous behavior occurred without team opt-in')
+  }
+  if (state.ai.lastDecisionTick === -1 && state.ai.decisionSnapshot.length) {
+    throw new Error('Uninitialized AI cannot contain decisions')
+  }
+  if (state.ai.lastDecisionTick !== -1 &&
+      !everAutonomous.size) {
+    throw new Error('AI tick without prior activation')
   }
 
   // Validate precisely one recorded outcome per applied contact request.
@@ -361,7 +425,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     void _initialIntention
     void _initialEngagement
     if (typeof engagesBall !== 'boolean' ||
-        engagesBall !== engagement.get(player.playerId)) {
+        (!everAutonomous.has(player.clubId) &&
+          engagesBall !== engagement.get(player.playerId))) {
       throw new Error('Player ball engagement does not match applied commands')
     }
     if (JSON.stringify(metadata) !== JSON.stringify(expected)) {
@@ -369,7 +434,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     }
 
     const motion = lastMotion.get(player.playerId)
-    if (!motion) {
+    if (!motion && !everAutonomous.has(player.clubId)) {
       if (JSON.stringify({ ...player, engagesBall: false }) !==
           JSON.stringify(original)) {
         throw new Error('Player moved without an authoritative movement command')
@@ -389,15 +454,17 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       throw new Error('Player exceeds their maximum physical speed')
     }
     if ((!intention || typeof intention !== 'object' || Array.isArray(intention)) || !Number.isSafeInteger(intention.sinceTick) ||
-        intention.sinceTick < motion.appliedTick ||
+        intention.sinceTick < (everAutonomous.has(player.clubId) ? 0 : (motion?.appliedTick ?? 0)) ||
         intention.sinceTick > state.clock.tick) {
       throw new Error('Invalid player locomotion intention')
     }
     if (intention.kind === 'moveToPoint') {
-      if (intention.sinceTick !== motion.appliedTick ||
+      if ((!everAutonomous.has(player.clubId) &&
+            intention.sinceTick !== motion?.appliedTick) ||
           (!intention.target || typeof intention.target !== 'object' || Array.isArray(intention.target)) ||
           !insidePitch(intention.target, setup.pitch) ||
-          JSON.stringify(intention.target) !== JSON.stringify(motion.target)) {
+          (!everAutonomous.has(player.clubId) &&
+            JSON.stringify(intention.target) !== JSON.stringify(motion?.target))) {
         throw new Error('Movement target differs from the latest applied instruction')
       }
     } else if (intention.kind === 'holdFormation') {
@@ -454,7 +521,8 @@ export class FoundationMatchEngine {
     for (let i = 0; i < steps; i += 1) {
       const clock = advanceSimulationClock(this.state.clock)
       const applied = applyDueMatchCommands({ ...this.state, clock })
-      const agents = advancePlayerLocomotion(applied, this.setup.players, this.setup.pitch)
+      const planned = runAutonomousDecisions(applied, this.setup)
+      const agents = advancePlayerLocomotion(planned, this.setup.players, this.setup.pitch)
       const controller = agents.ball.controllerId
         ? agents.players.find((p) => p.playerId === agents.ball.controllerId)
         : null

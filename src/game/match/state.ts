@@ -5,9 +5,8 @@ import type { ClubId, PlayerId } from '../model/player'
 import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
-export const MATCH_STATE_SCHEMA_VERSION = 5 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-swept-contact-p4-v1' as const
-
+export const MATCH_STATE_SCHEMA_VERSION = 6 as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-autonomous-decisions-p5-v1' as const
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
   'ball/contact', 'match/referee', 'match/injuries',
@@ -31,7 +30,6 @@ export interface PlayerMatchState {
   readonly orientationRad: number
   readonly energy: number
   readonly intention: PlayerIntention
-  /** Engagement is an intent, not automatic tactical decision-making. */
   readonly engagesBall: boolean
 }
 export interface TeamMatchState {
@@ -66,10 +64,27 @@ export interface AutomaticContactEvent {
   readonly playerId: PlayerId
   readonly kind: 'interception' | 'challenge'
   readonly outcome: 'intercepted' | 'deflected' | 'wonChallenge' | 'heldOff'
-  /** Relative time of the physical encounter within the engine step. */
   readonly contactFraction: number
 }
-/** Headless physical diagnostics; no actual 11v11 match is playable yet. */
+export type AgentAction = 'shape' | 'support' | 'press' | 'pursue' | 'carry'
+export interface AgentDecision {
+  readonly tick: number
+  readonly playerId: PlayerId
+  readonly clubId: ClubId
+  readonly action: AgentAction
+  readonly engage: boolean
+  readonly target: Point2
+}
+export interface AIState {
+  readonly enabledTeams: readonly [boolean, boolean]
+  readonly lastDecisionTick: number
+  readonly lastPassTick: number
+  /** Bounded to the latest player decisions; not an infinite action log. */
+  readonly decisionSnapshot: readonly AgentDecision[]
+  /** Fixed from the validated starting setup, independent of player motion. */
+  readonly formationPositions: Readonly<Record<PlayerId, Point2>>
+}
+/** No match clock, goals, competition rules or full tactical AI yet. */
 export interface MatchState {
   readonly schemaVersion: typeof MATCH_STATE_SCHEMA_VERSION
   readonly engineVersion: typeof FOUNDATION_ENGINE_VERSION
@@ -87,4 +102,5 @@ export interface MatchState {
   readonly automaticContactEvents: readonly AutomaticContactEvent[]
   readonly ballContactCooldownUntilTick: number
   readonly nextCommandSequence: number
+  readonly ai: AIState
 }

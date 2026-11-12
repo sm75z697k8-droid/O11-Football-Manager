@@ -89,6 +89,15 @@ export function createInitialMatchState(input: unknown): {
     automaticContactEvents: [],
     ballContactCooldownUntilTick: 0,
     nextCommandSequence: 1,
+    ai: {
+      enabledTeams: [false, false],
+      lastDecisionTick: -1,
+      lastPassTick: -1000,
+      decisionSnapshot: [],
+      formationPositions: Object.fromEntries(players.map(p => [
+        p.playerId, { ...p.position },
+      ])),
+    },
   }
   return { setup: fixture, state }
 }

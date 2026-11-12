@@ -50,10 +50,17 @@ export interface SetBallEngagementRequest {
   readonly playerId: string
   readonly enabled: boolean
 }
+/** Opt-in autonomous behavior independently for either fictional team. */
+export interface SetAutonomousTeamRequest {
+  readonly commandId: string
+  readonly teamId: string
+  readonly type: 'setAutonomousTeam'
+  readonly enabled: boolean
+}
 export type MatchCommandRequest =
   | SetPressingCommandRequest | SetMovementTargetRequest
   | DiagnosticBallLaunchRequest | AttemptFirstTouchRequest | AttemptKickRequest
-  | SetBallEngagementRequest
+  | SetBallEngagementRequest | SetAutonomousTeamRequest
 export type ScheduledMatchCommand = MatchCommandRequest & {
   readonly requestedTick: number
   readonly targetTick: number
@@ -71,6 +78,7 @@ const BALL_LAUNCH_FIELDS = ['commandId', 'teamId', 'type', 'velocity']
 const FIRST_TOUCH_FIELDS = ['commandId', 'teamId', 'type', 'playerId']
 const KICK_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target', 'power', 'lift']
 const ENGAGEMENT_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'enabled']
+const AUTONOMY_FIELDS = ['commandId', 'teamId', 'type', 'enabled']
 
 export function parseMatchCommandRequest(
   input: unknown, pitch: PitchDefinition,
@@ -120,6 +128,16 @@ export function parseMatchCommandRequest(
     return { request: {
       commandId, teamId: value.teamId, type: 'diagnosticBallLaunch',
       velocity: { xMps: v.xMps, yMps: v.yMps, zMps: v.zMps },
+    } }
+  }
+  if (value.type === 'setAutonomousTeam') {
+    if (Object.keys(value).some((k) => !AUTONOMY_FIELDS.includes(k)) ||
+        typeof value.enabled !== 'boolean') {
+      return { reason: 'Invalid autonomous team toggle', commandId }
+    }
+    return { request: {
+      commandId, teamId: value.teamId,
+      type: 'setAutonomousTeam', enabled: value.enabled,
     } }
   }
   if (value.type === 'setBallEngagement') {
@@ -215,11 +233,22 @@ export function applyDueMatchCommands(state: MatchState): MatchState {
   let teams = state.teams
   let players = state.players
   let ball = state.ball
+  let ai = state.ai
   for (const command of due) {
     if (command.type === 'setPressingIntensity') {
       teams = teams.map((team) => team.clubId === command.teamId
         ? { ...team, pressingIntensity: command.intensity }
         : team) as unknown as typeof teams
+    } else if (command.type === 'setAutonomousTeam') {
+      const index = teams.findIndex(t => t.clubId === command.teamId)
+      if (index === -1) throw new Error('Missing team for autonomy')
+      const enabledTeams: [boolean, boolean] = [...ai.enabledTeams]
+      enabledTeams[index] = command.enabled
+      ai = {
+        ...ai, enabledTeams,
+        decisionSnapshot: command.enabled ? ai.decisionSnapshot :
+          ai.decisionSnapshot.filter(d => d.clubId !== command.teamId),
+      }
     } else if (command.type === 'setMovementTarget') {
       players = players.map((p) => p.playerId === command.playerId
         ? { ...p, intention: { kind: 'moveToPoint' as const,
@@ -240,7 +269,7 @@ export function applyDueMatchCommands(state: MatchState): MatchState {
   }))
   const ids = new Set(due.map((command) => command.commandId))
   return {
-    ...state, teams, players, ball,
+    ...state, teams, players, ball, ai,
     pendingCommands: state.pendingCommands.filter((command) => !ids.has(command.commandId)),
     appliedCommands: [...state.appliedCommands, ...applied],
   }

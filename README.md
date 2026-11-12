@@ -1,30 +1,29 @@
 # O11 Football Manager
 
-A serious, simulation-first football management simulator being developed for full-screen, landscape-first play on iPhone Safari and desktop. Development uses GitHub web editing and GitHub Actions.
+A long-term, simulation-first football management game under construction for **landscape-first full-screen** iPhone Safari and desktop. The entire project is maintained through GitHub on an iPhone.
 
-## Current milestone: Phase 4 — Automatic ball contact
+## Phase 5 — First autonomous football decisions
 
-The shared test fixture includes exactly two fictional clubs, **Harbor Athletic** and **Vale Rovers**, with 11 players each.
+The engine still uses exactly **two fictional clubs**: Harbor Athletic and Vale Rovers, with 11 starting footballers each.
 
-- Deterministic 50 ms logical ticks, seeded random streams, ordered command scheduling and versioned checkpoints.
-- Physically derived player acceleration, braking, speed and turning.
-- Physical ball rolling, gravity, drag, bouncing and pitch boundaries.
-- Explicit first-touch and kick attempts, with skill and actual reach affecting results.
-- **NEW:** Physical interception/challenge detection across the complete relative ball–player movement segment in a tick (instead of endpoint-only checking). A footballer's `setBallEngagement` intent activates automatic contact detection; no repeated first-touch commands are necessary. Real position, relative velocity and attributes influence interception, deflection and defensive challenges, with single-winner arbitration and cooldown.
-- Match state, controls and automatic interaction events restore and replay deterministically.
+- Metric pitch and player attributes, 50ms fixed-step simulation, seeded deterministic random streams, versioned checkpoints and command scheduling.
+- Physical players accelerate, turn and brake; the ball rolls, flies and rebounds; controlled first touches, kicks, interceptions and opponent challenges use actual positions.
+- **NEW:** Basic decision-making agents can be enabled for either team through `setAutonomousTeam`, default **off**. Agents choose physically bounded targets for pursuit, pressing, carrying, formation recovery and support. Their decisions are reassessed every 12 fixed ticks, rather than continuously generating command history.
+- Pressing intensity changes how many footballers chase the ball. The owner can choose a teammate under pressure and attempt an ordinary physical pass through the real kick and contact mechanics. Outcomes are not predetermined.
+- The AI state and decisions are checkpointed and replayed deterministically, with version 6 checking team opt-in history.
 
-**Still not a playable football match:** The app has no autonomous tactical AI to choose when to engage, how to move, pass or defend; no formal match clock, goals, offside, fouls, player-body collision or interactive 2D match renderer. The website remains a temporary development preview with an illustrative pitch, not real match visualization. Physical body overlaps remain possible; the new contact resolver only arbitrates *ball* interactions.
+**Still not a playable match:** There is no complete competitive clock, rules/referee, goal adjudication, keeper AI, offside, body collisions, restarts, deep tactical decision engine, season management or interactive 2D renderer. The website remains a **temporary development preview** with an illustrative pitch, not actual gameplay footage.
 
-## Build checks
+A tactical AI decision **is not** guaranteed football success: contact, kick direction and defensive challenges depend on the existing physics and attributes. Formation logic is intentionally basic and **estimated**, not calibrated professional match behavior.
 
-GitHub Actions validates TypeScript, all Vitest tests, the Vite build and production assets; Pages deployment checks live HTML, JS and CSS over HTTP. Keep GitHub Pages source set to **GitHub Actions**.
+## GitHub verification
 
-Available scripts: `npm run check`, `npm run benchmark:foundation`, `npm run benchmark:motion`, `npm run benchmark:ball`, `npm run benchmark:contact` and `npm run benchmark:auto-contact`.
+CI runs `npm run check`, including TypeScript, all Vitest tests and the production build asset verification. The Pages workflow confirms live JS/CSS deployment. Keep Pages source set to **GitHub Actions**.
 
-Benchmarks run on GitHub's Linux Node runner. They are NOT iPhone Safari or real football-match frame-rate measurements.
+Optional Node-only information: `npm run benchmark:ai`. This does **not** establish iPhone Safari FPS or playable match performance.
 
-[Phase 4 technical design](docs/design/phase-4-automatic-contact.md)
+[Phase 5 design and limitations](docs/design/phase-5-autonomous-decisions.md)
 
-Live preview: https://sm75z697k8-droid.github.io/O11-Football-Manager/
+Preview: https://sm75z697k8-droid.github.io/O11-Football-Manager/
 
-The eventual 2D match viewer must render this exact authoritative engine state; no fake passes or predetermined outcomes will substitute for actual simulation.
+The next step should make actual engine motion observable via an authentic landscape-first 2D canvas viewer; no scripted cosmetic animation will substitute for physics.
