@@ -123,7 +123,9 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         ev.ownGoal !== (scorer.clubId !== goalTeam.clubId) ||
         !Number.isSafeInteger(ev.tick) || ev.tick !== state.clock.tick ||
         ev.tick < 1 ||
+        typeof ev.crossingY !== 'number' ||
         !Number.isFinite(ev.crossingY) ||
+        typeof ev.crossingHeightM !== 'number' ||
         !Number.isFinite(ev.crossingHeightM) ||
         Math.abs(ev.crossingY - setup.pitch.widthM / 2) >
           setup.pitch.goalWidthM / 2 - BALL_RADIUS_M + 1e-7 ||
