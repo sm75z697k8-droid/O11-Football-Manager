@@ -34,7 +34,7 @@ export function kickAngleErrorRange(
   accuracy: number, facingError: number, aiPass: boolean, shooting: boolean,
 ): number {
   if (aiPass && !shooting) {
-    return .015 + (1 - accuracy) * .16 + facingError * .08
+    return .008 + (1 - accuracy) * .10 + facingError * .045
   }
   return .025 + (1 - accuracy) * .26 + facingError * .12
 }

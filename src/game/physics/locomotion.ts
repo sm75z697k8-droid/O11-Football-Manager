@@ -97,6 +97,19 @@ function moveOne(
     velocity: { xMps: vx, yMps: vy }, orientationRad: facing }
 }
 
+/** Pure one-player preview using the identical acceleration, turning and
+ * braking code as the authoritative match tick. Does NOT mutate a match.
+ */
+export function projectPlayerToward(
+  player: PlayerMatchState, definition: PlayerDefinition,
+  target: Point2, pitch: PitchDefinition, tick: number,
+): PlayerMatchState {
+  return moveOne({
+    ...player,
+    intention: { kind: 'moveToPoint', target, sinceTick: tick },
+  }, definition, pitch, tick)
+}
+
 /** One authoritative fixed tick; idle matches allocate no player updates. */
 export function advancePlayerLocomotion(
   state: MatchState, definitions: readonly PlayerDefinition[], pitch: PitchDefinition,

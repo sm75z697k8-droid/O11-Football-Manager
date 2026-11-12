@@ -2,17 +2,21 @@ import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
 import type { PlayerDefinition } from '../model/player'
 import type { BallMatchState, PlayerMatchState } from '../match/state'
-import { BALL_RADIUS_M } from '../physics/ball'
-import { deriveMotionLimits } from '../physics/locomotion'
+import { BALL_RADIUS_M, advanceBallPhysics } from '../physics/ball'
+import { sweptFootContact } from '../physics/automatic-contact'
+import { deriveMotionLimits, projectPlayerToward } from '../physics/locomotion'
 import { contactAccuracy, kickAngleErrorRange } from '../physics/contact'
-import { estimateInterception, predictBallAt } from './coordination'
+import {
+  boundedTarget, estimateInterception, predictBallAt,
+} from './coordination'
 
 /**
  * P6.9B: a pass is aimed for a physically reachable teammate, not a
  * cosmetic empty-space kick. This is a conservative tactical preview:
  * actual pass error, interceptions and control remain authoritative.
  */
-export const PASS_CONNECTION_VERSION = 'reachable-physical-reception-v1'
+export const PASS_CONNECTION_VERSION = 'kinematic-reception-preview-v2'
+export const PASS_REHEARSAL_MAX_TICKS = 60
 
 export interface PassViability {
   readonly canReceive: boolean
@@ -38,9 +42,10 @@ export function passMeetingPoint(
   const definition = setup.players.find(p => p.id === receiver.playerId)
   if (!definition) throw new Error('Missing intended receiver definition')
   const brakes = deriveMotionLimits(definition, receiver.energy).brakingMps2
-  // Up to 1.6m displacement for momentum that cannot vanish instantly;
+  // Up to 1.05m displacement for momentum that cannot vanish instantly;
   // avoid leading a teammate all the way to an obsolete formation point.
-  const coastDistance = Math.min(1.6, speed * speed / Math.max(2 * brakes, 1))
+  const coastDistance = Math.min(1.05,
+    speed * speed / Math.max(2 * brakes, 1) * .6)
   const leadX = speed > .01 ? vx / speed * coastDistance : 0
   const leadY = speed > .01 ? vy / speed * coastDistance : 0
   return {
@@ -81,18 +86,45 @@ export function previewPhysicalPass(
   }
   const definition = setup.players.find(p => p.id === receiver.playerId)
   if (!definition) throw new Error('Missing receiving footballer definition')
-  const interception = estimateInterception(receiver, definition, trial, setup.pitch)
+  // Rehearse only the intended receiver and the nominal physical pass.
+  // This uses exactly the real 50ms ball physics and individual locomotion
+  // integrators. It cannot award a successful touch, change match RNG, or
+  // assume a ball magically arrives at its designated receiver.
+  let ballAt = trial
+  let moving = receiver
+  let meeting: Point2 | null = null
+  let arrival: number | null = null
+  let aimedPosition = boundedTarget(target, setup.pitch)
+  for (let tick = 1; tick <= PASS_REHEARSAL_MAX_TICKS; tick++) {
+    if (tick === 1 || tick % 4 === 0) {
+      const feasible = estimateInterception(
+        moving, definition, ballAt, setup.pitch)
+      aimedPosition = feasible?.target ?? boundedTarget(
+        predictBallAt(ballAt, .55).position, setup.pitch)
+    }
+    const nextPlayer = projectPlayerToward(
+      moving, definition, aimedPosition, setup.pitch, tick)
+    const nextBall = advanceBallPhysics(ballAt, setup.pitch)
+    const contact = sweptFootContact(
+      moving, nextPlayer, ballAt, nextBall)
+    if (contact && contact.impact.xM >= 0 &&
+        contact.impact.xM <= setup.pitch.lengthM &&
+        contact.impact.yM >= 0 &&
+        contact.impact.yM <= setup.pitch.widthM) {
+      arrival = tick * .05
+      meeting = contact.impact
+      break
+    }
+    if (nextBall.outsidePitch) break
+    moving = nextPlayer
+    ballAt = nextBall
+  }
+
   const angleDiff = Math.atan2(Math.sin(heading - carrier.orientationRad),
     Math.cos(heading - carrier.orientationRad))
   const facing = Math.abs(angleDiff) / Math.PI
   const angleRange = kickAngleErrorRange(accuracy, facing, true, false)
   const uncertaintyM = d * Math.sin(angleRange)
-  // Evaluate the exact nominal moving ball position when the receiver
-  // might contact. A return value is not a forced control event.
-  const atContact = interception
-    ? predictBallAt(trial, interception.etaSeconds).position : target
-  const outside = atContact.xM < 0 || atContact.xM > setup.pitch.lengthM ||
-    atContact.yM < 0 || atContact.yM > setup.pitch.widthM
   const margin = Math.min(
     target.xM, setup.pitch.lengthM - target.xM,
     target.yM, setup.pitch.widthM - target.yM,
@@ -103,9 +135,9 @@ export function previewPhysicalPass(
     (5 + uncertaintyM * .7 - margin) * 1.35, 0, 11) +
     clamp((uncertaintyM - 1) * .9, 0, 3)
   return {
-    canReceive: !!interception && !outside,
-    etaSeconds: interception?.etaSeconds ?? null,
-    intendedPoint: interception?.target ?? target,
+    canReceive: arrival !== null,
+    etaSeconds: arrival,
+    intendedPoint: meeting ?? target,
     uncertaintyM, safetyPenalty,
   }
 }

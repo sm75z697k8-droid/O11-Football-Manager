@@ -54,7 +54,7 @@ describe('Phase 6.9B real receiver connections', () => {
     const fast={...receiver,velocity:{xMps:7,yMps:0}}
     const target=passMeetingPoint(fast,setup)
     expect(target.xM).toBeGreaterThan(receiver.position.xM)
-    expect(target.xM).toBeLessThanOrEqual(receiver.position.xM+1.61)
+    expect(target.xM).toBeLessThanOrEqual(receiver.position.xM+1.06)
     const nearLine={...fast,position:{xM:92,yM:66},
       velocity:{xMps:4,yMps:6}}
     expect(passMeetingPoint(nearLine,setup).yM).toBeLessThanOrEqual(
@@ -136,8 +136,10 @@ describe('Phase 6.9B real receiver connections', () => {
     const a=new MatchViewerSession(117)
     for(let i=0;i<120&&!a.state.ball.outsidePitch;i++)a.advance(2)
     const clone=restoreFoundationMatch(a.checkpoint())
-    clone.advance(12)
-    a.advance(12)
+    clone.advance(6)
+    clone.advance(6)
+    a.advance(6)
+    a.advance(6)
     expect(clone.checkpoint()).toEqual(a.checkpoint())
   })
 })
