@@ -140,6 +140,55 @@ function attachToHands(
   }
 }
 
+/**
+ * A held-off tackle is a *failed* physical attempt, not a new collision on
+ * every cooldown expiry. If the same defender remains inside the controller's
+ * original foot-contact envelope, no fresh swept entry has occurred.
+ *
+ * Re-arm when the defender is outside reach at the start of a future tick
+ * and physically closes again, or whenever some other genuine touch changes
+ * the phase. This avoids indefinite HELD OFF event spam and expensive
+ * ever-growing iPhone event-log clones without inventing an awarded tackle.
+ */
+function alreadyHeldOffWithoutReapproach(
+  before: MatchState, after: MatchState,
+  playerBefore: PlayerMatchState, playerAfter: PlayerMatchState,
+): boolean {
+  const controller = before.ball.controllerId
+  if (controller === null || after.ball.controllerId !== controller ||
+      playerAfter.clubId === before.players.find(p =>
+        p.playerId === controller)?.clubId) return false
+  const gap = Math.hypot(
+    playerBefore.position.xM - before.ball.position.xM,
+    playerBefore.position.yM - before.ball.position.yM,
+  )
+  // A genuinely new entry across the contact envelope is allowed to
+  // challenge the current owner, including after an earlier lost tackle.
+  if (gap > FOOT_REACH_M + 1e-8) return false
+
+  let lastManualTouch = -1
+  for (let i = after.contactEvents.length - 1; i >= 0; i--) {
+    const touch = after.contactEvents[i]
+    if (touch.outcome === 'controlled' || touch.outcome === 'miscontrolled' ||
+        touch.outcome === 'kicked' || touch.outcome === 'thrown') {
+      lastManualTouch = touch.tick
+      break
+    }
+  }
+  for (let i = after.automaticContactEvents.length - 1; i >= 0; i--) {
+    const event = after.automaticContactEvents[i]
+    // A new interception/tackle/deflection starts a different physical
+    // contest. Failed contacts by other players do not reset this one.
+    if (event.outcome === 'intercepted' || event.outcome === 'wonChallenge' ||
+        event.outcome === 'deflected' || event.outcome === 'caught' ||
+        event.outcome === 'parried') return false
+    if (event.playerId === playerAfter.playerId &&
+        event.outcome === 'heldOff')
+      return event.tick > lastManualTouch
+  }
+  return false
+}
+
 function candidate(
   before: MatchState, after: MatchState, owner: PlayerMatchState | undefined,
   setup: MatchSetup,
@@ -168,6 +217,8 @@ function candidate(
       goalkeeperSave ? 1.55 : FOOT_REACH_M,
       goalkeeperSave ? 2.17 : FOOT_CONTACT_MAX_HEIGHT_M)
     if (!result) continue
+    if (owner && alreadyHeldOffWithoutReapproach(
+      before, after, old, p)) continue
     options.push({ player: p, sample: result })
   }
   options.sort((a, b) =>
