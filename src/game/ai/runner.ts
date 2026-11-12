@@ -43,14 +43,22 @@ export function runAutonomousDecisions(
     ? current.players.find(p =>
       p.playerId === current.ball.controllerId && p.formationSlot !== 'GK')
     : undefined
-  const imminentPressure = !!pressureOwner && current.players.some(p =>
-    p.clubId !== pressureOwner.clubId &&
-    p.formationSlot !== 'GK' &&
-    Math.hypot(p.position.xM - pressureOwner.position.xM,
-      p.position.yM - pressureOwner.position.yM) < FOOT_REACH_M + 1.5)
-  const decisionPeriod = imminentPressure
-    ? Math.max(6, AI_DECISION_PERIOD_TICKS / 2)
-    : AI_DECISION_PERIOD_TICKS
+  const lastContest = current.automaticContactEvents.at(-1)
+  // A *real* lost challenge may leave the same player physically crowding
+  // the controller. The old bug emitted a duplicate heldOff contact every
+  // 6 ticks, inadvertently causing a rapid replanning cadence. Keep that
+  // tactical responsiveness ONLY while the verified failed contest is
+  // still physically unresolved. Ordinary pressing does not speed up
+  // decisions or encourage gratuitous short passes.
+  const unresolvedHeldOff = !!pressureOwner &&
+    lastContest?.outcome === 'heldOff' &&
+    current.ball.lastTouchPlayerId === pressureOwner.playerId &&
+    current.players.some(p =>
+      p.playerId === lastContest.playerId &&
+      p.clubId !== pressureOwner.clubId &&
+      Math.hypot(p.position.xM - current.ball.position.xM,
+        p.position.yM - current.ball.position.yM) <= FOOT_REACH_M + .05)
+  const decisionPeriod = unresolvedHeldOff ? 6 : AI_DECISION_PERIOD_TICKS
   if (current.ai.lastDecisionTick >= 0 &&
       current.clock.tick - current.ai.lastDecisionTick < decisionPeriod &&
       latestContactTick <= current.ai.lastDecisionTick &&
