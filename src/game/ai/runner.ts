@@ -4,6 +4,7 @@ import { MAX_COMMANDS_PER_MATCH, scheduleMatchCommand } from '../match/commands'
 import { maintainPassReception } from './pass-coordination'
 import { followMovingLooseBall } from './loose-ball'
 import { trackGoalkeeperSaves } from './goal-directed'
+import { canReleaseControlledBall, evaluateOnBallChoice } from './possession'
 import {
   AI_DECISION_PERIOD_TICKS, choosePossessionRelease, planTeamDecisions,
 } from './decisions'
@@ -34,8 +35,16 @@ export function runAutonomousDecisions(
   // Evaluate movement intent and kick release on the SAME physical world
   // snapshot. Re-evaluating after writing tactical intentions could change
   // the selected action despite no new physical event.
-  const attempt = choosePossessionRelease(current, setup)
-  const snapshot = planTeamDecisions(current, setup)
+  const owner = current.players.find(p =>
+    p.playerId === current.ball.controllerId)
+  const index = current.teams.findIndex(t => t.clubId === owner?.clubId)
+  const ownerActive = owner && index >= 0 && current.ai.enabledTeams[index]
+  const choice = ownerActive
+    ? evaluateOnBallChoice(current, setup,
+      canReleaseControlledBall(current, setup), true)
+    : null
+  const attempt = choosePossessionRelease(current, setup, choice)
+  const snapshot = planTeamDecisions(current, setup, choice)
   const byId = new Map(snapshot.map((decision) => [decision.playerId, decision]))
   const players = current.players.map(player => {
     const decision = byId.get(player.playerId)

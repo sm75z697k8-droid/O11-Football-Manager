@@ -9,6 +9,7 @@ import { assessLooseBallRace } from './loose-ball'
 import {
   canReleaseControlledBall, evaluateOnBallChoice,
 } from './possession'
+import type { PossessionChoice } from './possession'
 import {
   boundedTarget, estimateInterception,
   predictBallAt, pursuitTarget, rankBallChasers, supportTarget,
@@ -42,6 +43,7 @@ function belongsTo(teamId: string, playerId: string | null,
  */
 export function planTeamDecisions(
   state: MatchState, setup: MatchSetup,
+  evaluatedChoice?: PossessionChoice | null,
 ): readonly AgentDecision[] {
   const definitions = new Map(setup.players.map(p => [p.id, p]))
   const decisions: AgentDecision[] = []
@@ -123,7 +125,8 @@ export function planTeamDecisions(
         target = keeperSave.target
       } else if (player.playerId === owner?.playerId) {
         const canPass = canReleaseControlledBall(state, setup)
-        const choice = evaluateOnBallChoice(state, setup, canPass, true)
+        const choice = evaluatedChoice !== undefined
+          ? evaluatedChoice : evaluateOnBallChoice(state, setup, canPass, true)
         action = choice?.kind === 'shoot' ? 'shoot' : 'carry'
         engage = true
         target = choice?.kind === 'carry'
@@ -169,13 +172,15 @@ export function planTeamDecisions(
  */
 export function choosePossessionRelease(
   state: MatchState, setup: MatchSetup,
+  evaluatedChoice?: PossessionChoice | null,
 ): { kind: 'pass' | 'shoot'; teamId: string; playerId: string; receiverId?: string; target: Point2; power: number; lift: number } | null {
   const owner = state.players.find(p => p.playerId === state.ball.controllerId)
   if (!owner || state.ball.outsidePitch || state.ball.heightM > .45 ||
       !canReleaseControlledBall(state, setup)) return null
   const index = state.teams.findIndex(t => t.clubId === owner.clubId)
   if (index < 0 || !state.ai.enabledTeams[index]) return null
-  const choice = evaluateOnBallChoice(state, setup, true, true)
+  const choice = evaluatedChoice !== undefined
+    ? evaluatedChoice : evaluateOnBallChoice(state, setup, true, true)
   return choice?.kind === 'pass' || choice?.kind === 'shoot'
     ? {
       kind: choice.kind,

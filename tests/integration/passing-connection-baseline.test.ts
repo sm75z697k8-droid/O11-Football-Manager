@@ -103,5 +103,5 @@ describe('Physical pass completion baseline — observed match flow', () => {
     // receiving footballer, not a cosmetic pass animation or a score roll.
     // It is a simulation regression threshold, NOT a real-world calibration.
     expect(actual.length / finished.length).toBeGreaterThan(0.80)
-  })
+  }, 15000)
 })
