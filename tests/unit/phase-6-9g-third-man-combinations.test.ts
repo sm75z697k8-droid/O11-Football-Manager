@@ -49,11 +49,12 @@ describe('Phase 6.9G physically coordinated third-man movement',()=>{
     expect(planned!.playerId).toBe(striker.playerId)
     expect(planned!.playerId).not.toBe(receiver.playerId)
     expect(planned!.playerId).not.toBe(passer.playerId)
-    expect(planned!.target.xM).toBeGreaterThan(receiver.position.xM)
+    const liveReceiver = state.players.find(p=>p.playerId===receiver.playerId)!
+    expect(planned!.target.xM).toBeGreaterThan(liveReceiver.position.xM)
     expect(Math.hypot(planned!.target.xM-striker.position.xM,
       planned!.target.yM-striker.position.yM)).toBeLessThanOrEqual(18)
     const support=chooseDynamicSupport(state,setup,team,
-      receiver.position,new Set([receiver.playerId]))
+      liveReceiver.position,new Set([receiver.playerId]))
     expect(support.get(striker.playerId)?.target).toEqual(planned!.target)
     expect(support.get(striker.playerId)?.utility).toBeGreaterThan(0)
     expect(state.ball.controllerId).toBeNull()
@@ -100,7 +101,8 @@ describe('Phase 6.9G physically coordinated third-man movement',()=>{
     expect(third.engage).toBe(false)
     expect(receiving.action).toBe('receive')
     expect(receiving.engage).toBe(true)
-    expect(third.target.xM).toBeGreaterThan(receiver.position.xM)
+    expect(third.target.xM).toBeGreaterThan(
+      state.players.find(p=>p.playerId===receiver.playerId)!.position.xM)
   })
   it('preserves deterministic headless match checkpoints',()=>{
     const session=new MatchViewerSession(90)
