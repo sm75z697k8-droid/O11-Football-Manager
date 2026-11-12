@@ -463,7 +463,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         throw new Error('Opening kick-off is frozen despite a completed kick')
       }
     } else {
-      if (!contact || !Number.isSafeInteger(actual.takenTick) ||
+      if (!contact || typeof actual.takenTick !== 'number' ||
+          !Number.isSafeInteger(actual.takenTick) ||
           actual.takenTick !== contact.tick + 1 ||
           actual.takenTick > state.clock.tick ||
           matching.length !== 1 ||
