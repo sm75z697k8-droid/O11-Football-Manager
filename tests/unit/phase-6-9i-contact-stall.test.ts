@@ -116,11 +116,14 @@ describe('Phase 6.9I — failed-challenge collision de-duplication',()=>{
     const blocked=oneTick(state,setup)
     expect(blocked.automaticContactEvents.at(-1)?.outcome).toBe('heldOff')
     const current:MatchState={...blocked,
-      clock:{...blocked.clock,tick:6},
-      ai:{...blocked.ai,enabledTeams:[true,true],lastDecisionTick:0},
+      clock:{...blocked.clock,tick:7},
+      // The real contact at tick 1 has already triggered its normal AI
+      // refresh. At tick 7, only the unresolved-contest gate can shorten
+      // the regular 12-tick interval.
+      ai:{...blocked.ai,enabledTeams:[true,true],lastDecisionTick:1},
     }
     const update=runAutonomousDecisions(current,setup)
-    expect(update.ai.lastDecisionTick).toBe(6)
+    expect(update.ai.lastDecisionTick).toBe(7)
     expect(update.ball.controllerId).toBe(state.ball.controllerId)
     // If the defender is far away, the regular 12-tick decision pacing
     // remains. The shorter interval is NOT a global pass-spam timer.
@@ -129,7 +132,7 @@ describe('Phase 6.9I — failed-challenge collision de-duplication',()=>{
         ? {...p,position:{xM:72,yM:52},engagesBall:false} : p),
     }
     const slow=runAutonomousDecisions(unpressured,setup)
-    expect(slow.ai.lastDecisionTick).toBe(0)
+    expect(slow.ai.lastDecisionTick).toBe(1)
     expect(slow.contactEvents).toHaveLength(0)
   })
   it('both autonomous sides remain enabled and interpolation advances real ticks',()=>{
