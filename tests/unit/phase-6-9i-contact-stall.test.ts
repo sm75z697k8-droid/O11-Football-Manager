@@ -4,6 +4,7 @@ import { createFoundationMatch } from '../../src/game/match/engine'
 import { resolveAutomaticBallContact } from '../../src/game/physics/automatic-contact'
 import { BALL_RADIUS_M } from '../../src/game/physics/ball'
 import { MatchViewerSession } from '../../src/game/viewer/session'
+import { runAutonomousDecisions } from '../../src/game/ai/runner'
 import type { MatchState } from '../../src/game/match/state'
 import type { MatchSetup } from '../../src/game/model/match'
 
@@ -109,6 +110,25 @@ describe('Phase 6.9I — failed-challenge collision de-duplication',()=>{
     expect(contested.automaticContactEvents[1].outcome).toBe('wonChallenge')
     expect(contested.ball.controllerId).not.toBe(ownerId)
     expect(contested.ball.controllerId).toBe(strongId)
+  })
+  it('reconsiders possession promptly under genuine pressure without requiring contact spam',()=>{
+    const {state,setup,weakId}=scene()
+    const current:MatchState={...state,
+      clock:{...state.clock,tick:6},
+      ai:{...state.ai,enabledTeams:[true,true],lastDecisionTick:0},
+    }
+    const update=runAutonomousDecisions(current,setup)
+    expect(update.ai.lastDecisionTick).toBe(6)
+    expect(update.ball.controllerId).toBe(state.ball.controllerId)
+    // If the defender is far away, the regular 12-tick decision pacing
+    // remains. The shorter interval is NOT a global pass-spam timer.
+    const unpressured:MatchState={...current,
+      players:current.players.map(p=>p.playerId===weakId
+        ? {...p,position:{xM:72,yM:52},engagesBall:false} : p),
+    }
+    const slow=runAutonomousDecisions(unpressured,setup)
+    expect(slow.ai.lastDecisionTick).toBe(0)
+    expect(slow.contactEvents).toHaveLength(0)
   })
   it('both autonomous sides remain enabled and interpolation advances real ticks',()=>{
     const game=new MatchViewerSession(90)
