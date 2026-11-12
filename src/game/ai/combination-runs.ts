@@ -12,7 +12,7 @@ import { boundedTarget, separationM } from './coordination'
  * kicked for real. An open central attacking lane must exist, and only one
  * midfielder/striker receives the extra instruction.
  */
-export const COMBINATION_RUNS_VERSION = 'physical-third-man-support-v1'
+export const COMBINATION_RUNS_VERSION = 'physical-pass-reception-follow-through-v2'
 const MAX_RUN_DISTANCE_M = 18
 const MIN_RUN_GAP_M = 5.5
 const MAX_PASS_AGE_TICKS = 26
@@ -23,6 +23,7 @@ export interface ThirdManRun {
   /** Support utility bonus, not a success probability. */
   readonly utilityBonus: number
   readonly initialReceiverId: string
+  readonly sourcePassId: string
 }
 
 const nearOpponent = (point: Point2,
@@ -35,29 +36,84 @@ const isCentralRunner = (player: PlayerMatchState) =>
   player.formationSlot === 'RCM' ||
   player.formationSlot === 'LCM'
 
+interface CombinationPhase {
+  readonly receiverId: string
+  readonly passerId: string
+  readonly sourcePassId: string
+  readonly reference: Point2
+}
+
+/** In flight, we observe a real physical kick. After reception, we look
+ * for a real controlled first touch by the intended team. Both paths
+ * derive entirely from authoritative contact events and ball ownership.
+ */
+function combinationPhase(
+  state: MatchState, setup: MatchSetup, teamId: string,
+): CombinationPhase | null {
+  if (state.ball.outsidePitch) return null
+  const intent = activePassIntent(state)
+  if (intent && intent.teamId === teamId &&
+      state.ball.controllerId === null &&
+      state.ball.lastTouchPlayerId === intent.passerId &&
+      state.clock.tick - intent.requestedTick <= MAX_PASS_AGE_TICKS &&
+      state.contactEvents.some(e =>
+        e.commandId === intent.commandId && e.outcome === 'kicked')) {
+    return {
+      receiverId: intent.receiverId,
+      passerId: intent.passerId,
+      sourcePassId: intent.commandId,
+      reference: intendedReceiverTarget(state, setup, intent),
+    }
+  }
+
+  const receiver = state.players.find(p =>
+    p.playerId === state.ball.controllerId && p.clubId === teamId)
+  if (!receiver || receiver.formationSlot === 'GK' ||
+      state.ball.lastTouchPlayerId !== receiver.playerId ||
+      state.ball.heightM > .5) return null
+
+  const received = [
+    ...state.automaticContactEvents.filter(e =>
+      e.playerId === receiver.playerId && e.outcome === 'intercepted'),
+    ...state.contactEvents.filter(e =>
+      e.playerId === receiver.playerId && e.outcome === 'controlled'),
+  ].sort((a,b)=>b.tick-a.tick)[0]
+  if (!received || state.clock.tick - received.tick > 22) return null
+  const physicalPass = [...state.contactEvents].reverse().find(e =>
+    e.commandId.startsWith('ai-pass-') &&
+    e.outcome === 'kicked' && e.tick < received.tick &&
+    received.tick - e.tick <= 70)
+  if (!physicalPass || physicalPass.playerId === receiver.playerId) return null
+  const passer = state.players.find(p =>
+    p.playerId === physicalPass.playerId && p.clubId === teamId)
+  if (!passer) return null
+  // Only a genuinely completed same-team control, without an intervening
+  // opposition deflection, qualifies as a successful combination receipt.
+  const intervening = state.automaticContactEvents.some(e =>
+    e.tick > physicalPass.tick && e.tick < received.tick &&
+    e.outcome !== 'heldOff')
+  if (intervening) return null
+  return {
+    receiverId: receiver.playerId,
+    passerId: passer.playerId,
+    sourcePassId: physicalPass.commandId,
+    reference: receiver.position,
+  }
+}
+
 /**
- * Plan a future outlet BEHIND an actual incoming pass (a third-man run).
- * Nobody is commanded to touch the ball, and the existing receiver keeps
- * exclusive interception priority. The physical match may never complete
- * this combination if a defender gets there first.
+ * Plan a future outlet BEHIND an actual kicked pass, either while the
+ * intended receiver chases it or shortly after an actual controlled
+ * reception. All locomotion, contacts, and the next kick remain physical.
  */
 export function planThirdManRun(
   state: MatchState, setup: MatchSetup, teamId: string,
 ): ThirdManRun | null {
-  const intent = activePassIntent(state)
-  if (!intent || intent.teamId !== teamId ||
-      state.ball.controllerId !== null || state.ball.outsidePitch ||
-      state.ball.lastTouchPlayerId !== intent.passerId ||
-      state.clock.tick - intent.requestedTick > MAX_PASS_AGE_TICKS ||
-      !state.contactEvents.some(e =>
-        e.commandId === intent.commandId && e.outcome === 'kicked'))
-    return null
-
+  const phase = combinationPhase(state, setup, teamId)
+  if (!phase) return null
   const team = state.teams.find(t => t.clubId === teamId)
-  const receiver = state.players.find(p => p.playerId === intent.receiverId)
-  if (!team || !receiver || receiver.formationSlot === 'GK') return null
-
-  const reference = intendedReceiverTarget(state, setup, intent)
+  if (!team) return null
+  const reference = phase.reference
   const goalDistance = team.attackingDirection === 1
     ? setup.pitch.lengthM - reference.xM : reference.xM
   if (goalDistance < 13 || goalDistance > 41) return null
@@ -81,8 +137,8 @@ export function planThirdManRun(
     score: number; bonus: number } | null = null
   for (const runner of state.players) {
     if (runner.clubId !== teamId || !isCentralRunner(runner) ||
-        runner.playerId === intent.receiverId ||
-        runner.playerId === intent.passerId) continue
+        runner.playerId === phase.receiverId ||
+        runner.playerId === phase.passerId) continue
     const original = state.ai.formationPositions[runner.playerId]
     if (!original) continue
 
@@ -131,6 +187,7 @@ export function planThirdManRun(
     playerId: best.player.playerId,
     target: best.target,
     utilityBonus: best.bonus,
-    initialReceiverId: intent.receiverId,
+    initialReceiverId: phase.receiverId,
+    sourcePassId: phase.sourcePassId,
   } : null
 }
