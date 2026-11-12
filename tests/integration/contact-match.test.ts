@@ -293,12 +293,30 @@ describe('Phase 3 authentic geometric player-ball interactions', () => {
     expect(() => restoreFoundationMatch(snapshot)).toThrow()
   })
 
-  it('leaves pitch time and scores untouched after any number of contact attempts', () => {
+  it('keeps the diagnostic period, but awards only physically crossed goals', () => {
     const { engine, striker } = capturedFixture()
     engine.submitCommand(kick(striker.playerId))
     engine.advance(250)
-    expect(engine.getState().period).toBe('notStarted')
-    expect(engine.getState().teams.map((t) => t.score)).toEqual([0, 0])
+    const state = engine.getState()
+    expect(state.period).toBe('notStarted')
+    expect(state.teams.map(t => t.score)).toEqual([
+      state.goalEvents.filter(g => g.scoringTeamId === 'club_harbor').length,
+      state.goalEvents.filter(g => g.scoringTeamId === 'club_vale').length,
+    ])
+    expect(state.goalEvents.length).toBeLessThanOrEqual(1)
+    if (state.goalEvents.length) {
+      const goal = state.goalEvents[0]
+      expect(goal.side).toBe('right')
+      expect(goal.lastTouchPlayerId).toBe(striker.playerId)
+      expect(goal.crossingHeightM).toBeLessThanOrEqual(2.44 - 0.11)
+      expect(goal.crossingY).toBeGreaterThan(34 - 3.66)
+      expect(goal.crossingY).toBeLessThan(34 + 3.66)
+      expect(state.teams[0].score).toBe(1)
+      expect(restoreFoundationMatch(engine.checkpoint()).checkpoint()).toEqual(engine.checkpoint())
+      const forged = structuredClone(engine.checkpoint())
+      ;(forged.state.goalEvents[0] as {crossingY: number}).crossingY = 57
+      expect(() => restoreFoundationMatch(forged)).toThrow()
+    }
   })
 })
 

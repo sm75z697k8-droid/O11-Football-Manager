@@ -35,11 +35,14 @@ describe('Phase 3 contact and checkpoint workload', () => {
     expect(engine.getState().contactEvents.map((e) => e.outcome)).toEqual([
       'controlled', 'kicked',
     ])
-    expect(engine.getState().teams.map((t) => t.score)).toEqual([0, 0])
+    expect(engine.getState().teams.map(t => t.score)).toEqual([
+      engine.getState().goalEvents.filter(g => g.scoringTeamId === 'club_harbor').length,
+      engine.getState().goalEvents.filter(g => g.scoringTeamId === 'club_vale').length,
+    ])
     console.info('[O11 Phase 3 contact baseline] ' + JSON.stringify({
       runtime: 'GitHub Actions Linux Node, NOT iPhone Safari',
-      workload: '2 contact attempts + free ball/player ticks, no match AI',
-      logicalTicks: 653,
+      workload: '2 physical contacts and flight up to a real goal/boundary, no AI',
+      logicalTicks: engine.getState().clock.tick,
       elapsedMs: Number(elapsed.toFixed(2)),
       checkpointBytes: bytes,
       note: 'Informational only; not a full match or FPS benchmark.',
