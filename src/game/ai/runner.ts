@@ -60,11 +60,15 @@ export function runAutonomousDecisions(
   }
   const attempt = choosePossessionRelease(result, setup)
   const alreadyPending = result.pendingCommands.some(c =>
-    c.type === 'attemptKick' && c.commandId.startsWith('ai-pass-'))
+    c.type === 'attemptKick' &&
+    (c.commandId.startsWith('ai-pass-') ||
+      c.commandId.startsWith('ai-shot-')))
   if (attempt && !alreadyPending &&
       result.nextCommandSequence <= MAX_COMMANDS_PER_MATCH) {
-    const commandId = 'ai-' + attempt.kind + '-' + result.clock.tick +
-      '-' + attempt.playerId
+    // The physical contact and goalkeeper systems recognize ai-shot-;
+    // 'shoot' is the decision enum, not the command namespace.
+    const commandId = (attempt.kind === 'shoot' ? 'ai-shot-' : 'ai-pass-') +
+      result.clock.tick + '-' + attempt.playerId
     const receipt = scheduleMatchCommand(result, {
       commandId,
       type: 'attemptKick',

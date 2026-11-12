@@ -39,6 +39,9 @@ describe('Live exhibition attacking intelligence diagnostic', () => {
     expect(s.kickoff?.phase).toBe('inPlay')
     expect(s.contactEvents[0].outcome).toBe('kicked')
     expect(s.appliedCommands.length).toBeGreaterThanOrEqual(3)
+    expect(attemptedShots.length).toBeGreaterThanOrEqual(1)
+    expect(s.contactEvents.some(e =>
+      e.commandId.startsWith('ai-shot-') && e.outcome === 'kicked')).toBe(true)
     expect(s.goalEvents.length).toBeLessThanOrEqual(1)
     expect(s.teams.map(t => t.score).reduce((a, b) => a + b, 0))
       .toBe(s.goalEvents.length)
