@@ -38,11 +38,23 @@ export function canReleaseControlledBall(
     return false
   const owner = state.players.find(p => p.playerId === state.ball.controllerId)
   if (!owner) return false
-  const lastManual = state.contactEvents.findLast(e =>
-    e.playerId === owner.playerId && e.outcome === 'controlled')?.tick ?? -1
-  const lastAutomatic = state.automaticContactEvents.findLast(e =>
-    e.playerId === owner.playerId &&
-    (e.outcome === 'intercepted' || e.outcome === 'wonChallenge'))?.tick ?? -1
+  let lastManual = -1
+  for (let i = state.contactEvents.length - 1; i >= 0; i--) {
+    const e = state.contactEvents[i]
+    if (e.playerId === owner.playerId && e.outcome === 'controlled') {
+      lastManual = e.tick
+      break
+    }
+  }
+  let lastAutomatic = -1
+  for (let i = state.automaticContactEvents.length - 1; i >= 0; i--) {
+    const e = state.automaticContactEvents[i]
+    if (e.playerId === owner.playerId &&
+        (e.outcome === 'intercepted' || e.outcome === 'wonChallenge')) {
+      lastAutomatic = e.tick
+      break
+    }
+  }
   const receivedTick = Math.max(lastManual, lastAutomatic)
   if (receivedTick < 0) return true
   const definition = setup.players.find(p => p.id === owner.playerId)
