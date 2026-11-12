@@ -1,3 +1,9 @@
+## Phase 6.9G — Third-man attacking combinations
+
+When an actual ground pass is moving toward a teammate in the attacking third, the remaining attackers can prepare the **next** attacking move. O11 now searches a small set of real, physically reachable lanes for **one** striker or central midfielder to make a third-man run. The support runner never steals the original receiver's ball engagement. Teammate separation, defender positions, a conservative approximation of the second-last defender, and real shot corridors determine whether the run is worthwhile. The recipient still needs to control the initial pass, turn, and deliberately choose the next pass or shot; the engine awards no scripted assists, passes, or saves.
+
+This improvement keeps the 6.9F winger half-space behaviour, 6.9E goalkeeper handling, real physical passing, and deterministic checkpoints. See [Phase 6.9G design notes](docs/design/phase-6-9g-third-man-combinations.md).
+
 ## Phase 6.9F — Purposeful final-third attacking runs
 
 The match AI now considers **inside-channel winger runs** when a teammate actually controls the ball in the attacking final third. Rather than leaving both wide forwards next to the touchline, the team may select a half-space target based on real defenders, shot corridor quality, available teammate separation, physical distance to the ball carrier and an approximate offside-aware position ceiling. These are only movement intentions: players still travel using the existing movement physics, passes still need actual ball contact, and the goalkeeper only reacts to genuine shots.
