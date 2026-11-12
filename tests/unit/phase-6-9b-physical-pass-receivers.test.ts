@@ -5,7 +5,10 @@ import { MatchViewerSession } from '../../src/game/viewer/session'
 import { BALL_RADIUS_M } from '../../src/game/physics/ball'
 import { contactAccuracy, kickAngleErrorRange } from '../../src/game/physics/contact'
 import { passMeetingPoint, previewPhysicalPass } from '../../src/game/ai/pass-viability'
-import { evaluateOnBallChoice, evaluateOnBallPlan } from '../../src/game/ai/possession'
+import {
+  canReleaseControlledBall, evaluateOnBallChoice,
+  evaluateOnBallPlan,
+} from '../../src/game/ai/possession'
 import { activePassIntent, intendedReceiverTarget } from '../../src/game/ai/pass-coordination'
 import type { MatchState } from '../../src/game/match/state'
 
@@ -131,6 +134,31 @@ describe('Phase 6.9B real receiver connections', () => {
     expect(target.xM).toBeLessThan(40)
     expect(target.yM).toBeLessThan(24)
     expect(target).not.toEqual(intent.target)
+  })
+  it('lets players settle a genuine first touch without mandatory instant ping-pong passing',()=>{
+    const {setup,state,carrier}=stagedPass()
+    const received:MatchState={
+      ...state,
+      clock:{...state.clock,tick:100},
+      ai:{...state.ai,lastPassTick:0},
+      automaticContactEvents:[{
+        tick:99,playerId:carrier.playerId,kind:'interception',
+        outcome:'intercepted',contactFraction:.3,
+      }],
+    }
+    const original=JSON.stringify(received)
+    expect(canReleaseControlledBall(received,setup)).toBe(false)
+    expect(canReleaseControlledBall({
+      ...received,clock:{...received.clock,tick:101},
+    },setup)).toBe(false)
+    expect(canReleaseControlledBall({
+      ...received,clock:{...received.clock,tick:102},
+    },setup)).toBe(true)
+    expect(canReleaseControlledBall({
+      ...received,clock:{...received.clock,tick:102},
+      ai:{...received.ai,lastPassTick:95},
+    },setup)).toBe(false)
+    expect(JSON.stringify(received)).toBe(original)
   })
   it('maintains genuine physical replay with no synthetic completed passes',()=>{
     const a=new MatchViewerSession(117)
