@@ -30,7 +30,11 @@ describe('Live exhibition attacking intelligence diagnostic', () => {
       allContacts: s.contactEvents.length,
       homeMaxX: +farthestHomePossessionX.toFixed(1),
       awayMinX: +farthestAwayPossessionX.toFixed(1),
-      goals: s.goalEvents.length, outOfPlay: s.ball.outsidePitch,
+      goals: s.goalEvents, outOfPlay: s.ball.outsidePitch,
+      recentKicks: s.appliedCommands.filter(c => c.type === 'attemptKick').slice(-14)
+        .map(c => ({ id: c.commandId, by: c.playerId, to: c.target,
+          power: c.power })),
+      finalBall: s.ball.position, finalTouch: s.ball.lastTouchPlayerId,
     }))
     expect(s.kickoff?.phase).toBe('inPlay')
     expect(s.contactEvents[0].outcome).toBe('kicked')
