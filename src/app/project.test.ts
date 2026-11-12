@@ -5,7 +5,7 @@ describe('Project development status', () => {
   it('keeps the match engine clearly marked as landscape-first physical viewer', () => {
     expect(PROJECT_NAME).toBe('O11 Football Manager')
     expect(PROJECT_PHASE).toBe('6')
-    expect(ENGINE_STATUS).toBe('live-2d-physics-viewer'
+    expect(ENGINE_STATUS).toBe('live-2d-physics-viewer')
   })
 
   it('defines unique and sequential foundation milestones', () => {
