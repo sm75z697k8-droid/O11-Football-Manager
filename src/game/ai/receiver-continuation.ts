@@ -78,7 +78,7 @@ export function evaluateReceiverContinuation(
     ? setup.pitch.lengthM - receptionPoint.xM : receptionPoint.xM
   // The short-horizon model is only useful close enough that the next
   // action could genuinely influence the attack. No mid-pitch pass bonus.
-  if (remaining > 47 || remaining < 2) return protect
+  if (remaining > 36 || remaining < 2) return protect
 
   const abilities = receiverDefinition.abilities
   const control = (.45 * abilities.technical.firstTouch +
