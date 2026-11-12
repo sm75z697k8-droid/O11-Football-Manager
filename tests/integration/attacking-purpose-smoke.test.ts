@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MatchViewerSession } from '../../src/game/viewer/session'
-import { planThirdManRun } from '../../src/game/ai/combination-runs'
+import { planThirdManRun, planWideUnderlap } from '../../src/game/ai/combination-runs'
 
 /**
  * The seeded exhibition can end with a shot, a legitimate missed pass or
@@ -12,12 +12,13 @@ describe('Seed-varied live exhibition attacking intelligence diagnostic', () => 
     const results: {
       seed: number; ticks: number; passes: number;
       shots: number; goals: number; out: boolean;
-      thirdManOffers: number;
+      thirdManOffers: number; underlapSnapshots: number;
       keeperCatches: number; keeperParries: number; keeperSaveAttempts: number;
     }[] = []
     for (const seed of [123456789, 42, 90, 117, 205, 832, 4100, 9999, 7654321]) {
       const session = new MatchViewerSession(seed)
       const distinctThirdManOffers = new Set<string>()
+      let underlapSnapshots = 0
       for (let i = 0; i < 200 && !session.state.ball.outsidePitch; i++) {
         session.advance(8)
         const live = session.state
@@ -28,6 +29,9 @@ describe('Seed-varied live exhibition attacking intelligence diagnostic', () => 
           ? planThirdManRun(live, session.setup, activeTeam) : null
         if (opportunity)
           distinctThirdManOffers.add(opportunity.sourcePassId)
+        if (live.players.some(p=>p.playerId===live.ball.controllerId &&
+          planWideUnderlap(live,session.setup,p.clubId)))
+          underlapSnapshots += 1
       }
       const s = session.state
       const shotCommands = s.appliedCommands.filter(c =>
@@ -49,6 +53,7 @@ describe('Seed-varied live exhibition attacking intelligence diagnostic', () => 
         shots: realShotContacts.length, goals: s.goalEvents.length,
         out: s.ball.outsidePitch,
         thirdManOffers:distinctThirdManOffers.size,
+        underlapSnapshots,
         keeperCatches:s.automaticContactEvents.filter(e=>e.outcome==='caught').length,
         keeperParries:s.automaticContactEvents.filter(e=>e.outcome==='parried').length,
         keeperSaveAttempts:s.automaticContactEvents.filter(e=>
