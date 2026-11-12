@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
 import { createFoundationMatch, restoreFoundationMatch } from '../../src/game/match/engine'
 import { MatchViewerSession } from '../../src/game/viewer/session'
-import { planThirdManRun } from '../../src/game/ai/combination-runs'
+import { planThirdManRun, planWideUnderlap } from '../../src/game/ai/combination-runs'
 import { chooseDynamicSupport } from '../../src/game/ai/support-space'
 import { planTeamDecisions } from '../../src/game/ai/decisions'
 import type { MatchState } from '../../src/game/match/state'
@@ -132,6 +132,43 @@ describe('Phase 6.9G physically coordinated third-man movement',()=>{
     expect(receiving.engage).toBe(true)
     expect(third.target.xM).toBeGreaterThan(
       state.players.find(p=>p.playerId===receiver.playerId)!.position.xM)
+  })
+  it('gives a genuinely wide winger a physically reachable midfield underlap',()=>{
+    const {setup,state,team}=stagedPass()
+    const winger=state.players.find(p=>p.clubId===team&&p.formationSlot==='RW')!
+    const midfielder=state.players.find(p=>p.clubId===team&&p.formationSlot==='RCM')!
+    const players=state.players.map(p=>p.playerId===winger.playerId
+      ? {...p,position:{xM:78,yM:54}}
+      : p.playerId===midfielder.playerId
+        ? {...p,position:{xM:78,yM:46}} : p)
+    const held:MatchState={...state,players,
+      ai:{...state.ai,passIntent:null},
+      ball:{...state.ball,position:{xM:78,yM:54},
+        velocity:{xMps:0,yMps:0,zMps:0},
+        controllerId:winger.playerId,
+        controlOffset:{xM:0,yM:0},
+        lastTouchPlayerId:winger.playerId},
+      contactEvents:[]}
+    const run=planWideUnderlap(held,setup,team)
+    expect(run).not.toBeNull()
+    expect(run!.playerId).toBe(midfielder.playerId)
+    expect(run!.target.xM).toBeGreaterThan(78)
+    expect(run!.target.yM).toBeLessThan(54)
+    expect(run!.target.yM).toBeGreaterThan(37)
+    expect(Math.hypot(run!.target.xM-78,run!.target.yM-46)).toBeLessThanOrEqual(18)
+    const support=chooseDynamicSupport(held,setup,team,
+      {xM:78,yM:54},new Set([winger.playerId]))
+    expect(support.get(midfielder.playerId)?.target).toEqual(run!.target)
+    expect(held.ball.controllerId).toBe(winger.playerId)
+    expect(held.contactEvents).toHaveLength(0)
+  })
+  it('does not order midfield underlaps while the winger does not control the ball',()=>{
+    const {setup,state,team}=stagedPass()
+    expect(planWideUnderlap(state,setup,team)).toBeNull()
+    const other=state.players.find(p=>p.clubId!==team)!
+    const controlled:MatchState={...state,ball:{...state.ball,
+      controllerId:other.playerId,lastTouchPlayerId:other.playerId}}
+    expect(planWideUnderlap(controlled,setup,team)).toBeNull()
   })
   it('preserves deterministic headless match checkpoints',()=>{
     const session=new MatchViewerSession(90)
