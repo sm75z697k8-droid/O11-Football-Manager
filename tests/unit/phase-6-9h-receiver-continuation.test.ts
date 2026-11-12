@@ -112,6 +112,21 @@ describe('Phase 6.9H: prospective next action after a physically viable pass',()
     expect(a.state.contactEvents).toHaveLength(0)
     expect(b.state.contactEvents).toHaveLength(0)
   })
+  it('does not overvalue a teammate\'s hypothetical next action over a clear shot',()=>{
+    const staged=stage({xM:94,yM:34},{xM:88,yM:34})
+    const owner=staged.striker
+    const state:MatchState={...staged.state,
+      ball:{...staged.state.ball,
+        position:owner.position,
+        controllerId:owner.playerId,lastTouchPlayerId:owner.playerId}}
+    const pass={kind:'pass' as const,receiverId:staged.receiver.playerId,
+      target:{xM:94,yM:34},power:.35,lift:0,utility:32}
+    const reviewed=reviewOnBallActions(state,staged.setup,[pass])
+    expect(reviewed.assessments[0].reasons)
+      .toContain('Current ball carrier has an immediate shooting lane')
+    expect(state.contactEvents).toHaveLength(0)
+    expect(state.goalEvents).toHaveLength(0)
+  })
   it('keeps exact replay checks and kickoff protection unchanged',()=>{
     const session=new MatchViewerSession(90)
     for(let i=0;i<120 && !session.state.ball.outsidePitch;i++)
