@@ -89,6 +89,11 @@ describe('Physical pass completion baseline — observed match flow', () => {
       sampledMatches:snapshots.map(x=>JSON.parse(x)),
       kicked:finished.length,received:actual.length,touched:touched.length,
       outcomeCounts:byOutcome,
+      distanceBands:[{min:0,max:12},{min:12,max:18},{min:18,max:25},{min:25,max:100}]
+        .map(b=>{const passes=finished.filter(r=>r.distance>=b.min&&r.distance<b.max)
+          return {metres:b.min+'-'+b.max,attempted:passes.length,
+            received:passes.filter(r=>r.outcome==='receiverControl').length}
+        }),
       avoidableMisses:finished.filter(r=>r.outcome!=='receiverControl')
         .slice(0,18).map(r=>({
           seed:r.seed,passMetres:+r.distance.toFixed(1),
