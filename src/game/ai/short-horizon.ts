@@ -155,7 +155,8 @@ function assessedPass(
   const utility = choice.utility - .6 - penalty + futureGain
   const reasons = [
     laneRisk > 2.2 ? 'Defender can contest the passing lane' :
-      'Passing lane likely reachable',
+      laneRisk > 0 ? 'Defender approaching the passing lane' :
+        'Passing lane likely reachable',
     receivingRisk > 2 ? 'Receiver moving away from target' :
       'Receiver can meet the intended ball',
     pressureRisk > 1.8 ? 'Receiver likely under pressure' :
