@@ -65,7 +65,12 @@ export function canReleaseControlledBall(
   const mentality = definition.abilities.mental
   const oneTouch = underPressure && mentality.decisions +
     mentality.composure >= 140
-  const settleTicks = oneTouch ? 1 : 3
+  // A keeper who has received the ball at their feet must scan the
+  // field and prepare distribution; use a real first-touch timestamp,
+  // not an animation pause or a random delay.
+  const settleTicks = owner.formationSlot === 'GK'
+    ? underPressure ? 10 : 22
+    : oneTouch ? 1 : 3
   return state.clock.tick - receivedTick >= settleTicks
 }
 
