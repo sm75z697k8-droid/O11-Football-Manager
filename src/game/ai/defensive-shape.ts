@@ -115,7 +115,8 @@ function primaryPressers(
   const radius = intensity === 'high' ? 38 : intensity === 'standard' ? 30 : 16
   const candidates = teammates.filter(p =>
     p.formationSlot !== 'GK' &&
-    separationM(p.position, ball) <= radius)
+    (separationM(p.position, ball) <= radius ||
+      p.playerId === preferredPlayerId))
     .sort((a, b) => {
       const score = (p: PlayerMatchState) =>
         separationM(p.position, ball) / 6.5 + keeperPenalty(p) -

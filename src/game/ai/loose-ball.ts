@@ -53,8 +53,17 @@ export function assessLooseBallRace(
         (a.player.playerId < b.player.playerId ? -1 : a.player.playerId > b.player.playerId ? 1 : 0))
     const nearest = ranked[0]
     if (!nearest) throw new Error('Missing outfield footballer for recovery')
-    pursuerIds[team.clubId] = nearest.player.playerId
-    arrivalSeconds[team.clubId] = nearest.time
+    // The genuine opening pass has a designated receiving midfielder.
+    // Let that footballer anticipate their own pass while the ball is free;
+    // physical movement/contact can still fail or be intercepted.
+    const kickoff = state.kickoff?.phase === 'inPlay' &&
+      state.ball.lastTouchPlayerId === state.kickoff.kickerId &&
+      state.kickoff.teamId === team.clubId
+        ? ranked.find(c => c.player.playerId === state.kickoff?.receiverId)
+        : undefined
+    const nominated = kickoff ?? nearest
+    pursuerIds[team.clubId] = nominated.player.playerId
+    arrivalSeconds[team.clubId] = nominated.time
   }
   // A small tie preference for the last passer avoids jitter without
   // treating 'last touch' as guaranteed possession.
@@ -64,9 +73,15 @@ export function assessLooseBallRace(
   const homeTime = arrivalSeconds[home.clubId]
   const awayTime = arrivalSeconds[away.clubId]
   const tie = Math.abs(homeTime - awayTime) <= .22
-  const favoredTeamId = tie && lastTouchClub
-    ? lastTouchClub
-    : homeTime <= awayTime ? home.clubId : away.clubId
+  const kickoffPass = state.kickoff?.phase === 'inPlay' &&
+    state.ball.lastTouchPlayerId === state.kickoff.kickerId
+  // Keep the opening passing team's support response until somebody
+  // actually touches the ball, not for subsequent mispasses/open play.
+  const favoredTeamId = kickoffPass
+    ? state.kickoff!.teamId
+    : tie && lastTouchClub
+      ? lastTouchClub
+      : homeTime <= awayTime ? home.clubId : away.clubId
   return { favoredTeamId, pursuerIds, arrivalSeconds }
 }
 
