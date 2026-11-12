@@ -1,7 +1,7 @@
 /** O11 project metadata. Real-time landscape Canvas now visualizes the authoritative headless engine; no official match rules or results yet. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = '6.9D' as const
-export const ENGINE_STATUS = 'coordinated-loose-ball-recovery' as const
+export const PROJECT_PHASE = '6.9E' as const
+export const ENGINE_STATUS = 'physical-goalkeeper-handling-and-hold' as const
 
 export const FOUNDATION_STAGES = [
   { id: '0A', title: 'Project foundation', summary: 'App, TypeScript, tests and deployment' },
@@ -25,4 +25,5 @@ export const FOUNDATION_STAGES = [
   { id: '6.9A', title: 'Short-horizon attacking intelligence', summary: 'Predictive pass pressure, ball-carrying risk, shot corridors and explainable intent' },
   { id: '6.9B', title: 'Receivable passing reliability', summary: 'Physical interception previews, believable receiving targets and controlled kick deviation' },
   { id: '6.9D', title: 'Coordinated loose-ball recovery', summary: 'Handoff to better recovery runners, immediate team replanning and supporting shape' },
+  { id: '6.9E', title: 'Goalkeeper handling', summary: 'Physical shot catches/parries, hands-held ball, deliberate basic distribution' },
 ] as const
