@@ -144,7 +144,7 @@ describe('Phase 6.6 real loose-ball recognition and link play', () => {
   })
 
   it('allows quicker decisions without removing a pass-attempt cooldown', () => {
-    expect(AI_PASS_MIN_INTERVAL_TICKS).toBe(12)
+    expect(AI_PASS_MIN_INTERVAL_TICKS).toBe(18)
     expect(AI_PASS_MIN_INTERVAL_TICKS).toBeGreaterThanOrEqual(10)
   })
 

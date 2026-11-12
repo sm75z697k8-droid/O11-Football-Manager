@@ -99,5 +99,9 @@ describe('Physical pass completion baseline — observed match flow', () => {
     }))
     expect(records.length).toBeGreaterThan(8)
     expect(finished.length).toBeGreaterThan(5)
+    // Long-form multi-seed integration gate: track the ACTUAL designated
+    // receiving footballer, not a cosmetic pass animation or a score roll.
+    // It is a simulation regression threshold, NOT a real-world calibration.
+    expect(actual.length / finished.length).toBeGreaterThan(0.80)
   })
 })

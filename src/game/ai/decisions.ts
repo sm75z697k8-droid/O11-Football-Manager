@@ -7,7 +7,7 @@ import { planDefensiveResponsibilities } from './defensive-shape'
 import { planGoalkeeperSave } from './goal-directed'
 import { assessLooseBallRace } from './loose-ball'
 import {
-  AI_PASS_MIN_INTERVAL_TICKS, evaluateOnBallChoice,
+  canReleaseControlledBall, evaluateOnBallChoice,
 } from './possession'
 import {
   boundedTarget, estimateInterception,
@@ -122,8 +122,7 @@ export function planTeamDecisions(
         engage = keeperSave.engage
         target = keeperSave.target
       } else if (player.playerId === owner?.playerId) {
-        const canPass = state.clock.tick - state.ai.lastPassTick >=
-          AI_PASS_MIN_INTERVAL_TICKS
+        const canPass = canReleaseControlledBall(state, setup)
         const choice = evaluateOnBallChoice(state, setup, canPass, true)
         action = choice?.kind === 'shoot' ? 'shoot' : 'carry'
         engage = true
@@ -173,7 +172,7 @@ export function choosePossessionRelease(
 ): { kind: 'pass' | 'shoot'; teamId: string; playerId: string; receiverId?: string; target: Point2; power: number; lift: number } | null {
   const owner = state.players.find(p => p.playerId === state.ball.controllerId)
   if (!owner || state.ball.outsidePitch || state.ball.heightM > .45 ||
-      state.clock.tick - state.ai.lastPassTick < AI_PASS_MIN_INTERVAL_TICKS) return null
+      !canReleaseControlledBall(state, setup)) return null
   const index = state.teams.findIndex(t => t.clubId === owner.clubId)
   if (index < 0 || !state.ai.enabledTeams[index]) return null
   const choice = evaluateOnBallChoice(state, setup, true, true)

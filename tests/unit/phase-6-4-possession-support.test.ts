@@ -152,7 +152,7 @@ describe('Phase 6.4 dynamic, spatially evaluated supporting runs', () => {
 
 describe('Phase 6.4 possession decisions reward open outlets, not blind passes', () => {
   it('reduces the global cooldown while still preventing immediate repeat kicks', () => {
-    expect(AI_PASS_MIN_INTERVAL_TICKS).toBe(12)
+    expect(AI_PASS_MIN_INTERVAL_TICKS).toBe(18)
     expect(AI_PASS_MIN_INTERVAL_TICKS).toBeGreaterThanOrEqual(12)
   })
 

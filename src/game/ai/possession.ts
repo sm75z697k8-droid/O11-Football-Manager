@@ -18,13 +18,43 @@ import type { ActionAssessment } from './short-horizon'
  */
 export const POSSESSION_PLANNER_VERSION = 'receivable-passes-p69b-v1'
 export const AI_SAFE_EDGE_MARGIN_M = 3.1
-export const AI_PASS_MIN_INTERVAL_TICKS = 12
+export const AI_PASS_MIN_INTERVAL_TICKS = 18
 
 const min = Math.min
 const max = Math.max
 const clamp = (n: number, a: number, b: number) => max(a, min(b, n))
 const distance = (a: Point2, b: Point2) =>
   Math.hypot(a.xM - b.xM, a.yM - b.yM)
+
+/** A player who JUST made a real first touch should normally have time to
+ * orient and protect the ball before another commanded release. An excellent
+ * player under pressure can still make a quick one-touch combination.
+ * Uses actual contact events; never pretends a first touch happened.
+ */
+export function canReleaseControlledBall(
+  state: MatchState, setup: MatchSetup,
+): boolean {
+  if (state.clock.tick - state.ai.lastPassTick < AI_PASS_MIN_INTERVAL_TICKS)
+    return false
+  const owner = state.players.find(p => p.playerId === state.ball.controllerId)
+  if (!owner) return false
+  const lastManual = state.contactEvents.findLast(e =>
+    e.playerId === owner.playerId && e.outcome === 'controlled')?.tick ?? -1
+  const lastAutomatic = state.automaticContactEvents.findLast(e =>
+    e.playerId === owner.playerId &&
+    (e.outcome === 'intercepted' || e.outcome === 'wonChallenge'))?.tick ?? -1
+  const receivedTick = Math.max(lastManual, lastAutomatic)
+  if (receivedTick < 0) return true
+  const definition = setup.players.find(p => p.id === owner.playerId)
+  if (!definition) return false
+  const defenders = state.players.filter(p => p.clubId !== owner.clubId)
+  const underPressure = nearestOpponent(owner.position, defenders) < 2.6
+  const mentality = definition.abilities.mental
+  const oneTouch = underPressure && mentality.decisions +
+    mentality.composure >= 140
+  const settleTicks = oneTouch ? 1 : 3
+  return state.clock.tick - receivedTick >= settleTicks
+}
 
 export type PossessionChoice =
   | { readonly kind: 'shoot'; readonly target: Point2;
