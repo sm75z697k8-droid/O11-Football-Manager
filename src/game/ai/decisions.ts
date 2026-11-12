@@ -132,9 +132,10 @@ export function planTeamDecisions(
         const choice = evaluatedChoice !== undefined
           ? evaluatedChoice : evaluateOnBallChoice(state, setup, canPass, true)
         action = choice?.kind === 'shoot' ? 'shoot' : 'carry'
-        engage = true
-        target = choice?.kind === 'carry'
-          ? choice.target : { ...player.position }
+        engage = ball.heightM < .5
+        target = ball.heightM >= .5 ? { ...player.position } :
+          choice?.kind === 'carry'
+            ? choice.target : { ...player.position }
       } else if (looseRace && committed?.playerId === player.playerId) {
         // Preserve the actual receiver's physical run while a kicked pass
         // is in flight, even if an opponent has the better recovery chance.
