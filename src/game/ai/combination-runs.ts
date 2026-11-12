@@ -191,3 +191,80 @@ export function planThirdManRun(
     sourcePassId: phase.sourcePassId,
   } : null
 }
+
+/** One controlled wide-ball underlap, never a scripted overlapping pass.
+ * The same real-world defender spacing and offside-aware target ceiling
+ * used by the third-man planner decide whether this outlet is plausible.
+ */
+export interface WideUnderlapRun {
+  readonly playerId: string
+  readonly target: Point2
+  readonly utilityBonus: number
+  readonly wingerId: string
+}
+
+export function planWideUnderlap(
+  state: MatchState, setup: MatchSetup, teamId: string,
+): WideUnderlapRun | null {
+  if (state.ball.outsidePitch || state.ball.heightM > .5) return null
+  const carrier = state.players.find(p =>
+    p.playerId === state.ball.controllerId && p.clubId === teamId)
+  if (!carrier || (carrier.formationSlot !== 'RW' &&
+      carrier.formationSlot !== 'LW')) return null
+  const team = state.teams.find(t => t.clubId === teamId)
+  if (!team) return null
+  const direction = team.attackingDirection
+  const distanceToGoal = direction === 1
+    ? setup.pitch.lengthM - carrier.position.xM : carrier.position.xM
+  if (distanceToGoal < 12 || distanceToGoal > 37) return null
+  const side = (carrier.formationSlot === 'RW' ? 1 : -1) * direction
+  const centre = setup.pitch.widthM / 2
+  if ((carrier.position.yM - centre) * side < 11) return null
+
+  const opponents = state.players.filter(p => p.clubId !== teamId)
+  const forward = (p: Point2) => p.xM * direction
+  const secondDefender = opponents.map(p => forward(p.position))
+    .sort((a, b) => b - a)[1]
+  const limit = Math.max(
+    forward(carrier.position),
+    (secondDefender ?? forward(carrier.position)) - 1.4)
+  let best: {runner: PlayerMatchState; target: Point2;
+    score: number; bonus: number} | null = null
+  for (const runner of state.players) {
+    if (runner.clubId !== teamId ||
+        runner.formationSlot !==
+          (carrier.formationSlot === 'RW' ? 'RCM' : 'LCM'))
+      continue
+    const anchor = state.ai.formationPositions[runner.playerId]
+    if (!anchor) continue
+    for (const advance of [6, 9]) {
+      for (const inside of [7, 10, 13]) {
+        const target = boundedTarget({
+          xM: carrier.position.xM + direction * advance,
+          yM: carrier.position.yM - side * inside,
+        }, setup.pitch)
+        if (forward(target) > limit + .01 ||
+            (target.yM - centre) * side < 3 ||
+            separationM(target, anchor) > 38) continue
+        const travel = separationM(runner.position, target)
+        if (travel < 2.5 || travel > MAX_RUN_DISTANCE_M) continue
+        const space = nearOpponent(target, opponents)
+        const blocked = laneObstruction(carrier.position, target, opponents)
+        if (space < 5.5 || blocked > 1.4) continue
+        const chance = attackingOpportunityAt(
+          target, team, setup, opponents)
+        if (chance <= 1.5) continue
+        const score = chance * 1.3 + Math.min(space, 10) * .55 -
+          travel * .28 - blocked * 3
+        const bonus = 5 + Math.min(14, chance * 1.3)
+        if (!best || score > best.score + 1e-8 ||
+            (Math.abs(score - best.score) < 1e-8 &&
+              runner.playerId < best.runner.playerId)) {
+          best = {runner, target, score, bonus}
+        }
+      }
+    }
+  }
+  return best ? {playerId:best.runner.playerId, target:best.target,
+    utilityBonus:best.bonus, wingerId:carrier.playerId} : null
+}
