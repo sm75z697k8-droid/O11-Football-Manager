@@ -34,8 +34,13 @@ export function openingKickoffPosition(
   if (isTaking && slot === 'ST') {
     return { xM: centreX + side * 0.77, yM: centreY }
   }
-  if (isTaking && slot === 'RCM') {
-    return { xM: centreX + side * 5.8, yM: centreY + 3.4 }
+  if (isTaking && (slot === 'RCM' || slot === 'LCM')) {
+    // Two legal short outlets either side of the centre mark. The
+    // selected option is based on player attributes, not hardcoded RCM.
+    return {
+      xM: centreX + side * 5.8,
+      yM: centreY + (slot === 'RCM' ? 3.4 : -3.4),
+    }
   }
   // All non-kickers stay in their own half, with the defending side
   // outside the required 9.15m centre-circle radius.
@@ -53,8 +58,25 @@ export function openingKickoffState(setup: MatchSetup): KickoffState | null {
   if (index === -1) return null
   const starters = setup.teams[index].starters
   const kickerId = starters.find(p => p.slot === 'ST')?.playerId
-  const receiverId = starters.find(p => p.slot === 'RCM')?.playerId
-  if (!kickerId || !receiverId) throw new Error('Kick-off requires a striker and supporting midfielder')
+  const candidateReceivers = starters
+    .filter(p => p.slot === 'RCM' || p.slot === 'LCM')
+    .map(assignment => {
+      const definition = setup.players.find(p => p.id === assignment.playerId)
+      if (!definition) throw new Error('Missing kick-off midfielder definition')
+      const a = definition.abilities
+      // Choice of recipient is an estimated football judgment; execution
+      // still uses normal seeded contact/ball physics.
+      const score = .48 * a.technical.firstTouch +
+        .27 * a.technical.technique +
+        .25 * a.mental.anticipation
+      return { playerId: assignment.playerId, score }
+    })
+    .sort((a, b) => b.score - a.score ||
+      (a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0))
+  const receiverId = candidateReceivers[0]?.playerId
+  if (!kickerId || !receiverId) {
+    throw new Error('Kick-off requires a striker and two central midfield options')
+  }
   return {
     teamId: setup.teams[index].clubId,
     kickerId, receiverId,

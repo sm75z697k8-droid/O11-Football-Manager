@@ -1,7 +1,7 @@
 /** O11 project metadata. Real-time landscape Canvas now visualizes the authoritative headless engine; no official match rules or results yet. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = '6' as const
-export const ENGINE_STATUS = 'live-2d-physics-viewer' as const
+export const PROJECT_PHASE = '6.3' as const
+export const ENGINE_STATUS = 'coordinated-team-intelligence' as const
 
 export const FOUNDATION_STAGES = [
   { id: '0A', title: 'Project foundation', summary: 'App, TypeScript, tests and deployment' },
@@ -15,4 +15,5 @@ export const FOUNDATION_STAGES = [
   { id: '4', title: 'Automatic ball contact', summary: 'Swept intersections, physical interceptions and opponent contests' },
   { id: '5', title: 'Basic autonomous decisions', summary: 'Pursuit, pressing, formation support and physical pass attempts' },
   { id: '6', title: 'Real 2D match viewer', summary: 'Landscape Canvas, real player physics, controls and telemetry' },
+  { id: '6.3', title: 'Team coordination', summary: 'Predictive reception, dynamic support and layered defensive roles' },
 ] as const

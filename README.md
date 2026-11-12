@@ -1,3 +1,11 @@
+## Phase 6.3 — Coordinated team intelligence
+
+O11 now computes **predictive pass reception** from the actual moving ball and each player's physical reach, rather than always chasing the current ball position. The opening kick has two nearby central-midfield options and chooses an intended recipient by relevant attributes. The other ten players act on coordinated responsibilities: staggered passing-triangle support, wing width, holding-midfielder outlets, goal-side defensive cover and selective marking alongside realistic pressing.
+
+This is **estimated, deterministic off-ball AI**, not learned tactical intelligence or scripted completed passes. Ball contacts, tackles, kicks and velocities are still resolved by the authoritative physics. The full-screen iPhone landscape view is unchanged; football rules, scoring and out-of-play restarts are not yet implemented.
+
+See [Phase 6.3 technical design](docs/design/phase-6-3-team-coordination.md).
+
 ## Phase 6.2 — Context-aware football AI
 
 The ball carrier now evaluates genuine **passing lanes, nearby pressure, safe space and boundary risk** rather than always running toward goal. Forward, sideways and backward passes can be selected when preferable; otherwise players choose an open carry direction through existing movement physics. Attributes influence the decisions, and kicks are still executed through real ball/contact physics, never awarded automatically.
