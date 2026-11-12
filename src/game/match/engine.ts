@@ -306,6 +306,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   let expectedController: string | null = null
   let expectedLastTouch: string | null = null
   const engagementAtTick = new Map(setup.players.map(p => [p.id, false]))
+  const autonomousAtTick = new Map(setup.clubs.map(c => [c.id, false]))
   const ticks = [...new Set([
     ...orderedApplied.map(c => c.appliedTick),
     ...state.automaticContactEvents.map(e => e.tick),
@@ -315,6 +316,13 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     for (const cmd of due) {
       if (cmd.type === 'setBallEngagement') {
         engagementAtTick.set(cmd.playerId, cmd.enabled)
+      } else if (cmd.type === 'setAutonomousTeam') {
+        autonomousAtTick.set(cmd.teamId, cmd.enabled)
+        if (!cmd.enabled) {
+          for (const p of setup.players.filter(p => p.clubId === cmd.teamId)) {
+            engagementAtTick.set(p.id, false)
+          }
+        }
       }
     }
     if (due.some(c => c.type === 'diagnosticBallLaunch')) {
@@ -344,8 +352,10 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         contender?.clubId === owner.clubId : ev.kind !== 'interception'
       const manualContact = state.contactEvents.some(e => e.tick === tick &&
         ['controlled', 'miscontrolled', 'kicked'].includes(e.outcome))
-      if (!engagementAtTick.get(ev.playerId) || wrongKind ||
-          manualContact || due.some(c => c.type === 'diagnosticBallLaunch')) {
+      const allowed = engagementAtTick.get(ev.playerId) ||
+        autonomousAtTick.get(contender?.clubId ?? '')
+      if (!allowed || wrongKind || manualContact ||
+          due.some(c => c.type === 'diagnosticBallLaunch')) {
         throw new Error('Automatic contact is incompatible with engagement or ownership')
       }
       if (ev.outcome === 'intercepted' || ev.outcome === 'wonChallenge') {

@@ -249,6 +249,12 @@ export function applyDueMatchCommands(state: MatchState): MatchState {
         decisionSnapshot: command.enabled ? ai.decisionSnapshot :
           ai.decisionSnapshot.filter(d => d.clubId !== command.teamId),
       }
+      if (!command.enabled) {
+        // A disabled team must no longer automatically contest the ball.
+        // Existing movement momentum remains handled by locomotion.
+        players = players.map(p => p.clubId === command.teamId
+          ? { ...p, engagesBall: false } : p)
+      }
     } else if (command.type === 'setMovementTarget') {
       players = players.map((p) => p.playerId === command.playerId
         ? { ...p, intention: { kind: 'moveToPoint' as const,
