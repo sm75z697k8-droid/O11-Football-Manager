@@ -9,6 +9,9 @@ The automatic-contact resolver previously allowed a defender who was physically 
 ## Fix
 When a defender has recently lost a real challenge, a continuing overlap with the **same ball owner** does not count as a new collision. A genuine new approach from outside foot-contact reach is required to re-arm an unsuccessful physical challenge. Fresh touches by any player (controlled passes, interceptions, deflections, successful tackles, shot catches and parries) reset the previous contest; other defenders are never prohibited from challenging. A physical return into reach can produce a new genuine tackle and can still result in a skill-dependent winner. No possession is revoked by timer, no ball is moved artificially, and opponent tackle ability remains authoritative.
 
+## AI continuity under real pressure
+An artificial failed-contact stream formerly forced more frequent AI replanning. Carriers are now independently reconsidered at a six-tick tactical interval while a physically close opposing player is in immediate challenge range; otherwise the existing 12-tick interval remains. This adjustment uses actual player positions and foot-reachable ball height, not synthetic contact events. It does not require or create a new physical tackle, change any kick cooldown, or guarantee that a pass or shot succeeds.
+
 The event history is still retained for physics and checkpoint validation. The viewer reuses its already-detached prior-step snapshot (saving a duplicate structured clone), and restricts event-feed processing to recent items rather than sorting unbounded history on every HUD render. A completed goal halts unnecessary animation scheduling while the exhibition awaits restart implementation.
 
 ## Tests and limitations
