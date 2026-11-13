@@ -1,5 +1,5 @@
 import type { MatchState } from '../match/state'
-import { formatDiagnosticTime } from './pacing'
+import { formatMatchTime } from '../match/periods'
 
 /** An explicitly user-requested copyable reproduction report.
  * No network request, browser identifiers, account data or device location.
@@ -18,9 +18,15 @@ export function copyableMatchDiagnostics(state: MatchState): string {
     report: MATCH_DIAGNOSTICS_VERSION,
     engineVersion: state.engineVersion,
     seed: state.seed.toString(16).toUpperCase().padStart(8, '0'),
-    time: formatDiagnosticTime(state.clock.tick),
+    time: formatMatchTime(state),
+    period: state.period,
+    periodTiming: state.periodTiming,
+    periodKickoff: state.periodKickoff,
     tick: state.clock.tick,
-    terminal: state.postGoalKickoff
+    terminal: state.period === 'fullTime' ? 'full-time' :
+      state.period === 'halfTime' ? 'half-time' :
+      state.periodKickoff ? 'second-half-' + state.periodKickoff.phase :
+      state.postGoalKickoff
       ? 'post-goal-' + state.postGoalKickoff.phase :
       state.restart?.kind === 'throwIn' ? 'throw-in-staging' :
         state.restart?.kind === 'goalKick' ? 'goal-kick-staging' :
