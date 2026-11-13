@@ -6,6 +6,7 @@ import type { PlayerDefinition } from '../model/player'
 import type { PitchDefinition, Point2 } from '../model/pitch'
 import type { PlayerMatchState, BallMatchState, MatchState, ContactEvent } from '../match/state'
 import type { AppliedMatchCommand } from '../match/commands'
+import { throwInTakerTarget, forbiddenThrowInSecondTouch } from '../match/restarts'
 
 /**
  * Contact tests are intentionally explicit in Phase 3: no football AI is
@@ -168,11 +169,12 @@ export function advanceControlledBall(
 }
 
 function event(
-  command: AppliedMatchCommand, kind: 'control' | 'kick' | 'throw',
+  command: AppliedMatchCommand, kind: ContactEvent['kind'],
   outcome: ContactEvent['outcome'], drawUsed: 0 | 1,
 ): ContactEvent {
   if (command.type !== 'attemptFirstTouch' && command.type !== 'attemptKick' &&
-      command.type !== 'attemptGoalkeeperThrow') {
+      command.type !== 'attemptGoalkeeperThrow' &&
+      command.type !== 'attemptThrowIn') {
     throw new Error('Unexpected command supplied to contact resolver')
   }
   return {
@@ -196,7 +198,8 @@ export function resolveContactAttempts(
   const commands = state.appliedCommands.filter((command) =>
     command.appliedTick === state.clock.tick &&
     (command.type === 'attemptFirstTouch' || command.type === 'attemptKick' ||
-      command.type === 'attemptGoalkeeperThrow'),
+      command.type === 'attemptGoalkeeperThrow' ||
+      command.type === 'attemptThrowIn'),
   )
   if (!commands.length) return state
 
@@ -207,15 +210,76 @@ export function resolveContactAttempts(
   const events: ContactEvent[] = []
   for (const command of commands) {
     if (command.type !== 'attemptFirstTouch' && command.type !== 'attemptKick' &&
-        command.type !== 'attemptGoalkeeperThrow') continue
+        command.type !== 'attemptGoalkeeperThrow' &&
+        command.type !== 'attemptThrowIn') continue
     const kind = command.type === 'attemptFirstTouch' ? 'control' :
-      command.type === 'attemptGoalkeeperThrow' ? 'throw' : 'kick'
+      command.type === 'attemptGoalkeeperThrow' ? 'throw' :
+        command.type === 'attemptThrowIn' ? 'throwIn' : 'kick'
     const player = players.get(command.playerId)
     const definition = definitions.get(command.playerId)
     if (!player || !definition) throw new Error('Applied contact references an unknown player')
 
     if (ball.controllerId && ball.controllerId !== command.playerId) {
       events.push(event(command, kind, 'occupied', 0))
+      continue
+    }
+    if (command.type === 'attemptThrowIn') {
+      const restart = state.restart
+      const at = restart?.kind === 'throwIn'
+        ? throwInTakerTarget(restart, setup) : null
+      const legal = !!restart && restart.kind === 'throwIn' &&
+        restart.takerId === player.playerId &&
+        restart.awardedTeamId === player.clubId &&
+        at !== null && ball.outsidePitch &&
+        Math.hypot(player.position.xM - at.xM,
+          player.position.yM - at.yM) <= 1.15 &&
+        state.clock.tick - restart.tick >= 14
+      if (!legal || !at) {
+        events.push(event(command, kind, 'notReady', 0))
+        continue
+      }
+      const dx = command.target.xM - restart.spot.xM
+      const dy = command.target.yM - restart.spot.yM
+      const distance = Math.hypot(dx, dy)
+      if (distance < 2.5 || distance > 28) {
+        events.push(event(command, kind, 'invalidDirection', 0))
+        continue
+      }
+      const a = definition.abilities
+      const quality = (
+        .5 * a.technical.longThrows +
+        .3 * a.technical.technique +
+        .2 * a.mental.composure) / 100
+      const spread = .014 + (1 - quality) * .10
+      const error = (contactRng.nextFloat() - .5) * 2 * spread
+      const nominalAngle = Math.atan2(dy, dx)
+      const bearing = nominalAngle + error
+      const launchHeight = 1.85
+      const verticalSpeed = 2.9 + command.power * 2.2
+      // Aim the physical flight at a plausible receiving distance, not
+      // at a fixed 20m launch that flies past a short 8–12m outlet.
+      // Exact flight is still simulated by ball physics after release.
+      const flightTime = (verticalSpeed + Math.sqrt(
+        verticalSpeed * verticalSpeed +
+          2 * 9.81 * (launchHeight - BALL_RADIUS_M))) / 9.81
+      const idealPlanar = (Math.exp(.008 * distance) - 1) /
+        (.008 * flightTime)
+      const planarSpeed = Math.min(25, idealPlanar *
+        (.80 + .34 * command.power) *
+        (.97 + a.physical.strength * .0006))
+      const position = { ...restart.spot }
+      ball = {
+        ...ball, position,
+        heightM: launchHeight,
+        velocity: {
+          xMps: Math.cos(bearing) * planarSpeed,
+          yMps: Math.sin(bearing) * planarSpeed,
+          zMps: verticalSpeed,
+        },
+        controllerId: null, controlOffset: null,
+        lastTouchPlayerId: player.playerId, outsidePitch: false,
+      }
+      events.push(event(command, kind, 'thrownIn', 1))
       continue
     }
     if (command.type === 'attemptGoalkeeperThrow') {
@@ -252,6 +316,10 @@ export function resolveContactAttempts(
         lastTouchPlayerId: player.playerId,
       }
       events.push(event(command, kind, 'thrown', 1))
+      continue
+    }
+    if (forbiddenThrowInSecondTouch({ ...state, ball }, player.playerId)) {
+      events.push(event(command, kind, 'secondTouch', 0))
       continue
     }
     if (!canReachBall(player, ball)) {

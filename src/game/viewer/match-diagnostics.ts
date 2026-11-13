@@ -9,7 +9,8 @@ export const MATCH_DIAGNOSTICS_VERSION = 'o11-debug-report-v1'
 
 export function copyableMatchDiagnostics(state: MatchState): string {
   const lastKick = [...state.contactEvents].reverse().find(e =>
-    e.outcome === 'kicked' || e.outcome === 'thrown')
+    e.outcome === 'kicked' || e.outcome === 'thrown' ||
+    e.outcome === 'thrownIn')
   const player = state.players.find(p => p.playerId === state.ball.controllerId)
   const ball = state.ball
   return JSON.stringify({
@@ -18,8 +19,16 @@ export function copyableMatchDiagnostics(state: MatchState): string {
     seed: state.seed.toString(16).toUpperCase().padStart(8, '0'),
     time: formatDiagnosticTime(state.clock.tick),
     tick: state.clock.tick,
-    terminal: ball.outsidePitch ? 'out-of-play'
-      : state.goalEvents.length ? 'goal' : 'playing',
+    terminal: state.goalEvents.length ? 'goal' :
+      state.restart?.kind === 'throwIn' ? 'throw-in-staging' :
+        ball.outsidePitch ? 'out-of-play' : 'playing',
+    restart: state.restart,
+    outOfPlayCounts: {
+      total: state.outOfPlayEvents.length,
+      throwIns: state.outOfPlayEvents.filter(e => e.kind === 'throwIn').length,
+      completedThrowIns: state.contactEvents.filter(
+        e => e.outcome === 'thrownIn').length,
+    },
     aiTeams: state.ai.enabledTeams,
     commandsUsed: state.nextCommandSequence - 1,
     pendingCommands: state.pendingCommands.length,

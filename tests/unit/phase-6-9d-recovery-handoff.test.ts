@@ -5,6 +5,7 @@ import { BALL_RADIUS_M } from '../../src/game/physics/ball'
 import { activePassIntent, maintainPassReception, shouldYieldPassReception } from '../../src/game/ai/pass-coordination'
 import { runAutonomousDecisions } from '../../src/game/ai/runner'
 import type { MatchState } from '../../src/game/match/state'
+import { MATCH_STATE_SCHEMA_VERSION } from '../../src/game/match/state'
 
 function stagedLoosePass(missed: boolean, kicked = true) {
   const setup = makeFictionalMatchSetup()
@@ -97,7 +98,7 @@ describe('Phase 6.9D physically meaningful recovery handoff', () => {
     const engine = createFoundationMatch(setup)
     engine.advance(40)
     const snapshot = engine.checkpoint()
-    expect(snapshot.state.schemaVersion).toBe(9)
+    expect(snapshot.state.schemaVersion).toBe(MATCH_STATE_SCHEMA_VERSION)
     expect(restoreFoundationMatch(snapshot).checkpoint()).toEqual(snapshot)
   })
 })

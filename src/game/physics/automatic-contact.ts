@@ -8,6 +8,7 @@ import { activePhysicalShot } from '../ai/goal-directed'
 import { GOALKEEPER_HAND_HEIGHT_M } from './goalkeeper-handling'
 import { goalkeeperCatchStretchPenalty, goalkeeperSaveWindow } from './goalkeeper-saves'
 import { planGoalkeeperOneOnOne } from '../ai/goalkeeper-one-on-one'
+import { forbiddenThrowInSecondTouch } from '../match/restarts'
 import { activeAerialDelivery, goalkeeperCrossHandReach } from '../ai/goalkeeper-aerial'
 
 /**
@@ -210,6 +211,7 @@ function candidate(
         before.ball.lastTouchPlayerId === after.kickoff.kickerId &&
         p.playerId === after.kickoff.kickerId) continue
     if (!p.engagesBall || p.participation !== 'onField' ||
+      forbiddenThrowInSecondTouch(after, p.playerId) ||
       p.playerId === owner?.playerId ||
       (owner && p.clubId === owner.clubId)) continue
     const old = pastPlayers.get(p.playerId)
