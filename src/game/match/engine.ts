@@ -709,9 +709,23 @@ export class FoundationMatchEngine {
       if (controller && !controllingDefinition) {
         throw new Error('Controlled-ball movement requires a player definition')
       }
+      // Only a real on-ball CARRY with a nontrivial movement target needs
+      // directional close-control updates. When settling to pass or shoot,
+      // preserve the existing physically caught foot-contact point. This
+      // avoids shifting kick origins and altering unrelated match outcomes.
+      const carrying = !!controller &&
+        controller.intention.kind === 'moveToPoint' &&
+        Math.hypot(
+          controller.intention.target.xM - controller.position.xM,
+          controller.intention.target.yM - controller.position.yM) > 1.2 &&
+        Math.hypot(
+          controller.velocity.xMps, controller.velocity.yMps) > .5 &&
+        agents.ai.decisionSnapshot.some(d =>
+          d.playerId === controller.playerId && d.action === 'carry')
       const ball = controller
         ? advanceControlledBall(
-          agents.ball, controller, this.setup.pitch, controllingDefinition)
+          agents.ball, controller, this.setup.pitch,
+          carrying ? controllingDefinition : undefined)
         : advanceBallPhysics(agents.ball, this.setup.pitch)
       const moved = ball === agents.ball ? agents : { ...agents, ball }
       const contacted = resolveContactAttempts(moved, this.setup)
