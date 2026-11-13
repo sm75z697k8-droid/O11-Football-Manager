@@ -142,6 +142,14 @@ describe('Goalkeeper open-play positioning and angle management', () => {
       d => d.playerId === scene.keeper.playerId)!
     expect(keeperAction.action).toBe('save')
     expect(keeperAction.engage).toBe(true)
-    expect(keeperAction.target.xM).toBeCloseTo(2.8)
+    // The goalkeeper braces against an immediate body-level shot first.
+    expect(keeperAction.target.xM).toBeCloseTo(scene.keeper.position.xM)
+    const reacted: MatchState = {
+      ...shot, clock: { ...shot.clock, tick: 129 },
+    }
+    const reactingAction = planTeamDecisions(reacted, scene.setup).find(
+      d => d.playerId === scene.keeper.playerId)!
+    expect(reactingAction.action).toBe('save')
+    expect(reactingAction.target.xM).toBeCloseTo(2.8)
   })
 })
