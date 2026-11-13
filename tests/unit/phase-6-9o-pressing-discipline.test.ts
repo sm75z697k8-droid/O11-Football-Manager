@@ -3,7 +3,8 @@ import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
 import { createFoundationMatch } from '../../src/game/match/engine'
 import { planTeamDecisions } from '../../src/game/ai/decisions'
 import {
-  planDefensiveResponsibilities, pressingApproachTarget,
+  defensiveRecoveryTarget, planDefensiveResponsibilities,
+  pressingApproachTarget,
 } from '../../src/game/ai/defensive-shape'
 import { projectPlayerToward } from '../../src/game/physics/locomotion'
 import type { MatchState, PressingIntensity } from '../../src/game/match/state'
@@ -118,6 +119,24 @@ describe('Phase 6.9O — trigger-based pressing and defensive restraint',()=>{
       expect(normal.defending().every(d=>!d.engage)).toBe(true)
       expect(normal.defending().some(d=>d.action==='recover')).toBe(true)
       expect(normal.defending().filter(d=>d.action==='cover')).toHaveLength(1)
+    })
+
+    it(`screens goal-side from the compact block instead of long-range cover sprints on side ${side}`,()=>{
+      for(const intensity of ['low','standard','high'] as const){
+        const a=stage(side,{type:intensity})
+        const cover=a.defending().find(d=>d.action==='cover')!
+        expect(cover).toBeDefined()
+        expect(cover.engage).toBe(false)
+        const owner=a.state.players.find(p=>p.playerId===cover.playerId)!
+        const anchor=a.state.ai.formationPositions[owner.playerId]
+        const block=defensiveRecoveryTarget(
+          owner,anchor,a.ballPoint,a.team,a.setup)
+        const gap=Math.hypot(
+          cover.target.xM-block.xM,
+          cover.target.yM-block.yM)
+        const limit=intensity==='low'?7:intensity==='standard'?10:13
+        expect(gap).toBeLessThanOrEqual(limit+.000001)
+      }
     })
 
     it(`uses two coordinated high pressers only for a nearby wide trap on side ${side}`,()=>{
