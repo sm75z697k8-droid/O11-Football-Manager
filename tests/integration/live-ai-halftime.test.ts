@@ -59,11 +59,34 @@ describe('S1.5 true two-AI-team 45-minute first half', () => {
     match.advance(30)
     replay.advance(30)
     expect(replay.checkpoint()).toEqual(match.checkpoint())
+    let secondChunks=0
+    while(match.getState().period==='secondHalf'){
+      if(secondChunks++>20)
+        throw new Error('Live AI football failed to reach final whistle')
+      match.advance(10000)
+    }
+    const full=match.getState()
+    expect(full.period).toBe('fullTime')
+    expect(full.clock.tick).toBe(
+      full.periodTiming.secondHalfStartTick!+HALF_TICKS+
+      full.periodTiming.secondHalfAddedTicks!)
+    expect(full.goalEvents.length).toBeGreaterThanOrEqual(halftime.goalEvents.length)
+    expect(full.teams.reduce((sum,t)=>sum+t.score,0)).toBe(full.goalEvents.length)
+    const completeCheckpoint=match.checkpoint()
+    expect(restoreFoundationMatch(completeCheckpoint).checkpoint())
+      .toEqual(completeCheckpoint)
+    match.advance(8)
+    expect(match.checkpoint()).toEqual(completeCheckpoint)
     console.info('[O11 S1.5 REAL AI HALFTIME]',JSON.stringify({
       seed:117,halftimeTick:halftime.clock.tick,
       firstHalfAdded:halftime.periodTiming.firstHalfAddedTicks,
       ...counts,
       secondHalfKickoffTick:returned.periodTiming.secondHalfStartTick,
+      fullTimeTick:full.clock.tick,
+      secondHalfAdded:full.periodTiming.secondHalfAddedTicks,
+      finalScore:full.teams.map(t=>t.score),
+      totalGoals:full.goalEvents.length,
+      fullMatchCommands:full.appliedCommands.length,
     }))
   }, 60000)
 })
