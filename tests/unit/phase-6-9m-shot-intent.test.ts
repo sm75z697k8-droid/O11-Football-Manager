@@ -127,15 +127,25 @@ describe('Phase 6.9M — decisions and physical shot-frame preview',()=>{
     })
   }
 
-  it('prefers the goal side not already guarded by the goalkeeper',()=>{
-    const high=stage(0,{keeperY:39})
-    const low=stage(0,{keeperY:29})
+  it('favours an on-frame window away from the keeper rather than forcing corner shots',()=>{
+    const high=stage(0,{keeperY:36})
+    const low=stage(0,{keeperY:32})
     const shotHigh=evaluateShootingOpportunity(
       high.shooter,high.def,high.opponents,high.team,high.setup)!
     const shotLow=evaluateShootingOpportunity(
       low.shooter,low.def,low.opponents,low.team,low.setup)!
-    expect(shotHigh.target.yM).toBeLessThan(34)
-    expect(shotLow.target.yM).toBeGreaterThan(34)
+    // A central shot can be objectively safer than a far-corner shot
+    // if the edge would be frequently missed by this specific striker.
+    expect(shotHigh.target.yM).toBeLessThanOrEqual(34)
+    expect(shotLow.target.yM).toBeGreaterThanOrEqual(34)
+    const windows=evaluatePhysicalShotWindows(
+      high.shooter,high.def,high.opponents,high.team,high.setup,
+      shotHigh.power,shotHigh.lift)
+    const away=windows.find(w=>w.target.yM<34)!
+    const towards=windows.find(w=>w.target.yM>34)!
+    expect(away.keeperGap).toBeGreaterThan(towards.keeperGap)
+    expect(windows.every(w=>w.onFrameShare>=0&&w.onFrameShare<=1))
+      .toBe(true)
   })
 
   it('models less accurate finishers with larger frame-miss exposure at distance',()=>{
