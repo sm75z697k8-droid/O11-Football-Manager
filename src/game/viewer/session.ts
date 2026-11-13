@@ -1,4 +1,5 @@
-import { makeFictionalMatchSetup } from '../../data/fixtures/fictional-match'
+import { makeExhibitionMatchSetup } from '../../data/fixtures/keeper-comparison'
+import type { ExhibitionPreset } from '../../data/fixtures/keeper-comparison'
 import { openingKickoffPass } from '../match/kickoff'
 import { createFoundationMatch } from '../match/engine'
 import type { FoundationMatchEngine } from '../match/engine'
@@ -11,13 +12,15 @@ import type { MatchState } from '../match/state'
  */
 export class MatchViewerSession {
   readonly setup: MatchSetup
+  readonly preset: ExhibitionPreset
   private engine: FoundationMatchEngine
   private prior: MatchState
   private latest: MatchState
 
   /** Explicit seed enables exact replay; omitted seed retains the test fixture. */
-  constructor(seed?: number) {
-    const template = makeFictionalMatchSetup()
+  constructor(seed?: number, preset: ExhibitionPreset = 'balanced') {
+    const template = makeExhibitionMatchSetup(preset)
+    this.preset = preset
     const fixture = {
       ...template,
       seed: seed ?? template.seed,

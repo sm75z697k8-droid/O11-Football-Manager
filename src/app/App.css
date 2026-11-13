@@ -99,7 +99,7 @@ button:focus-visible,select:focus-visible,canvas:focus-visible{outline:2px solid
 }
 .right-nav{
   display:flex;justify-content:flex-end;align-items:center;gap:6px;
-  min-height:46px;flex:0 0 138px;
+  min-height:46px;flex:0 0 168px;
 }
 .sim-clock{
   font-size:13px;font-weight:850;letter-spacing:.04em;
@@ -114,6 +114,7 @@ button:focus-visible,select:focus-visible,canvas:focus-visible{outline:2px solid
   box-shadow:0 3px 14px #0005;
 }
 .hud-icon.selected,.hud-icon:hover{background:#275043;border-color:#8cdbad;}
+.hud-gk-icon{font-size:10px;letter-spacing:.02em;font-weight:900;}
 .match-caption-top{
   position:absolute;z-index:2;left:max(14px,env(safe-area-inset-left));
   top:calc(env(safe-area-inset-top) + 70px);
@@ -346,7 +347,7 @@ button:focus-visible,select:focus-visible,canvas:focus-visible{outline:2px solid
   .team-names small{display:none;}
   .o11-brand-sub{display:none;}
   .o11-mini-brand{flex-basis:46px;}
-  .right-nav{flex-basis:124px;gap:4px;}
+  .right-nav{flex-basis:156px;gap:4px;}
   .transport-identity,.transport-tail{display:none;}
   .floating-transport{width:max-content;max-width:calc(100% - 100px);min-width:0;}
   .match-corner-left{font-size:7px;opacity:.6;}
@@ -402,3 +403,44 @@ button:focus-visible,select:focus-visible,canvas:focus-visible{outline:2px solid
   padding:5px 6px;font-weight:750;}
 .drawer-ai-alternatives small{margin-left:4px;font-size:8px;
   color:#9bb5a5;}
+
+
+/* Goalkeeper test mode: concise side-by-side numbers, suitable for 248px
+   landscape drawers. These are actual fixture attributes, not HUD guesses. */
+.keeper-lab{display:flex;flex-direction:column;gap:11px;}
+.keeper-lab .drawer-muted{margin:0;font-size:10px;line-height:1.5;}
+.keeper-preset-switch{
+  display:grid;grid-template-columns:1fr 1fr;gap:5px;
+}
+.keeper-preset-switch button{
+  min-height:34px;border-radius:8px;border:1px solid #3a6055;
+  background:#142c2b;color:#a9c8b7;font-size:10px;
+  font-weight:850;padding:6px 3px;
+}
+.keeper-preset-switch button.active{
+  border-color:#b5f4c3;background:#b6eed0;color:#102f24;
+}
+.keeper-stat-table{
+  width:100%;border-collapse:collapse;font-size:11px;
+  font-variant-numeric:tabular-nums;
+}
+.keeper-stat-table th,.keeper-stat-table td{
+  text-align:left;padding:7px 4px;border-bottom:1px solid #ffffff19;
+}
+.keeper-stat-table thead th{
+  color:#8bafa0;font-size:8px;font-weight:850;letter-spacing:.09em;
+}
+.keeper-stat-table th:nth-child(2),
+.keeper-stat-table th:nth-child(3),
+.keeper-stat-table td{text-align:center;}
+.keeper-stat-table tbody th{color:#bad3c6;font-weight:650;}
+.keeper-stat-table td{color:#e6ffeb;font-weight:900;font-size:12px;}
+.keeper-role-notes{display:grid;gap:7px;}
+.keeper-role-notes p{
+  margin:0;display:flex;flex-direction:column;gap:4px;
+  padding:9px;background:rgba(39,72,57,.48);
+  border:1px solid rgba(157,224,186,.15);border-radius:8px;
+  color:#abc6b7;font-size:10px;line-height:1.4;
+}
+.keeper-role-notes strong{color:#e4f9ec;font-size:10px;}
+.keeper-lab .drawer-legal{margin:0;font-size:9px;line-height:1.55;}

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { MouseEvent } from 'react'
 import type { MatchState } from '../game/match/state'
 import { MatchViewerSession } from '../game/viewer/session'
+import { GOALKEEPER_COMPARISON_PROFILES } from '../data/fixtures/keeper-comparison'
+import type { ExhibitionPreset } from '../data/fixtures/keeper-comparison'
 import { copyableMatchDiagnostics } from '../game/viewer/match-diagnostics'
 import { MAX_COMMANDS_PER_MATCH } from '../game/match/commands'
 import { PROJECT_PHASE } from './project'
@@ -13,7 +15,15 @@ import { calculateFrameAdvance, formatDiagnosticTime } from '../game/viewer/paci
 import type { PlaybackSpeed } from '../game/viewer/pacing'
 import './App.css'
 
-type OverlayPanel = 'none' | 'players' | 'events'
+type OverlayPanel = 'none' | 'players' | 'events' | 'keepers'
+
+const KEEPER_COMPARISON_METRICS = [
+  { key: 'reflexes', label: 'Reflexes' },
+  { key: 'diving', label: 'Diving' },
+  { key: 'handling', label: 'Handling' },
+  { key: 'positioning', label: 'Positioning' },
+  { key: 'parrying', label: 'Parrying' },
+] as const
 type FeedItem = {
   readonly key: string
   readonly tick: number
@@ -59,7 +69,10 @@ function physicalEvents(state: MatchState): FeedItem[] {
 
 export default function App() {
   const sessionRef = useRef<MatchViewerSession | null>(null)
-  if (sessionRef.current === null) sessionRef.current = new MatchViewerSession()
+  // New users see a visible goalkeeper contrast; the untouched balanced
+  // fixture remains available as a same-seed control in the GK panel.
+  if (sessionRef.current === null) sessionRef.current =
+    new MatchViewerSession(undefined, 'keeper-comparison')
   const session = sessionRef.current
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [playing, setPlaying] = useState(false)
@@ -175,8 +188,10 @@ export default function App() {
     }
   }, [playing, speed, selectedId, renderRevision])
 
-  const restartWithSeed = (seed: number) => {
-    const fresh = new MatchViewerSession(seed)
+  const restartWithSeed = (
+    seed: number, preset: ExhibitionPreset = sessionRef.current!.preset,
+  ) => {
+    const fresh = new MatchViewerSession(seed, preset)
     sessionRef.current = fresh
     setPlaying(false)
     setFailure(null)
@@ -189,6 +204,14 @@ export default function App() {
 
   const replaySameMatch = () => {
     restartWithSeed(sessionRef.current!.state.seed)
+  }
+
+  const changeExhibitionPreset = (next: ExhibitionPreset) => {
+    if (sessionRef.current!.preset === next) return
+    // Identical seed and team sheets outside GK: the controlled comparison
+    // changes abilities only, while the physical match restarts at kickoff.
+    restartWithSeed(sessionRef.current!.state.seed, next)
+    setPanel('keepers')
   }
 
   const startNewMatch = () => {
@@ -205,7 +228,8 @@ export default function App() {
   }
 
   const copyMatchReport = () => {
-    const report = copyableMatchDiagnostics(sessionRef.current!.state)
+    const report = copyableMatchDiagnostics(sessionRef.current!.state) +
+      '\nEXHIBITION PRESET: ' + sessionRef.current!.preset
     if (navigator.clipboard?.writeText) {
       void navigator.clipboard.writeText(report)
         .then(() => setDiagnosticCopied(true))
@@ -216,6 +240,10 @@ export default function App() {
   }
 
   const seedCode = hud.seed.toString(16).toUpperCase().padStart(8, '0')
+  const keeperDefinitions = session.setup.clubs.map(club =>
+    session.setup.players.find(p =>
+      p.clubId === club.id && p.abilities.goalkeeping !== null))
+  const keeperComparison = session.preset === 'keeper-comparison'
 
   const stepOne = () => {
     if (playing || failure || hud.ball.outsidePitch) return
@@ -305,6 +333,13 @@ export default function App() {
           </span>
           <button
             type="button"
+            className={panel === 'keepers' ? 'hud-icon hud-gk-icon selected' : 'hud-icon hud-gk-icon'}
+            aria-label="Compare goalkeeper attributes and match presets"
+            aria-pressed={panel === 'keepers'}
+            onClick={() => setPanel(current => current === 'keepers' ? 'none' : 'keepers')}
+          >GK</button>
+          <button
+            type="button"
             className={panel === 'players' ? 'hud-icon selected' : 'hud-icon'}
             aria-label="Open player information"
             aria-pressed={panel === 'players'}
@@ -326,7 +361,7 @@ export default function App() {
         <span className="caption-divider">/</span>
         PHYSICS ENGINE
         <span className="caption-divider">/</span>
-        <span className="match-seed">SEED {seedCode} · BUILD {PROJECT_PHASE}</span>
+        <span className="match-seed">SEED {seedCode} · BUILD {PROJECT_PHASE} · {keeperComparison ? 'GK COMPARISON' : 'BALANCED'}</span>
       </div>
 
       <div className="match-corner-left">
@@ -347,9 +382,13 @@ export default function App() {
       )}
 
       {panel !== 'none' && (
-        <aside className="overlay-drawer" aria-label={panel === 'players' ? 'Player inspector' : 'Physical event log'}>
+        <aside className="overlay-drawer" aria-label={panel === 'players'
+          ? 'Player inspector' : panel === 'keepers'
+            ? 'Goalkeeper comparison and test setup' : 'Physical event log'}>
           <div className="drawer-head">
-            <div><small>O11 MATCH LAB / TELEMETRY</small><strong>{panel === 'players' ? 'Player inspector' : 'Physical events'}</strong></div>
+            <div><small>O11 MATCH LAB / TELEMETRY</small><strong>{panel === 'players'
+              ? 'Player inspector' : panel === 'keepers'
+                ? 'Goalkeeper lab' : 'Physical events'}</strong></div>
             <button type="button" onClick={() => setPanel('none')} aria-label="Close panel">×</button>
           </div>
 
@@ -410,6 +449,55 @@ export default function App() {
               </button>
               <div className="drawer-stat"><span>BALL CONTROLLER</span><strong>{owner ? ownerClub?.shortName + ' #' + owner.shirtNumber : 'NONE'}</strong></div>
               <p className="drawer-legal">Goals are recorded only when the physical ball crosses the goalmouth. This is an exhibition without a full match clock, referee or restarts.</p>
+            </div>
+          ) : panel === 'keepers' ? (
+            <div className="drawer-content keeper-lab">
+              <p className="drawer-muted">
+                Fictional profiles for testing real goalkeeper AI.
+                Switching profiles resets the match to kickoff with the
+                <strong> same seed</strong>.
+              </p>
+              <div className="keeper-preset-switch" role="group" aria-label="Goalkeeper test fixture">
+                <button type="button" aria-pressed={!keeperComparison}
+                  className={!keeperComparison ? 'active' : ''}
+                  onClick={() => changeExhibitionPreset('balanced')}>Balanced</button>
+                <button type="button" aria-pressed={keeperComparison}
+                  className={keeperComparison ? 'active' : ''}
+                  onClick={() => changeExhibitionPreset('keeper-comparison')}>GK comparison</button>
+              </div>
+              <table className="keeper-stat-table" aria-label="Actual fictional goalkeeper ratings">
+                <thead>
+                  <tr><th scope="col">RATING</th><th scope="col">HAR</th><th scope="col">VAL</th></tr>
+                </thead>
+                <tbody>
+                  {KEEPER_COMPARISON_METRICS.map(metric => (
+                    <tr key={metric.key}>
+                      <th scope="row">{metric.label}</th>
+                      {keeperDefinitions.map(keeper => (
+                        <td key={keeper!.id}>{keeper!.abilities.goalkeeping![metric.key]}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {keeperComparison ? (
+                <div className="keeper-role-notes">
+                  <p><strong>HAR · {GOALKEEPER_COMPARISON_PROFILES.club_harbor.title}</strong>
+                    {GOALKEEPER_COMPARISON_PROFILES.club_harbor.summary}</p>
+                  <p><strong>VAL · {GOALKEEPER_COMPARISON_PROFILES.club_vale.title}</strong>
+                    {GOALKEEPER_COMPARISON_PROFILES.club_vale.summary}</p>
+                </div>
+              ) : (
+                <p className="drawer-muted keeper-control-note">
+                  Both goalkeepers use identical 68-rated goalkeeping attributes
+                  in the balanced control fixture.
+                </p>
+              )}
+              <p className="drawer-legal">
+                Ratings are estimated 0–100 abilities, not save percentages.
+                The outfield players, formation, pressing and physics are unchanged.
+                Different ratings can change the match sequence even with the same seed.
+              </p>
             </div>
           ) : (
             <div className="drawer-content event-feed">
