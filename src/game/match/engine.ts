@@ -286,7 +286,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         !player || teamIdx < 0 || player.clubId !== d.clubId ||
         !state.ai.enabledTeams[teamIdx] ||
         !Number.isSafeInteger(d.tick) || d.tick !== state.ai.lastDecisionTick ||
-        !['shape','support','press','pursue','carry','receive','cover','mark','recover','shoot','save','oneOnOne'].includes(d.action) ||
+        !['shape','support','press','pursue','carry','receive','cover','mark','recover','shoot','save','oneOnOne','claimCross'].includes(d.action) ||
         typeof d.engage !== 'boolean' ||
         !object(d.target) || !insidePitch(d.target, setup.pitch) ||
         liveDecisions.has(d.playerId)) {
@@ -363,7 +363,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         ev.contactFraction < 0 || ev.contactFraction > 1 ||
         !(
           (ev.kind === 'interception' &&
-            ['intercepted', 'deflected', 'caught', 'parried'].includes(ev.outcome)) ||
+            ['intercepted', 'deflected', 'caught', 'parried', 'punched'].includes(ev.outcome)) ||
           (ev.kind === 'challenge' &&
             (['wonChallenge', 'heldOff'].includes(ev.outcome) ||
               (ev.outcome === 'caught' &&
@@ -374,7 +374,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
           'contactFraction,kind,outcome,playerId,tick') {
       throw new Error('Invalid automatic ball contact history')
     }
-    if ((ev.outcome === 'caught' || ev.outcome === 'parried') &&
+    if ((ev.outcome === 'caught' || ev.outcome === 'parried' ||
+      ev.outcome === 'punched') &&
         !state.players.some(p => p.playerId === ev.playerId &&
           p.formationSlot === 'GK')) {
       throw new Error('Only a goalkeeper may record a glove save')
@@ -464,7 +465,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         expectedController = ev.playerId
         expectedLastTouch = ev.playerId
         expectedCatchTick = ev.outcome === 'caught' ? tick : null
-      } else if (ev.outcome === 'deflected' || ev.outcome === 'parried') {
+      } else if (ev.outcome === 'deflected' || ev.outcome === 'parried' ||
+                 ev.outcome === 'punched') {
         expectedController = null
         expectedLastTouch = ev.playerId
         expectedCatchTick = null
