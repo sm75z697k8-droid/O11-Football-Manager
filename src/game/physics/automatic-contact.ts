@@ -219,7 +219,9 @@ function candidate(
     const goalkeeperSave = p.formationSlot === 'GK' &&
       !!shooter && shooter.clubId !== p.clubId &&
       withinOwnPenaltyArea(p, setup)
-    const definition = goalkeeperSave
+    // Aerial interceptions need goalkeeper attributes too: the previous
+    // shot-only lookup silently fell back to foot contact for crosses.
+    const definition = p.formationSlot === 'GK'
       ? setup.players.find(def => def.id === p.playerId) : undefined
     const saveWindow = goalkeeperSave && shot &&
       definition?.abilities.goalkeeping
