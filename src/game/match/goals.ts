@@ -2,6 +2,7 @@ import type { PitchDefinition } from '../model/pitch'
 import type { BallMatchState, GoalEvent, MatchState } from './state'
 import type { MatchSetup } from '../model/match'
 import { BALL_RADIUS_M } from '../physics/ball'
+import { postGoalKickoffAward } from './post-goal-kickoff'
 
 /**
  * Goal-line geometry in the same 105 x 68 metre coordinates as ball physics.
@@ -44,13 +45,15 @@ export function detectGoalMouthCrossing(
   }
 }
 
-/** Called after actual locomotion, flight, touches, and keeper challenges.
- * Remains at one goal per exhibition because no restart state exists yet.
+/** Called after real locomotion, ball flight, touches and keeper challenges.
+ * Every distinct physical crossing can score; it is followed by an
+ * independently staged, physical centre restart for the conceding team.
  */
 export function adjudicatePhysicalGoal(
   before: MatchState, after: MatchState, setup: MatchSetup,
 ): MatchState {
-  if (after.goalEvents.length || before.goalEvents.length ||
+  if (after.goalEvents.length !== before.goalEvents.length ||
+      after.postGoalKickoff !== null ||
       after.kickoff?.phase === 'awaitingKick' ||
       after.ball.lastTouchPlayerId === null) return after
   const crossed = detectGoalMouthCrossing(before.ball, after.ball, setup.pitch)
@@ -68,11 +71,31 @@ export function adjudicatePhysicalGoal(
     ownGoal: scorer.clubId !== scoringTeam.clubId,
     ...crossed,
   }
-  return {
+  const updated: MatchState = {
     ...after,
     teams: after.teams.map(team => ({
       ...team, score: team.score + (team.clubId === goal.scoringTeamId ? 1 : 0),
     })) as unknown as MatchState['teams'],
-    goalEvents: [goal],
+    goalEvents: [...after.goalEvents, goal],
+    // Referee replaces the dead scored ball on the centre mark. This is
+    // an actual legal restart placement, NOT a teleporting active pass.
+    ball: {
+      ...after.ball,
+      position: {
+        xM: setup.pitch.lengthM / 2, yM: setup.pitch.widthM / 2,
+      },
+      heightM: BALL_RADIUS_M,
+      velocity: { xMps: 0, yMps: 0, zMps: 0 },
+      outsidePitch: false,
+      controllerId: null, controlOffset: null,
+      // Preserve physical last-touch history until another genuine
+      // contact, so checkpoint possession chronology stays auditable.
+      lastTouchPlayerId: scorer.playerId,
+    },
+    ai: { ...after.ai, passIntent: null, decisionSnapshot: [] },
+  }
+  return {
+    ...updated,
+    postGoalKickoff: postGoalKickoffAward(updated, setup, goal),
   }
 }
