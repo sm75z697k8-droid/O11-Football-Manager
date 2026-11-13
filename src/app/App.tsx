@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import type { MouseEvent } from 'react'
 import type { MatchState } from '../game/match/state'
 import { MatchViewerSession } from '../game/viewer/session'
+import { copyableMatchDiagnostics } from '../game/viewer/match-diagnostics'
+import { MAX_COMMANDS_PER_MATCH } from '../game/match/commands'
+import { PROJECT_PHASE } from './project'
 import { distinctMatchSeed } from '../game/core/match-variation'
 import { AI_PASS_MIN_INTERVAL_TICKS, evaluateOnBallPlan } from '../game/ai/possession'
 import { findPlayerAt, projectPitch } from '../game/viewer/geometry'
@@ -66,6 +69,7 @@ export default function App() {
   const [hud, setHud] = useState<MatchState>(session.state)
   const [renderRevision, setRenderRevision] = useState(0)
   const [failure, setFailure] = useState<string | null>(null)
+  const [diagnosticCopied, setDiagnosticCopied] = useState(false)
 
   useEffect(() => {
     const onVisibility = () => {
@@ -176,6 +180,7 @@ export default function App() {
     sessionRef.current = fresh
     setPlaying(false)
     setFailure(null)
+    setDiagnosticCopied(false)
     setSelectedId(null)
     setPanel('none')
     setHud(fresh.state)
@@ -196,6 +201,17 @@ export default function App() {
     } catch {
       setFailure('A secure browser random seed is unavailable. You can still replay this match.')
       setPlaying(false)
+    }
+  }
+
+  const copyMatchReport = () => {
+    const report = copyableMatchDiagnostics(sessionRef.current!.state)
+    if (navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(report)
+        .then(() => setDiagnosticCopied(true))
+        .catch(() => { void window.prompt('Copy match diagnostic report', report) })
+    } else {
+      void window.prompt('Copy match diagnostic report', report)
     }
   }
 
@@ -310,7 +326,7 @@ export default function App() {
         <span className="caption-divider">/</span>
         PHYSICS ENGINE
         <span className="caption-divider">/</span>
-        <span className="match-seed">SEED {seedCode}</span>
+        <span className="match-seed">SEED {seedCode} · BUILD {PROJECT_PHASE}</span>
       </div>
 
       <div className="match-corner-left">
@@ -387,6 +403,11 @@ export default function App() {
               <div className="drawer-divider" />
               <div className="drawer-stat"><span>ACTIVE AI TEAMS</span><strong>{activeTeam} / 2</strong></div>
               <div className="drawer-stat"><span>PHYSICAL CONTACTS</span><strong>{hud.automaticContactEvents.length + successContacts}</strong></div>
+              <div className="drawer-stat"><span>COMMANDS USED</span><strong>{hud.nextCommandSequence - 1} / {MAX_COMMANDS_PER_MATCH}</strong></div>
+              <div className="drawer-stat"><span>BUILD</span><strong>{PROJECT_PHASE}</strong></div>
+              <button type="button" className="drawer-debug-copy" onClick={copyMatchReport}>
+                {diagnosticCopied ? '✓ Debug report copied' : 'Copy match debug report'}
+              </button>
               <div className="drawer-stat"><span>BALL CONTROLLER</span><strong>{owner ? ownerClub?.shortName + ' #' + owner.shirtNumber : 'NONE'}</strong></div>
               <p className="drawer-legal">Goals are recorded only when the physical ball crosses the goalmouth. This is an exhibition without a full match clock, referee or restarts.</p>
             </div>
