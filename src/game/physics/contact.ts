@@ -6,7 +6,7 @@ import type { PlayerDefinition } from '../model/player'
 import type { PitchDefinition, Point2 } from '../model/pitch'
 import type { PlayerMatchState, BallMatchState, MatchState, ContactEvent } from '../match/state'
 import type { AppliedMatchCommand } from '../match/commands'
-import { throwInTakerTarget } from '../match/restarts'
+import { throwInTakerTarget, forbiddenThrowInSecondTouch } from '../match/restarts'
 
 /**
  * Contact tests are intentionally explicit in Phase 3: no football AI is
@@ -306,6 +306,10 @@ export function resolveContactAttempts(
         lastTouchPlayerId: player.playerId,
       }
       events.push(event(command, kind, 'thrown', 1))
+      continue
+    }
+    if (forbiddenThrowInSecondTouch({ ...state, ball }, player.playerId)) {
+      events.push(event(command, kind, 'secondTouch', 0))
       continue
     }
     if (!canReachBall(player, ball)) {
