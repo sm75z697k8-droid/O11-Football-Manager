@@ -11,14 +11,31 @@ describe('Temporary goalkeeper live save diagnostic', () => {
       const session = new MatchViewerSession(seed)
       const seenShots = new Set<string>()
       const samples: unknown[] = []
+      const events: unknown[] = []
       let near = 0
       let catches = 0
       let parries = 0
       for (let i = 0; i < 1400 &&
         !session.state.ball.outsidePitch &&
         !session.state.goalEvents.length; i++) {
+        const prior = session.state
         session.advance(1)
         const state = session.state
+        const contact = state.automaticContactEvents.at(-1)
+        if (contact?.tick === state.clock.tick &&
+            (contact.outcome === 'caught' || contact.outcome === 'parried')) {
+          const candidate = prior.players.find(p=>p.playerId===contact.playerId)!
+          const def = session.setup.players.find(p=>p.id===candidate.playerId)!
+          const priorShot = activePhysicalShot(prior)
+          const gap = Math.hypot(prior.ball.position.xM-candidate.position.xM,prior.ball.position.yM-candidate.position.yM)
+          const skill = def.abilities.goalkeeping!
+          events.push({outcome:contact.outcome,tick:state.clock.tick,
+            age:priorShot?state.clock.tick-priorShot.tick:null,
+            speed:+Math.hypot(prior.ball.velocity.xMps,prior.ball.velocity.yMps).toFixed(1),
+            height:+prior.ball.heightM.toFixed(2),
+            gap:+gap.toFixed(2),reach:priorShot?+goalkeeperSaveWindow(def,state.clock.tick,priorShot.tick).reachM.toFixed(2):null,
+            skill:skill.handling})
+        }
         const shot = activePhysicalShot(state)
         if (shot) {
           seenShots.add(shot.shooterId + ':' + shot.tick)
@@ -43,7 +60,7 @@ describe('Temporary goalkeeper live save diagnostic', () => {
       }
       catches=session.state.automaticContactEvents.filter(e=>e.outcome==='caught').length
       parries=session.state.automaticContactEvents.filter(e=>e.outcome==='parried').length
-      summaries.push({seed,shots:seenShots.size,near,catches,parries,samples})
+      summaries.push({seed,shots:seenShots.size,near,catches,parries,samples,events})
     }
     console.log('GK LIVE RADIUS DIAGNOSTICS',JSON.stringify(summaries))
   })
