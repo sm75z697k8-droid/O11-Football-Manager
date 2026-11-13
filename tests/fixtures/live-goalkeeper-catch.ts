@@ -8,7 +8,7 @@ import { MatchViewerSession } from '../../src/game/viewer/session'
  */
 export function matchWithLiveGoalkeeperCatch(): MatchViewerSession {
   const candidates=[
-    7654321,42,90,117,205,832,4100,9999,123456789,
+    123456789,7654321,42,90,117,205,832,4100,9999,
     123,321,1111,2222,3333,55555,12345,
   ]
   for(const seed of candidates) {
