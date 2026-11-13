@@ -6,6 +6,7 @@ import { chooseDynamicSupport } from './support-space'
 import { planDefensiveResponsibilities } from './defensive-shape'
 import { planHeldGoalkeeperShape } from './goalkeeper-possession-shape'
 import { planGoalkeeperSave } from './goal-directed'
+import { planGoalkeeperPosition } from './goalkeeper-positioning'
 import { assessLooseBallRace } from './loose-ball'
 import {
   canReleaseControlledBall, evaluateOnBallChoice,
@@ -135,12 +136,21 @@ export function planTeamDecisions(
       let target: Point2 = shape
       let engage = false
 
-      const keeperSave = player.formationSlot === 'GK' && isDefending
+      // Real incoming shots always take priority over ordinary position,
+      // including a loose-ball race that briefly favours our own team.
+      const keeperSave = player.formationSlot === 'GK'
         ? planGoalkeeperSave(state, setup, player, team) : null
+      const keeperPosition = player.formationSlot === 'GK' &&
+        player.playerId !== owner?.playerId
+        ? planGoalkeeperPosition(state, setup, player, team) : null
       if (keeperSave) {
         action = 'save'
         engage = keeperSave.engage
         target = keeperSave.target
+      } else if (keeperPosition) {
+        action = 'shape'
+        engage = false
+        target = keeperPosition.target
       } else if (player.playerId === owner?.playerId) {
         const canPass = canReleaseControlledBall(state, setup)
         const choice = evaluatedChoice !== undefined
