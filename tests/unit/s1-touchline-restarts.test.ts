@@ -217,6 +217,19 @@ describe('S1.1 physical touchline restarts', () => {
     expect(continued.ball.position).toEqual(restart.spot)
     expect(advanceBallPhysics(continued.ball, scene.setup.pitch).position.yM)
       .toBeLessThan(restart.spot.yM)
+    // This is a physically flying ball, not a scripted completed pass:
+    // verify its actual descent is near the nominated reception.
+    let projected = continued.ball
+    let bestNearLanding = Infinity
+    for (let tick = 0; tick < 44; tick++) {
+      projected = advanceBallPhysics(projected, scene.setup.pitch)
+      if (projected.heightM < .6) {
+        bestNearLanding = Math.min(bestNearLanding,
+          Math.hypot(projected.position.xM - command.target.xM,
+            projected.position.yM - command.target.yM))
+      }
+    }
+    expect(bestNearLanding).toBeLessThan(6)
     expect(command.type).toBe('attemptThrowIn')
   })
 
