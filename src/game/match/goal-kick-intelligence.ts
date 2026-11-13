@@ -137,10 +137,18 @@ export function assessGoalKickOptions(
       .20*skills.mental.anticipation+
       .10*skills.physical.agility)/100
     const shortTarget=shortOutlets.get(player.playerId)
-    const availableShort=!!shortTarget &&
+    const shapeReady=!!shortTarget &&
       dist(player.position,shortTarget)<
-        (['RCB','LCB'].includes(player.formationSlot)?2.4:3.2) &&
-      d<=32
+        (['RCB','LCB'].includes(player.formationSlot)?2.4:3.2)
+    // A full-back can naturally pull WIDER to escape a high press,
+    // rather than being forced back onto the stationary staging marker.
+    // Still require a truly open physical ground lane and viable range.
+    const openedWide=!!shortTarget &&
+      ['RB','LB','DM'].includes(player.formationSlot) &&
+      depth>setup.pitch.penaltyAreaDepthM+1.5 &&
+      d<=30 && space>=5.8 && obstruction<1.0
+    const availableShort=!!shortTarget && d<=32 &&
+      (shapeReady||openedWide)
     if(availableShort){
       const pressure=Math.max(0,5.3-space)
       const utility=22+Math.min(space,12)*1.5-
