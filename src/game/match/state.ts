@@ -6,7 +6,7 @@ import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
 export const MATCH_STATE_SCHEMA_VERSION = 9 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-gk-one-on-one-p69s-v1' as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-gk-aerial-claims-p69t-v1' as const
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
   'ball/contact', 'match/referee', 'match/injuries',
@@ -64,7 +64,7 @@ export interface AutomaticContactEvent {
   readonly tick: number
   readonly playerId: PlayerId
   readonly kind: 'interception' | 'challenge'
-  readonly outcome: 'intercepted' | 'deflected' | 'wonChallenge' | 'heldOff' | 'caught' | 'parried'
+  readonly outcome: 'intercepted' | 'deflected' | 'wonChallenge' | 'heldOff' | 'caught' | 'parried' | 'punched'
   readonly contactFraction: number
 }
 /** The opening state and physical release; no other football restarts yet. */
@@ -75,7 +75,7 @@ export interface KickoffState {
   readonly phase: 'awaitingKick' | 'inPlay'
   readonly takenTick: number | null
 }
-export type AgentAction = 'shape' | 'support' | 'press' | 'pursue' | 'carry' | 'receive' | 'cover' | 'mark' | 'recover' | 'shoot' | 'save' | 'oneOnOne'
+export type AgentAction = 'shape' | 'support' | 'press' | 'pursue' | 'carry' | 'receive' | 'cover' | 'mark' | 'recover' | 'shoot' | 'save' | 'oneOnOne' | 'claimCross'
 export interface AgentDecision {
   readonly tick: number
   readonly playerId: PlayerId
