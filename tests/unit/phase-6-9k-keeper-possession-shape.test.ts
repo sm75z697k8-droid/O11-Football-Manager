@@ -107,13 +107,17 @@ describe('Phase 6.9K — real goalkeeper hand-possession shape',()=>{
         .toBe(true)
       const standardMarks=defending.filter(d=>d.action==='mark')
       expect(standardMarks.length).toBeLessThanOrEqual(1)
-      const high:MatchState={...held,teams:held.teams.map(t=>
-        t.clubId===opponent?{...t,pressingIntensity:'high'}:t) as MatchState['teams']}
+      const high:MatchState={...held,teams:[
+        {...held.teams[0],pressingIntensity:held.teams[0].clubId===opponent?'high':'standard'},
+        {...held.teams[1],pressingIntensity:held.teams[1].clubId===opponent?'high':'standard'},
+      ]}
       const highMarks=planTeamDecisions(high,setup)
         .filter(d=>d.clubId===opponent&&d.action==='mark')
       expect(highMarks.length).toBeLessThanOrEqual(2)
-      const low:MatchState={...held,teams:held.teams.map(t=>
-        t.clubId===opponent?{...t,pressingIntensity:'low'}:t) as MatchState['teams']}
+      const low:MatchState={...held,teams:[
+        {...held.teams[0],pressingIntensity:held.teams[0].clubId===opponent?'low':'standard'},
+        {...held.teams[1],pressingIntensity:held.teams[1].clubId===opponent?'low':'standard'},
+      ]}
       const lowBlock=planTeamDecisions(low,setup)
         .filter(d=>d.clubId===opponent)
       expect(lowBlock.every(d=>d.action!=='mark')).toBe(true)
