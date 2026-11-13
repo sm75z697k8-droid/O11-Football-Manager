@@ -6,6 +6,7 @@ import { resolveContactAttempts } from '../../src/game/physics/contact'
 import { applyDueMatchCommands } from '../../src/game/match/commands'
 import {
   classifyOutOfPlay, recordOutOfPlay, stageThrowIn,
+  forbiddenThrowInSecondTouch,
   advanceThrowInStoppage, throwInTakerTarget, throwInReceiverTargets,
 } from '../../src/game/match/restarts'
 import type { MatchState } from '../../src/game/match/state'
@@ -217,6 +218,49 @@ describe('S1.1 physical touchline restarts', () => {
     expect(advanceBallPhysics(continued.ball, scene.setup.pitch).position.yM)
       .toBeLessThan(restart.spot.yM)
     expect(command.type).toBe('attemptThrowIn')
+  })
+
+  it('prevents a second touch until another player physically plays the throw', () => {
+    const setup = makeFictionalMatchSetup()
+    const baseline = createFoundationMatch(setup).getState()
+    const taker = baseline.players.find(p => p.formationSlot === 'RB')!
+    const receiver = baseline.players.find(p =>
+      p.playerId !== taker.playerId && p.clubId === taker.clubId)!
+    const state: MatchState = {
+      ...baseline, clock: { ...baseline.clock, tick: 55 },
+      ball: {
+        ...baseline.ball, lastTouchPlayerId: taker.playerId,
+        controllerId: null,
+      },
+      contactEvents: [{
+        commandId: 'ai-restart-throwin-48',
+        tick: 54, playerId: taker.playerId,
+        kind: 'throwIn', outcome: 'thrownIn', drawUsed: 1,
+      }],
+    }
+    expect(forbiddenThrowInSecondTouch(state, taker.playerId)).toBe(true)
+    expect(forbiddenThrowInSecondTouch(state, receiver.playerId)).toBe(false)
+    const intercepted: MatchState = {
+      ...state,
+      ball: { ...state.ball, lastTouchPlayerId: receiver.playerId },
+      automaticContactEvents: [{
+        tick: 56, playerId: receiver.playerId,
+        kind: 'interception', outcome: 'intercepted', contactFraction: .5,
+      }],
+    }
+    expect(forbiddenThrowInSecondTouch(intercepted, taker.playerId)).toBe(false)
+    const takerNext: MatchState = {
+      ...intercepted,
+      ball: { ...intercepted.ball, lastTouchPlayerId: taker.playerId },
+      automaticContactEvents: [
+        ...intercepted.automaticContactEvents,
+        {
+          tick: 57, playerId: taker.playerId,
+          kind: 'interception', outcome: 'intercepted', contactFraction: .5,
+        },
+      ],
+    }
+    expect(forbiddenThrowInSecondTouch(takerNext, taker.playerId)).toBe(false)
   })
 
   it('prevents arbitrary throw commands while ordinary play is running', () => {
