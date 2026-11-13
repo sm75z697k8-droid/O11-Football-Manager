@@ -155,8 +155,14 @@ describe('GK-S1 realistic goal-kick approach and build-out',()=>{
           yM:cb.position.yM}}
       })
     const fb=screen.players.find(p=>p.clubId===s.defending.clubId&&
-      p.formationSlot==='RB')!
-    const fbTarget=goalKickBuildOutTarget(fb,s.event,s.setup)!
+      p.formationSlot==='LB')!
+    // A full-back pulls wider than the formation marker, outside the
+    // two pressing lanes. The GK must see this real, movable outlet.
+    const fbTarget={xM:21,yM:5}
+    expect(Math.hypot(
+      fbTarget.xM-goalKickBuildOutTarget(fb,s.event,s.setup)!.xM,
+      fbTarget.yM-goalKickBuildOutTarget(fb,s.event,s.setup)!.yM))
+      .toBeGreaterThan(3.2)
     const actual=place(screen,p=>p.playerId===fb.playerId,
       p=>({...p,position:fbTarget,velocity:{xMps:0,yMps:0}}))
     const staged=stageGoalKick(actual,s.setup)
