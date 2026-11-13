@@ -213,6 +213,35 @@ describe('S1.3 real corner-kick restarts', () => {
     }
   })
 
+  it('chooses a genuinely short corner when the near-post crossing area is crowded', () => {
+    const scene = ready('right', true)
+    const near = cornerReceiverTargets(scene.event, scene.setup.pitch).near
+    const deepPressured: MatchState = {
+      ...scene.state,
+      players: scene.state.players.map(p =>
+        p.clubId === scene.defender.clubId &&
+          ['ST', 'DM'].includes(p.formationSlot)
+          ? {
+              ...p, position: {xM:near.xM, yM:near.yM},
+              velocity: {xMps:0,yMps:0},
+            } : p),
+    }
+    expect(cornerOpponentsClear(deepPressured,scene.event,scene.setup.pitch))
+      .toBe(true)
+    const planned = stageCorner(deepPressured,scene.setup)
+    const request = planned.pendingCommands.find(c =>
+      c.type === 'attemptCornerKick')!
+    expect(request).toBeDefined()
+    expect(request.lift).toBe(.02)
+    const applied = applyDueMatchCommands({
+      ...planned, clock: { ...planned.clock, tick: 146 },
+    })
+    const contacted = advanceCornerStoppage(
+      applied,scene.setup,resolveContactAttempts)
+    expect(contacted.contactEvents.at(-1)?.outcome).toBe('cornerKicked')
+    expect(contacted.ball.velocity.zMps).toBeGreaterThan(0)
+  })
+
   it('holds a corner until nearby defenders have actually retreated', () => {
     const scene = ready('right',false)
     const defender = scene.state.players.find(p =>
