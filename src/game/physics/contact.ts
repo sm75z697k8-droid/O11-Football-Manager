@@ -57,22 +57,104 @@ export function canReachBall(player: PlayerMatchState, ball: BallMatchState): bo
 }
 
 /**
- * During controlled possession the ball follows its relative foot position,
- * rather than having a cosmetic player sprite carry an unrelated ball.
- * This is a simplified local-control constraint, not a dribbling simulator.
+ * Phase 6.9N — deterministic close-control geometry (design estimates).
+ * A controlled ball stays within genuine foot reach, but its local offset
+ * smoothly follows the carrier's facing, real momentum and speed. Unlike the
+ * previous immutable receiving offset, it cannot remain permanently behind
+ * a dribbler who has turned.
+ *
+ * This is a conservative first step, NOT free-ball touches or random
+ * dribbling-loss rolls. Defenders still win only physical contacts.
+ */
+export const CLOSE_CONTROL_VERSION = 'directional-foot-carry-p69n-v1'
+export const CLOSE_CONTROL_STEP_SECONDS = .05
+export const CLOSE_CONTROL_MAX_OFFSET_M = .75
+const closeClamp = (n: number, lo: number, hi: number) =>
+  Math.min(hi, Math.max(lo, n))
+
+export function closeControlOffset(
+  ball: BallMatchState, player: PlayerMatchState,
+  definition: PlayerDefinition, pitch: PitchDefinition,
+): Point2 {
+  if (definition.id !== player.playerId) {
+    throw new Error('Close control requires the owning player definition')
+  }
+  if (!ball.controlOffset || ball.controllerId !== player.playerId) {
+    throw new Error('Close control requires genuine foot possession')
+  }
+  const abilities = definition.abilities
+  const skill = closeClamp((
+    .35 * abilities.technical.dribbling +
+    .20 * abilities.technical.firstTouch +
+    .20 * abilities.physical.agility +
+    .15 * abilities.physical.balance +
+    .10 * abilities.mental.composure) / 100, 0, 1)
+  const speed = Math.hypot(player.velocity.xMps, player.velocity.yMps)
+  const forwardX = Math.cos(player.orientationRad)
+  const forwardY = Math.sin(player.orientationRad)
+  // During a sharp turn the player's facing changes before their momentum.
+  // An intermediate bearing puts the ball near the feet instead of
+  // snapping it immediately to the wrong side of their movement.
+  const momentumWeight = .3 * closeClamp(speed / 4, 0, 1)
+  const mx = speed > 1e-6 ? player.velocity.xMps / speed : forwardX
+  const my = speed > 1e-6 ? player.velocity.yMps / speed : forwardY
+  const blendedX = (1 - momentumWeight) * forwardX + momentumWeight * mx
+  const blendedY = (1 - momentumWeight) * forwardY + momentumWeight * my
+  const bearingLength = Math.hypot(blendedX, blendedY)
+  const dx = blendedX / Math.max(bearingLength, 1e-6)
+  const dy = blendedY / Math.max(bearingLength, 1e-6)
+  // Faster carries take a slightly longer touch; better ball control keeps
+  // that touch closer. Never exceed the 1.05m legal foot-reach envelope.
+  const desiredRadius = .41 +
+    .30 * closeClamp(speed / 8.5, 0, 1) * (1.10 - .20 * skill)
+  const desired = { xM: dx * desiredRadius, yM: dy * desiredRadius }
+  const previous = ball.controlOffset
+  const gapX = desired.xM - previous.xM
+  const gapY = desired.yM - previous.yM
+  const gap = Math.hypot(gapX, gapY)
+  // Every 50ms tick can advance the contact point only a small physical
+  // distance. Higher dribbling/first-touch/agility improves responsiveness.
+  const stepM = (2.1 + 2.3 * skill + .10 * speed) *
+    CLOSE_CONTROL_STEP_SECONDS
+  const fraction = gap > stepM ? stepM / gap : 1
+  const movedX = previous.xM + gapX * fraction
+  const movedY = previous.yM + gapY * fraction
+  const magnitude = Math.hypot(movedX, movedY)
+  const bound = magnitude > CLOSE_CONTROL_MAX_OFFSET_M
+    ? CLOSE_CONTROL_MAX_OFFSET_M / magnitude : 1
+  // Keep the genuine controlled ball on the playing surface even if a
+  // carrier turns right against the pitch boundary. A later free kick can
+  // still legitimately travel out; this is only active during possession.
+  const proposedX = player.position.xM + movedX * bound
+  const proposedY = player.position.yM + movedY * bound
+  const x = closeClamp(proposedX, BALL_RADIUS_M,
+    pitch.lengthM - BALL_RADIUS_M)
+  const y = closeClamp(proposedY, BALL_RADIUS_M,
+    pitch.widthM - BALL_RADIUS_M)
+  return { xM: x - player.position.xM, yM: y - player.position.yM }
+}
+
+/** Advance the actual physical owner and its attached ball as one coherent
+ * 50ms contact state. Hand-held GK catches remain unchanged. The optional
+ * definition preserves the historical diagnostic API for direct unit callers;
+ * the authoritative match runner always supplies it for football dribblers.
  */
 export function advanceControlledBall(
   ball: BallMatchState, player: PlayerMatchState, pitch: PitchDefinition,
+  definition?: PlayerDefinition,
 ): BallMatchState {
   if (ball.controllerId !== player.playerId || !ball.controlOffset) {
     throw new Error('Controlled ball must have a valid player and relative offset')
   }
+  const offset = definition && ball.heightM !== GOALKEEPER_HAND_HEIGHT_M
+    ? closeControlOffset(ball, player, definition, pitch)
+    : ball.controlOffset
   const position: Point2 = {
-    xM: player.position.xM + ball.controlOffset.xM,
-    yM: player.position.yM + ball.controlOffset.yM,
+    xM: player.position.xM + offset.xM,
+    yM: player.position.yM + offset.yM,
   }
   return {
-    ...ball,
+    ...ball, controlOffset: offset,
     position,
     heightM: ball.heightM === GOALKEEPER_HAND_HEIGHT_M
       ? GOALKEEPER_HAND_HEIGHT_M : BALL_RADIUS_M,

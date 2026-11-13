@@ -8,7 +8,7 @@ import {
   assessGoalkeeperThrowOptions, chooseGoalkeeperThrow,
 } from '../../src/game/ai/goalkeeper-distribution'
 import { previewPhysicalGoalkeeperThrow } from '../../src/game/ai/goalkeeper-throw-preview'
-import { MatchViewerSession } from '../../src/game/viewer/session'
+import { matchWithLiveGoalkeeperCatch } from '../fixtures/live-goalkeeper-catch'
 import type { MatchState } from '../../src/game/match/state'
 
 function physicallyCaughtBy(side: 0 | 1) {
@@ -198,11 +198,7 @@ describe('Phase 6.9L — physical, ability-aware goalkeeper distribution', () =>
   })
 
   it('preserves a real held goalkeeper throw and exact checkpoint replay',()=>{
-    const session=new MatchViewerSession(42)
-    for(let i=0;i<1200 && !session.state.ball.outsidePitch &&
-        !session.state.automaticContactEvents.some(e=>e.outcome==='caught');i++) {
-      session.advance(1)
-    }
+    const session=matchWithLiveGoalkeeperCatch()
     expect(session.state.automaticContactEvents.some(e=>e.outcome==='caught'))
       .toBe(true)
     const cp=session.checkpoint()
