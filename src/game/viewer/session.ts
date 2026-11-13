@@ -72,6 +72,15 @@ export class MatchViewerSession {
     return this.latest
   }
 
+  /** Referee's halftime is a real pause; never interpolate the break
+   * as if players instantaneously travelled across a live pitch.
+   */
+  startSecondHalf(): MatchState {
+    this.latest = this.engine.beginSecondHalf()
+    this.prior = this.latest
+    return this.latest
+  }
+
   /** Provides an exact unmodified engine checkpoint for repeatability tests. */
   checkpoint() { return this.engine.checkpoint() }
 }

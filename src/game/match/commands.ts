@@ -335,6 +335,29 @@ export function scheduleMatchCommand(
     return reject('Player does not belong to the specified team')
   }
   const restart = state.restart
+  if (state.period === 'fullTime' || state.period === 'halfTime') {
+    if (!['setAutonomousTeam','setPressingIntensity'].includes(req.type)) {
+      return reject('Referee has stopped play at half-time or full-time')
+    }
+  }
+  const secondHalf = state.periodKickoff
+  const secondHalfPrefix = secondHalf
+    ? 'ai-pass-secondhalf-' + secondHalf.startTick + '-' : null
+  if (secondHalf && (
+    ['attemptFirstTouch','attemptGoalkeeperThrow','diagnosticBallLaunch',
+      'attemptThrowIn','attemptGoalKick','attemptCornerKick'].includes(req.type) ||
+    (req.type === 'attemptKick' &&
+      (secondHalf.phase !== 'staging' ||
+       !secondHalfPrefix || !req.commandId.startsWith(secondHalfPrefix) ||
+       req.teamId !== secondHalf.teamId ||
+       req.playerId !== secondHalf.kickerId ||
+       req.power !== .19 || req.lift !== 0))
+  )) return reject('Only the legal second-half kickoff may restart football')
+  if (req.type === 'attemptKick' &&
+      req.commandId.startsWith('ai-pass-secondhalf-') &&
+      (!secondHalfPrefix || !req.commandId.startsWith(secondHalfPrefix))) {
+    return reject('No second-half referee kickoff award')
+  }
   const postGoal = state.postGoalKickoff
   const postGoalPrefix = postGoal
     ? 'ai-pass-postgoal-' + postGoal.goalTick + '-' : null

@@ -5,8 +5,8 @@ import type { ClubId, PlayerId } from '../model/player'
 import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
-export const MATCH_STATE_SCHEMA_VERSION = 13 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-post-goal-kickoffs-s14-v1' as const
+export const MATCH_STATE_SCHEMA_VERSION = 14 as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-real-match-periods-s15-v1' as const
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
   'ball/contact', 'match/referee', 'match/injuries',
@@ -86,6 +86,29 @@ export interface PostGoalKickoffState {
   readonly phase: 'staging' | 'awaitingMovement'
   readonly kickedTick: number | null
 }
+export type MatchPeriod = 'notStarted' | 'firstHalf' |
+  'halfTime' | 'secondHalf' | 'fullTime'
+export interface MatchPeriodTiming {
+  readonly firstHalfStartTick: number | null
+  readonly secondHalfStartTick: number | null
+  readonly firstHalfLostTicks: number
+  readonly secondHalfLostTicks: number
+  readonly firstHalfAddedTicks: number | null
+  readonly secondHalfAddedTicks: number | null
+  readonly halfTimeTick: number | null
+  readonly fullTimeTick: number | null
+}
+/** The second-half kickoff is independent of the opening kickoff and
+ * of centre kickoffs following scored goals.
+ */
+export interface PeriodKickoffState {
+  readonly startTick: number
+  readonly teamId: ClubId
+  readonly kickerId: PlayerId
+  readonly receiverId: PlayerId
+  readonly phase: 'staging' | 'awaitingMovement'
+  readonly kickedTick: number | null
+}
 export type AgentAction = 'shape' | 'support' | 'press' | 'pursue' | 'carry' | 'receive' | 'cover' | 'mark' | 'recover' | 'shoot' | 'save' | 'oneOnOne' | 'claimCross'
 export interface AgentDecision {
   readonly tick: number
@@ -144,7 +167,9 @@ export interface MatchState {
   readonly matchId: string
   readonly seed: number
   readonly clock: SimulationClock
-  readonly period: 'notStarted'
+  readonly period: MatchPeriod
+  readonly periodTiming: MatchPeriodTiming
+  readonly periodKickoff: PeriodKickoffState | null
   readonly kickoff: KickoffState | null
   readonly postGoalKickoff: PostGoalKickoffState | null
   readonly goalEvents: readonly GoalEvent[]

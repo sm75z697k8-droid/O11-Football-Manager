@@ -27,7 +27,8 @@ describe('Phase 6 real simulation viewer session', () => {
     expect(session.state.players.some((p, i) =>
       p.position.xM !== session.previous.players[i].position.xM ||
       p.position.yM !== session.previous.players[i].position.yM)).toBe(true)
-    expect(session.state.period).toBe('notStarted')
+    expect(session.state.period).toBe('firstHalf')
+    expect(session.state.periodTiming.firstHalfStartTick).toBe(2)
     expect(session.state.teams.map(t => t.score)).toEqual([0, 0])
   })
 

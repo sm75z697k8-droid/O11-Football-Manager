@@ -5,6 +5,12 @@ import { maintainPassReception } from '../ai/pass-coordination'
 import { GOALKEEPER_HAND_HEIGHT_M, GOALKEEPER_HOLD_MIN_TICKS } from '../physics/goalkeeper-handling'
 import { adjudicatePhysicalGoal } from './goals'
 import { advanceThrowInStoppage, recordOutOfPlay } from './restarts'
+import {
+  adjudicatePeriodTime, advanceSecondHalfKickoff, prepareSecondHalf,
+  startFirstHalfAfterOpening, secondHalfKickoffBallStationary,
+  secondHalfKickoffLegal, periodKickoffPrefix, HALF_TICKS,
+  TICKS_PER_MINUTE,
+} from './periods'
 import { advanceGoalKickStoppage, goalKickSpot } from './goal-kicks'
 import {
   advanceCornerStoppage, cornerBallSpot, selectCornerTaker,
@@ -35,6 +41,7 @@ import type {
   CommandReceipt, ScheduledMatchCommand, AppliedMatchCommand,
 } from './commands'
 import { createInitialMatchState } from './setup'
+import { openingKickoffState } from './kickoff'
 import {
   advanceOpeningKickoff, openingKickoffPass, OPENING_KICKOFF_COMMAND_ID,
 } from './kickoff'
@@ -43,7 +50,7 @@ import {
 } from './state'
 import type { MatchState, PressingIntensity } from './state'
 
-export const MATCH_CHECKPOINT_VERSION = 13 as const
+export const MATCH_CHECKPOINT_VERSION = 14 as const
 export const MAX_ADVANCE_STEPS_PER_CALL = 10_000 as const
 
 export interface FoundationMatchCheckpoint {
@@ -87,7 +94,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   if (!object(input) || input.schemaVersion !== MATCH_STATE_SCHEMA_VERSION ||
       input.engineVersion !== FOUNDATION_ENGINE_VERSION ||
       input.matchId !== setup.matchId || input.seed !== setup.seed ||
-      input.period !== 'notStarted') {
+      !['notStarted', 'firstHalf', 'halfTime',
+        'secondHalf', 'fullTime'].includes(input.period as string)) {
     throw new Error('Incompatible or invalid match state checkpoint')
   }
   const state = input as unknown as MatchState
@@ -103,15 +111,20 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       !Array.isArray(state.automaticContactEvents) ||
       !Number.isSafeInteger(state.ballContactCooldownUntilTick) ||
       state.ballContactCooldownUntilTick < 0 ||
+      !object(state.periodTiming) ||
+      (state.periodKickoff !== null && !object(state.periodKickoff)) ||
       !object(state.ai) || !Array.isArray(state.ai.enabledTeams) ||
       !Array.isArray(state.ai.decisionSnapshot) ||
       !object(state.ai.formationPositions)) {
     throw new Error('Incomplete match state checkpoint')
   }
   const baseline = createInitialMatchState(setup).state
+  const switchedEnds = state.period === 'secondHalf' ||
+    state.period === 'fullTime'
   if (state.teams.some((team, i) =>
     !object(team) || team.clubId !== baseline.teams[i].clubId ||
-    team.attackingDirection !== baseline.teams[i].attackingDirection ||
+    team.attackingDirection !==
+      baseline.teams[i].attackingDirection * (switchedEnds ? -1 : 1) ||
     !Number.isSafeInteger(team.score) || team.score < 0 ||
     team.score !== state.goalEvents.filter(g =>
       g.scoringTeamId === team.clubId).length ||
@@ -126,7 +139,12 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   for (const ev of state.goalEvents) {
     const scorer = state.players.find(p => p.playerId === ev?.lastTouchPlayerId)
     const goalTeam = state.teams.find(t => t.clubId === ev?.scoringTeamId)
-    const expectedSide = goalTeam?.attackingDirection === 1 ? 'right' : 'left'
+    const inSecondHalf = state.periodTiming.halfTimeTick !== null &&
+      ev.tick > state.periodTiming.halfTimeTick
+    const firstHalfDirection = goalTeam
+      ? goalTeam.attackingDirection * (switchedEnds ? -1 : 1) : 0
+    const expectedSide = firstHalfDirection * (inSecondHalf ? -1 : 1) === 1
+      ? 'right' : 'left'
     if (!ev || typeof ev !== 'object' ||
         Object.keys(ev).sort().join(',') !==
         'crossingHeightM,crossingY,lastTouchPlayerId,ownGoal,scoringTeamId,side,tick' ||
@@ -229,8 +247,12 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
             exit.spot.xM !== setup.pitch.lengthM - .35)) {
         throw new Error('Invalid goal-line restart classification')
       }
+      const historicalSecondHalf = state.periodTiming.halfTimeTick !== null &&
+        exit.tick > state.periodTiming.halfTimeTick
       const defending = state.teams.find(t =>
-        t.attackingDirection === (exit.side === 'left' ? 1 : -1))
+        t.attackingDirection * (switchedEnds ? -1 : 1) *
+          (historicalSecondHalf ? -1 : 1) ===
+          (exit.side === 'left' ? 1 : -1))
       if (!defending ||
           (exit.kind === 'corner' &&
             (lastTouch.clubId !== defending.clubId ||
@@ -251,7 +273,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     const placement = goalKick ? goalKickSpot(lastExit, setup.pitch) :
       corner ? cornerBallSpot(lastExit, setup.pitch) : null
     if (!lastExit || JSON.stringify(state.restart) !== JSON.stringify(lastExit) ||
-        state.goalEvents.length > 0 ||
+        state.postGoalKickoff !== null || state.periodKickoff !== null ||
         state.ball.controllerId !== null ||
         state.ball.velocity.xMps !== 0 ||
         state.ball.velocity.yMps !== 0 ||
@@ -279,17 +301,26 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       throw new Error('Throw-in command not supported by chronological award')
     }
   }
+  const exitAbandonedAtWhistle = !!lastExit &&
+    ((state.periodTiming.halfTimeTick !== null &&
+       lastExit.tick <= state.periodTiming.halfTimeTick &&
+       switchedEnds) ||
+     (state.periodTiming.fullTimeTick !== null &&
+       lastExit.tick <= state.periodTiming.fullTimeTick))
   if (lastExit?.kind === 'throwIn' && state.restart === null &&
+      !exitAbandonedAtWhistle &&
       !state.contactEvents.some(e => e.kind === 'throwIn' &&
         e.outcome === 'thrownIn' && e.tick > lastExit.tick)) {
     throw new Error('Throw-in restart finished without a physical hand release')
   }
   if (lastExit?.kind === 'goalKick' && state.restart === null &&
+      !exitAbandonedAtWhistle &&
       !state.contactEvents.some(e => e.kind === 'goalKick' &&
         e.outcome === 'goalKicked' && e.tick > lastExit.tick)) {
     throw new Error('Goal kick finished without a real goal-area foot contact')
   }
   if (lastExit?.kind === 'corner' && state.restart === null &&
+      !exitAbandonedAtWhistle &&
       !state.contactEvents.some(e => e.kind === 'cornerKick' &&
         e.outcome === 'cornerKicked' && e.tick > lastExit.tick)) {
     throw new Error('Corner finished without real physical foot contact')
@@ -301,7 +332,13 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       exit.tick <= command.requestedTick &&
       (state.outOfPlayEvents.find(next =>
         next.tick > exit.tick)?.tick ?? Infinity) > command.appliedTick)
-    const taker = award ? selectCornerTaker(state, award, setup) : null
+    const historicalState = award &&
+      state.periodTiming.halfTimeTick !== null &&
+      award.tick <= state.periodTiming.halfTimeTick && switchedEnds
+      ? { ...state, ai: {
+        ...state.ai, formationPositions: baseline.ai.formationPositions,
+      } } : state
+    const taker = award ? selectCornerTaker(historicalState, award, setup) : null
     const event = state.contactEvents.find(e => e.commandId === command.commandId)
     if (!award || taker?.playerId !== command.playerId ||
         command.appliedTick <= award.tick ||
@@ -414,11 +451,16 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   }
 
   // Team AI only becomes authoritative after an applied opt-in command.
-  // The fixture anchors must remain exactly the validated initial positions.
+  // Formation anchors switch ends only at the legal half-time interval.
   if (state.ai.enabledTeams.length !== 2 ||
       state.ai.enabledTeams.some((v,i) => v !== expectedAIEnabled[i]) ||
       JSON.stringify(state.ai.formationPositions) !==
-        JSON.stringify(baseline.ai.formationPositions) ||
+        JSON.stringify(switchedEnds
+          ? Object.fromEntries(Object.entries(baseline.ai.formationPositions)
+            .map(([id,p]) => [id, {
+              xM:setup.pitch.lengthM-p.xM,
+              yM:setup.pitch.widthM-p.yM,
+            }])) : baseline.ai.formationPositions) ||
       !Number.isSafeInteger(state.ai.lastDecisionTick) ||
       state.ai.lastDecisionTick < -1 ||
       state.ai.lastDecisionTick > state.clock.tick ||
@@ -560,8 +602,16 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     const active = state.postGoalKickoff?.goalTick === goal.tick
     const awaiting = active &&
       state.postGoalKickoff?.phase === 'awaitingMovement'
+    // The referee may blow at the end of a half immediately after a goal.
+    // An unfinished restart is then CANCELLED by the period boundary;
+    // no physical kickoff can be fabricated just to close the audit.
+    const cancelledAtBreak = !active && goalKicks.length === 0 &&
+      state.periodTiming.halfTimeTick !== null &&
+      goal.tick <= state.periodTiming.halfTimeTick &&
+      goal.tick >= state.periodTiming.halfTimeTick - TICKS_PER_MINUTE &&
+      (state.period === 'secondHalf' || state.period === 'fullTime')
     if (goalKicks.length > 1 ||
-        (!active && goalKicks.length !== 1) ||
+        (!active && !cancelledAtBreak && goalKicks.length !== 1) ||
         (active && goalKicks.length !== (awaiting ? 1 : 0))) {
       throw new Error('Physical goal lacks exactly one genuine completed kickoff')
     }
@@ -830,6 +880,157 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     }
   }
 
+  // Law 7 and half-time are protected by checkpoint history, not UI time.
+  const timing = state.periodTiming
+  const timingKeys = [
+    'firstHalfAddedTicks','firstHalfLostTicks','firstHalfStartTick',
+    'fullTimeTick','halfTimeTick','secondHalfAddedTicks',
+    'secondHalfLostTicks','secondHalfStartTick',
+  ]
+  if (!object(timing) ||
+      Object.keys(timing).sort().join(',') !== timingKeys.join(',') ||
+      !Number.isSafeInteger(timing.firstHalfLostTicks) ||
+      timing.firstHalfLostTicks < 0 ||
+      !Number.isSafeInteger(timing.secondHalfLostTicks) ||
+      timing.secondHalfLostTicks < 0) {
+    throw new Error('Malformed referee period and added-time state')
+  }
+  const optionalTick = (v: number | null) =>
+    v === null || (Number.isSafeInteger(v) && v >= 0 &&
+      v <= state.clock.tick)
+  const optionalMinutes = (v: number | null) =>
+    v === null || (Number.isSafeInteger(v) && v >= 0 &&
+      v % TICKS_PER_MINUTE === 0)
+  if (!optionalTick(timing.firstHalfStartTick) ||
+      !optionalTick(timing.secondHalfStartTick) ||
+      !optionalTick(timing.halfTimeTick) ||
+      !optionalTick(timing.fullTimeTick) ||
+      !optionalMinutes(timing.firstHalfAddedTicks) ||
+      !optionalMinutes(timing.secondHalfAddedTicks)) {
+    throw new Error('Referee period has an invalid chronological counter')
+  }
+  const baselinePeriod = baseline.periodTiming
+  if (state.period === 'notStarted') {
+    if (state.periodKickoff !== null ||
+        JSON.stringify(timing) !== JSON.stringify(baselinePeriod)) {
+      throw new Error('An unstarted match has invented period time')
+    }
+  } else {
+    if (!state.kickoff || state.kickoff.phase !== 'inPlay' ||
+        timing.firstHalfStartTick !== state.kickoff.takenTick ||
+        timing.firstHalfStartTick === null ||
+        timing.firstHalfLostTicks >
+          state.clock.tick - timing.firstHalfStartTick) {
+      throw new Error('First half cannot begin before a real opening kick')
+    }
+    const halfEnded = state.period === 'halfTime' ||
+      state.period === 'secondHalf' || state.period === 'fullTime'
+    if (halfEnded !== (timing.halfTimeTick !== null) ||
+        (timing.halfTimeTick !== null &&
+          (timing.firstHalfAddedTicks === null ||
+            timing.halfTimeTick !==
+              timing.firstHalfStartTick + HALF_TICKS +
+                timing.firstHalfAddedTicks))) {
+      throw new Error('Halftime whistle lacks regulation and added time')
+    }
+    if (timing.firstHalfAddedTicks !== null &&
+        timing.firstHalfAddedTicks >
+          Math.ceil(timing.firstHalfLostTicks/TICKS_PER_MINUTE) *
+          TICKS_PER_MINUTE) {
+      throw new Error('First half announced more loss than physically observed')
+    }
+    if (state.period === 'firstHalf' &&
+        (timing.secondHalfStartTick !== null ||
+          timing.secondHalfLostTicks !== 0 ||
+          timing.secondHalfAddedTicks !== null ||
+          timing.fullTimeTick !== null || state.periodKickoff !== null ||
+          (state.clock.tick - timing.firstHalfStartTick >= HALF_TICKS &&
+            timing.firstHalfAddedTicks === null))) {
+      throw new Error('First-half clock moved beyond its lawful phase')
+    }
+    if (state.period === 'halfTime' &&
+        (timing.halfTimeTick !== state.clock.tick ||
+          timing.secondHalfStartTick !== null ||
+          timing.fullTimeTick !== null || state.periodKickoff !== null)) {
+      throw new Error('Half-time must remain a stationary referee interval')
+    }
+    const later = state.period === 'secondHalf' ||
+      state.period === 'fullTime'
+    if (later) {
+      if (timing.halfTimeTick === null ||
+          timing.halfTimeTick > state.clock.tick ||
+          (timing.secondHalfStartTick === null) !==
+            (state.periodKickoff !== null) ||
+          (timing.secondHalfStartTick !== null &&
+            timing.secondHalfStartTick <= timing.halfTimeTick)) {
+        throw new Error('Second half has an invalid kickoff chronology')
+      }
+      const original = setup.kickoff?.teamId
+      const taking = state.teams.find(t => t.clubId !== original)
+      const restart = state.periodKickoff
+      if (restart) {
+        const expected = openingKickoffState({
+          ...setup, kickoff: {teamId: taking?.clubId ?? ''},
+        })
+        if (!expected || !object(restart) ||
+            Object.keys(restart).sort().join(',') !==
+              'kickedTick,kickerId,phase,receiverId,startTick,teamId' ||
+            restart.teamId !== expected.teamId ||
+            restart.kickerId !== expected.kickerId ||
+            restart.receiverId !== expected.receiverId ||
+            restart.startTick !== timing.halfTimeTick ||
+            !['staging','awaitingMovement'].includes(restart.phase) ||
+            (restart.phase === 'staging' &&
+              (restart.kickedTick !== null ||
+                !secondHalfKickoffBallStationary(state, setup))) ||
+            (restart.phase === 'awaitingMovement' &&
+              (restart.kickedTick !== state.clock.tick ||
+                !Number.isSafeInteger(restart.kickedTick) ||
+                state.ball.controllerId !== null ||
+                !state.contactEvents.some(e =>
+                  e.tick === restart.kickedTick &&
+                  e.playerId === restart.kickerId &&
+                  e.outcome === 'kicked' &&
+                  e.commandId.startsWith(
+                    periodKickoffPrefix(restart.startTick))))) ||
+            !secondHalfKickoffLegal(state, setup)) {
+          throw new Error('Second-half kickoff lacks legal formation or contact')
+        }
+      }
+      const centreKicks = state.contactEvents.filter(e =>
+        e.commandId.startsWith(periodKickoffPrefix(timing.halfTimeTick!)) &&
+        e.outcome === 'kicked')
+      if (centreKicks.length !== (restart?.phase === 'staging' ? 0 : 1) ||
+          (timing.secondHalfStartTick !== null &&
+            (centreKicks[0]?.tick !== timing.secondHalfStartTick - 1 ||
+              restart !== null))) {
+        throw new Error('Second half did not begin with one physical kickoff')
+      }
+      if (timing.secondHalfStartTick !== null &&
+          timing.secondHalfLostTicks >
+            state.clock.tick - timing.secondHalfStartTick) {
+        throw new Error('Second-half lost-time count exceeds real ticks')
+      }
+    }
+    if (state.period === 'fullTime') {
+      if (timing.fullTimeTick !== state.clock.tick ||
+          timing.secondHalfStartTick === null ||
+          timing.secondHalfAddedTicks === null ||
+          timing.fullTimeTick !== timing.secondHalfStartTick +
+            HALF_TICKS + timing.secondHalfAddedTicks) {
+        throw new Error('Full-time whistle is not backed by 90+ stoppage minutes')
+      }
+    } else if (timing.fullTimeTick !== null) {
+      throw new Error('Full-time recorded before referee ends match')
+    }
+    if (timing.secondHalfAddedTicks !== null &&
+        timing.secondHalfAddedTicks >
+          Math.ceil(timing.secondHalfLostTicks/TICKS_PER_MINUTE) *
+            TICKS_PER_MINUTE) {
+      throw new Error('Second half added time exceeds observed delays')
+    }
+  }
+
   const currentPlayers = state.players
   for (let i = 0; i < currentPlayers.length; i += 1) {
     const player = currentPlayers[i]
@@ -857,7 +1058,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     }
 
     const motion = lastMotion.get(player.playerId)
-    if (!motion && !everAutonomous.has(player.clubId)) {
+    if (!motion && !everAutonomous.has(player.clubId) && !switchedEnds) {
       if (JSON.stringify({ ...player, engagesBall: false }) !==
           JSON.stringify(original)) {
         throw new Error('Player moved without an authoritative movement command')
@@ -942,28 +1143,35 @@ export class FoundationMatchEngine {
       throw new RangeError('Invalid engine advance step count')
     }
     for (let i = 0; i < steps; i += 1) {
+      if (this.state.period === 'halfTime' ||
+          this.state.period === 'fullTime') break
       if (this.state.restart && !['throwIn', 'goalKick', 'corner']
           .includes(this.state.restart.kind)) break
       const clock = advanceSimulationClock(this.state.clock)
       const applied = applyDueMatchCommands({ ...this.state, clock })
+      if (applied.periodKickoff) {
+        this.state = adjudicatePeriodTime(advanceSecondHalfKickoff(
+          applied, this.setup, resolveContactAttempts))
+        continue
+      }
       if (applied.postGoalKickoff) {
-        this.state = advancePostGoalKickoff(
-          applied, this.setup, resolveContactAttempts)
+        this.state = adjudicatePeriodTime(advancePostGoalKickoff(
+          applied, this.setup, resolveContactAttempts))
         continue
       }
       if (applied.restart?.kind === 'throwIn') {
-        this.state = advanceThrowInStoppage(
-          applied, this.setup, resolveContactAttempts)
+        this.state = adjudicatePeriodTime(advanceThrowInStoppage(
+          applied, this.setup, resolveContactAttempts))
         continue
       }
       if (applied.restart?.kind === 'goalKick') {
-        this.state = advanceGoalKickStoppage(
-          applied, this.setup, resolveContactAttempts)
+        this.state = adjudicatePeriodTime(advanceGoalKickStoppage(
+          applied, this.setup, resolveContactAttempts))
         continue
       }
       if (applied.restart?.kind === 'corner') {
-        this.state = advanceCornerStoppage(
-          applied, this.setup, resolveContactAttempts)
+        this.state = adjudicatePeriodTime(advanceCornerStoppage(
+          applied, this.setup, resolveContactAttempts))
         continue
       }
       const planned = runAutonomousDecisions(applied, this.setup)
@@ -1022,8 +1230,17 @@ export class FoundationMatchEngine {
       const resolved = resolveAutomaticBallContact(this.state, kickedOff, this.setup)
       const adjudicated = adjudicatePhysicalGoal(this.state,
         maintainPassReception(resolved, this.setup), this.setup)
-      this.state = recordOutOfPlay(this.state, adjudicated, this.setup)
+      this.state = adjudicatePeriodTime(startFirstHalfAfterOpening(
+        recordOutOfPlay(this.state, adjudicated, this.setup)))
     }
+    return this.getState()
+  }
+
+  /** Explicit referee-controlled break. Never silently advance an idle
+   * halftime clock or assign a successful kickoff from this action.
+   */
+  beginSecondHalf(): MatchState {
+    this.state = prepareSecondHalf(this.state, this.setup)
     return this.getState()
   }
 

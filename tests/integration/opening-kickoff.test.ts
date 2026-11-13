@@ -125,7 +125,8 @@ describe('Physical opening kick-off with a legal 4-3-3 starting formation', () =
     const taker = third.players.find(p => p.playerId === third.kickoff?.kickerId)!
     expect(taker.engagesBall).toBe(false)
     expect(third.teams.map(t => t.score)).toEqual([0, 0])
-    expect(third.period).toBe('notStarted')
+    expect(third.period).toBe('firstHalf')
+    expect(third.periodTiming.firstHalfStartTick).toBe(2)
   })
 
   it('passes toward the correct half when Vale takes the kick', () => {
