@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
 import { createFoundationMatch, restoreFoundationMatch } from '../../src/game/match/engine'
 import { resolveAutomaticBallContact } from '../../src/game/physics/automatic-contact'
+import { resolveContactAttempts } from '../../src/game/physics/contact'
 import { GOALKEEPER_HAND_HEIGHT_M, goalkeeperThrowVelocity } from '../../src/game/physics/goalkeeper-handling'
 import {
   assessGoalkeeperThrowOptions, chooseGoalkeeperThrow,
@@ -89,6 +90,37 @@ describe('Phase 6.9L — physical, ability-aware goalkeeper distribution', () =>
         o.power===chosen?.power)).toBe(true)
       expect(chooseGoalkeeperThrow(later,setup)).toEqual(chosen)
       expect(JSON.stringify(later)).toBe(before)
+    })
+  }
+
+  for (const side of [0,1] as const) {
+    it(`actually releases an aimed hand throw via the physical command resolver on side ${side}`,()=>{
+      const {setup,later,keeperId}=physicallyCaughtBy(side)
+      const selected=chooseGoalkeeperThrow(later,setup)
+      expect(selected).not.toBeNull()
+      const command={
+        commandId:'ai-pass-throw-mirrored-l',
+        type:'attemptGoalkeeperThrow' as const,
+        teamId:selected!.teamId,playerId:keeperId,
+        target:selected!.target,power:selected!.power,
+        requestedTick:later.clock.tick-1,
+        targetTick:later.clock.tick,
+        appliedTick:later.clock.tick,sequence:1,
+      }
+      const authoritative:MatchState={...later,
+        appliedCommands:[command]}
+      const before=JSON.stringify(authoritative)
+      const resolved=resolveContactAttempts(authoritative,setup)
+      expect(resolved.contactEvents.at(-1)?.outcome).toBe('thrown')
+      expect(resolved.contactEvents.at(-1)?.kind).toBe('throw')
+      expect(resolved.ball.controllerId).toBeNull()
+      expect(resolved.ball.lastTouchPlayerId).toBe(keeperId)
+      expect(resolved.ball.velocity.zMps).toBeGreaterThan(0)
+      expect(resolved.ball.velocity.xMps*(side===0?1:-1)).toBeGreaterThan(0)
+      expect(Math.hypot(resolved.ball.velocity.xMps,
+        resolved.ball.velocity.yMps))
+        .toBeCloseTo(4.8+selected!.power*9.3,7)
+      expect(JSON.stringify(authoritative)).toBe(before)
     })
   }
 
