@@ -8,6 +8,9 @@ import type { PlayerMatchState, BallMatchState, MatchState, ContactEvent } from 
 import type { AppliedMatchCommand } from '../match/commands'
 import { throwInTakerTarget, forbiddenRestartSecondTouch } from '../match/restarts'
 import { goalKickSpot, insideRestartPenaltyArea } from '../match/goal-kicks'
+import {
+  cornerBallSpot, cornerOpponentsClear, selectCornerTaker,
+} from '../match/corners'
 
 /**
  * Contact tests are intentionally explicit in Phase 3: no football AI is
@@ -176,7 +179,8 @@ function event(
   if (command.type !== 'attemptFirstTouch' && command.type !== 'attemptKick' &&
       command.type !== 'attemptGoalkeeperThrow' &&
       command.type !== 'attemptThrowIn' &&
-      command.type !== 'attemptGoalKick') {
+      command.type !== 'attemptGoalKick' &&
+      command.type !== 'attemptCornerKick') {
     throw new Error('Unexpected command supplied to contact resolver')
   }
   return {
@@ -202,7 +206,8 @@ export function resolveContactAttempts(
     (command.type === 'attemptFirstTouch' || command.type === 'attemptKick' ||
       command.type === 'attemptGoalkeeperThrow' ||
       command.type === 'attemptThrowIn' ||
-      command.type === 'attemptGoalKick'),
+      command.type === 'attemptGoalKick' ||
+      command.type === 'attemptCornerKick'),
   )
   if (!commands.length) return state
 
@@ -215,11 +220,13 @@ export function resolveContactAttempts(
     if (command.type !== 'attemptFirstTouch' && command.type !== 'attemptKick' &&
         command.type !== 'attemptGoalkeeperThrow' &&
         command.type !== 'attemptThrowIn' &&
-        command.type !== 'attemptGoalKick') continue
+        command.type !== 'attemptGoalKick' &&
+        command.type !== 'attemptCornerKick') continue
     const kind = command.type === 'attemptFirstTouch' ? 'control' :
       command.type === 'attemptGoalkeeperThrow' ? 'throw' :
         command.type === 'attemptThrowIn' ? 'throwIn' :
-          command.type === 'attemptGoalKick' ? 'goalKick' : 'kick'
+          command.type === 'attemptGoalKick' ? 'goalKick' :
+            command.type === 'attemptCornerKick' ? 'cornerKick' : 'kick'
     const player = players.get(command.playerId)
     const definition = definitions.get(command.playerId)
     if (!player || !definition) throw new Error('Applied contact references an unknown player')
@@ -322,6 +329,29 @@ export function resolveContactAttempts(
       }
       events.push(event(command, kind, 'thrown', 1))
       continue
+    }
+    if (command.type === 'attemptCornerKick') {
+      const restart = state.restart
+      const placement = restart?.kind === 'corner'
+        ? cornerBallSpot(restart, setup.pitch) : null
+      const selected = restart?.kind === 'corner'
+        ? selectCornerTaker(state, restart, setup) : null
+      const legal = restart?.kind === 'corner' && !!placement &&
+        restart.awardedTeamId === player.clubId &&
+        selected?.playerId === player.playerId &&
+        state.clock.tick - restart.tick >= 14 &&
+        !ball.outsidePitch && ball.controllerId === null &&
+        ball.heightM === BALL_RADIUS_M &&
+        ball.velocity.xMps === 0 && ball.velocity.yMps === 0 &&
+        ball.velocity.zMps === 0 &&
+        Math.hypot(ball.position.xM - placement.xM,
+          ball.position.yM - placement.yM) <= 1e-7 &&
+        canReachBall(player, ball) &&
+        cornerOpponentsClear(state, restart, setup.pitch)
+      if (!legal) {
+        events.push(event(command, kind, 'notReady', 0))
+        continue
+      }
     }
     if (command.type === 'attemptGoalKick') {
       const awarded = state.restart
@@ -429,6 +459,9 @@ export function resolveContactAttempts(
     const accuracy = command.type === 'attemptGoalKick' &&
       a.goalkeeping ? (.52 * a.goalkeeping.kickingDistribution +
         .29 * a.technical.passing + .19 * a.mental.composure) / 100 :
+      command.type === 'attemptCornerKick'
+        ? (.52 * a.technical.corners + .30 * a.technical.crossing +
+          .18 * a.mental.composure) / 100 :
       baseAccuracy
     const heading = Math.atan2(dy, dx)
     const facingError = Math.abs(Math.atan2(
@@ -458,7 +491,9 @@ export function resolveContactAttempts(
       lastTouchPlayerId: player.playerId,
     }
     events.push(event(command, kind,
-      command.type === 'attemptGoalKick' ? 'goalKicked' : 'kicked', 1))
+      command.type === 'attemptGoalKick' ? 'goalKicked' :
+        command.type === 'attemptCornerKick' ? 'cornerKicked' :
+          'kicked', 1))
   }
 
   const randomStreams = events.some((entry) => entry.drawUsed)
