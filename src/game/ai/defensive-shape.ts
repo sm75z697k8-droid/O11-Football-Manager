@@ -12,7 +12,7 @@ import { boundedTarget, separationM } from './coordination'
  * Only nearby threats inside a dangerous attacking corridor can override
  * recovery. The physics engine, not this planner, decides physical contact.
  */
-export const DEFENSIVE_PLANNER_VERSION = 'compact-block-recovery-v1'
+// Version identifier below reflects the active physical pressure policy.
 const clamp = (n: number, low: number, high: number) =>
   Math.max(low, Math.min(high, n))
 
@@ -106,26 +106,148 @@ function keeperPenalty(player: PlayerMatchState) {
     player.formationSlot === 'DM' ? .6 : 0
 }
 
+/**
+ * Phase 6.9O — intent-based, team-limited defensive pressure.
+ *
+ * Distances are deliberately estimated tactical calibrations, not a model
+ * trained on professional tracking data. Real movement and tackles remain
+ * in the 50ms physics engine.
+ */
+export const DEFENSIVE_PLANNER_VERSION = 'disciplined-pressure-triggers-p69o-v1'
+export const PRESSING_SWITCH_MARGIN_M = 3.5
+
+interface PressContext {
+  readonly carrier: PlayerMatchState | undefined
+  readonly goalDistanceM: number
+  readonly trappedWide: boolean
+  readonly drivingAtGoal: boolean
+  readonly settledReception: boolean
+}
+
+function pressContext(
+  state: MatchState, ballPoint: Point2, team: TeamMatchState,
+  setup: MatchSetup,
+): PressContext {
+  const carrier = state.players.find(p =>
+    p.playerId === state.ball.controllerId && p.clubId !== team.clubId)
+  const goalDistanceM = forwardProgress(
+    ballPoint.xM, setup.pitch.lengthM, team.attackingDirection)
+  const trappedWide = ballPoint.yM < 9 ||
+    ballPoint.yM > setup.pitch.widthM - 9
+  // Genuine goalward momentum is more threatening than a sideways jog.
+  const drivingAtGoal = !!carrier &&
+    carrier.velocity.xMps * team.attackingDirection < -1.1
+  const lastControlled = Math.max(
+    ...state.contactEvents.filter(e => e.playerId === carrier?.playerId &&
+      e.outcome === 'controlled').slice(-1).map(e => e.tick),
+    ...state.automaticContactEvents.filter(e =>
+      e.playerId === carrier?.playerId &&
+      (e.outcome === 'intercepted' || e.outcome === 'wonChallenge'))
+      .slice(-1).map(e => e.tick), -1000)
+  const settledReception = !!carrier &&
+    state.clock.tick - lastControlled <= 8 &&
+    state.clock.tick - lastControlled >= 0
+  return { carrier, goalDistanceM, trappedWide,
+    drivingAtGoal, settledReception }
+}
+
+/** Does not award a tackle, press success or possession. It answers only
+ * whether this player should abandon shape to close down the ball NOW.
+ * Low pressing can allow nonthreatening possession with no active presser.
+ */
+export function shouldPressCarrier(
+  player: PlayerMatchState, ballPoint: Point2,
+  team: TeamMatchState, context: PressContext,
+): boolean {
+  if (player.formationSlot === 'GK') return false
+  const distance = separationM(player.position, ballPoint)
+  const emergency = context.goalDistanceM <= 26
+  // We never use the old 16/30/38 metre unconditional chase radius.
+  const radius = team.pressingIntensity === 'low'
+    ? emergency ? 12 : 6
+    : team.pressingIntensity === 'standard'
+      ? emergency ? 17 : 11
+      : emergency ? 22 : 18
+  const triggerBonus = (context.trappedWide ||
+      context.drivingAtGoal || context.settledReception) &&
+    team.pressingIntensity !== 'low' ? 3 : 0
+  if (distance > radius + triggerBonus) return false
+  // Protect centre-backs from sprinting into midfield unless they can
+  // genuinely challenge at close range or protect a dangerous goal lane.
+  if (centreBack(player) && !emergency && distance > 4.5) return false
+  // In an opponent's harmless build-up, standard pressing stays zonal
+  // unless somebody can press immediately or the carrier is isolated.
+  if (team.pressingIntensity === 'standard' &&
+    context.goalDistanceM > 56 &&
+    !(context.trappedWide || context.drivingAtGoal ||
+      context.settledReception) && distance > 7) return false
+  return true
+}
+
 function primaryPressers(
+  state: MatchState, setup: MatchSetup,
   teammates: readonly PlayerMatchState[], ball: Point2,
   team: TeamMatchState, preferredPlayerId?: string,
 ): PlayerMatchState[] {
-  const intensity = team.pressingIntensity
-  const desired = intensity === 'high' ? 2 : intensity === 'standard' ? 1 : 1
-  const radius = intensity === 'high' ? 38 : intensity === 'standard' ? 30 : 16
+  const context = pressContext(state, ball, team, setup)
+  const previousPressIds = new Set(state.ai.decisionSnapshot
+    .filter(d => d.clubId === team.clubId && d.action === 'press')
+    .map(d => d.playerId))
+  // Keep free-ball racing separate from controlled-carrier pressing.
+  // A real nominated recovery player is still allowed to chase a loose ball.
   const candidates = teammates.filter(p =>
     p.formationSlot !== 'GK' &&
-    (separationM(p.position, ball) <= radius ||
-      p.playerId === preferredPlayerId))
-    .sort((a, b) => {
-      const score = (p: PlayerMatchState) =>
-        separationM(p.position, ball) / 6.5 + keeperPenalty(p) -
-        (p.playerId === preferredPlayerId ? 5 : 0)
-      return score(a) - score(b) ||
-        (a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0)
+    (context.carrier
+      ? shouldPressCarrier(p, ball, team, context)
+      : separationM(p.position, ball) <=
+        (team.pressingIntensity === 'high' ? 30 : 23) ||
+        p.playerId === preferredPlayerId))
+    .map(p => {
+      const distance = separationM(p.position, ball)
+      const anchor = state.ai.formationPositions[p.playerId]
+      const recover = anchor
+        ? defensiveRecoveryTarget(p, anchor, ball, team, setup)
+        : p.position
+      const leavingShape = separationM(p.position, recover)
+      const score = distance + keeperPenalty(p) * 2.3 +
+        leavingShape * .10 -
+        // Modest continuity: one slightly closer colleague should not
+        // instantly reverse 6v6 pressing responsibility every 0.6 seconds.
+        (context.carrier && previousPressIds.has(p.playerId)
+          ? PRESSING_SWITCH_MARGIN_M : 0) -
+        (!context.carrier && p.playerId === preferredPlayerId ? 20 : 0)
+      return {player:p,score,distance}
     })
-  // Low pressing protects shape unless ball enters an accessible zone.
-  return candidates.slice(0, desired)
+    .sort((a, b) => a.score - b.score ||
+      (a.player.playerId < b.player.playerId ? -1 :
+        a.player.playerId > b.player.playerId ? 1 : 0))
+  const primary = candidates[0]
+  if (!primary) return []
+  if (team.pressingIntensity !== 'high') return [primary.player]
+  const second = candidates.find(p => p.player.playerId !== primary.player.playerId &&
+    p.distance <= 14 &&
+    // Two straight-line chasers are reserved for a *real* trap, not
+    // the default response to a midfielder holding the ball.
+    (context.trappedWide || context.goalDistanceM <= 24 ||
+      context.settledReception))
+  return second ? [primary.player, second.player] : [primary.player]
+}
+
+/** Goal-side approach while outside immediate challenge range. Only
+ * physically closing inside 3.5m switches to the ball's exact position.
+ * The contact solver—not this intention—decides actual tackle outcomes.
+ */
+export function pressingApproachTarget(
+  player: PlayerMatchState, ball: Point2,
+  team: TeamMatchState, setup: MatchSetup,
+): Point2 {
+  if (separationM(player.position, ball) <= 3.5)
+    return boundedTarget(ball, setup.pitch)
+  return boundedTarget({
+    xM: ball.xM - team.attackingDirection * 1.9,
+    yM: ball.yM + clamp(
+      (player.position.yM - ball.yM) * .16, -1.3, 1.3),
+  }, setup.pitch)
 }
 
 function defensiveCover(
@@ -174,7 +296,7 @@ export function planDefensiveResponsibilities(
 ): ReadonlyMap<string, DefensiveAssignment> {
   const teammates = state.players.filter(p => p.clubId === team.clubId)
   const opponents = state.players.filter(p => p.clubId !== team.clubId)
-  const pressing = primaryPressers(teammates, ballPoint, team, preferredRecoveryId)
+  const pressing = primaryPressers(state, setup, teammates, ballPoint, team, preferredRecoveryId)
   const pressingIds = new Set(pressing.map(p => p.playerId))
   const cover = defensiveCover(
     teammates, ballPoint, team, setup, pressingIds)
@@ -194,7 +316,7 @@ export function planDefensiveResponsibilities(
       engage = true
       // Current controller is the physical threat. The 50ms movement engine
       // approaches the actual ball, not a fake successful tackle.
-      target = boundedTarget(ballPoint, setup.pitch)
+      target = pressingApproachTarget(player, ballPoint, team, setup)
     } else if (cover?.playerId === player.playerId) {
       action = 'cover'
       target = boundedTarget({
