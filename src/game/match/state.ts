@@ -5,8 +5,8 @@ import type { ClubId, PlayerId } from '../model/player'
 import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
-export const MATCH_STATE_SCHEMA_VERSION = 11 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-physical-goal-kicks-s12-v1' as const
+export const MATCH_STATE_SCHEMA_VERSION = 12 as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-physical-corners-s13-v1' as const
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
   'ball/contact', 'match/referee', 'match/injuries',
@@ -47,11 +47,11 @@ export interface BallMatchState {
   readonly controlOffset: Point2 | null
   readonly lastTouchPlayerId: PlayerId | null
 }
-export type ContactKind = 'control' | 'kick' | 'throw' | 'throwIn' | 'goalKick'
+export type ContactKind = 'control' | 'kick' | 'throw' | 'throwIn' | 'goalKick' | 'cornerKick'
 export type ContactOutcome =
   | 'controlled' | 'miscontrolled' | 'kicked'
   | 'outOfReach' | 'occupied' | 'alreadyControlled' | 'invalidDirection'
-  | 'thrown' | 'thrownIn' | 'goalKicked' | 'notReady' | 'secondTouch' | 'notHolding' | 'tooSoon'
+  | 'thrown' | 'thrownIn' | 'goalKicked' | 'cornerKicked' | 'notReady' | 'secondTouch' | 'notHolding' | 'tooSoon'
 export interface ContactEvent {
   readonly commandId: string
   readonly playerId: PlayerId
