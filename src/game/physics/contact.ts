@@ -15,6 +15,10 @@ import {
   postGoalKickoffPlayersLegal, postGoalKickoffBallStationary,
   postGoalKickoffCommandPrefix,
 } from '../match/post-goal-kickoff'
+import {
+  periodKickoffPrefix, secondHalfKickoffLegal,
+  secondHalfKickoffBallStationary,
+} from '../match/periods'
 
 /**
  * Contact tests are intentionally explicit in Phase 3: no football AI is
@@ -238,6 +242,20 @@ export function resolveContactAttempts(
     if (ball.controllerId && ball.controllerId !== command.playerId) {
       events.push(event(command, kind, 'occupied', 0))
       continue
+    }
+    if (state.periodKickoff) {
+      const half = state.periodKickoff
+      const authorized = command.type === 'attemptKick' &&
+        half.phase === 'staging' &&
+        command.commandId.startsWith(periodKickoffPrefix(half.startTick)) &&
+        command.playerId === half.kickerId &&
+        command.teamId === half.teamId &&
+        secondHalfKickoffLegal(state, setup) &&
+        secondHalfKickoffBallStationary({...state, ball}, setup)
+      if (!authorized) {
+        events.push(event(command, kind, 'notReady', 0))
+        continue
+      }
     }
     if (state.postGoalKickoff) {
       const restart = state.postGoalKickoff
