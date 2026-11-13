@@ -5,8 +5,8 @@ import type { ClubId, PlayerId } from '../model/player'
 import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
-export const MATCH_STATE_SCHEMA_VERSION = 14 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-real-match-periods-s15-v1' as const
+export const MATCH_STATE_SCHEMA_VERSION = 15 as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-law11-offside-s16-v1' as const
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
   'ball/contact', 'match/referee', 'match/injuries',
@@ -150,6 +150,27 @@ export interface OutOfPlayEvent {
   readonly awardedTeamId: ClubId | null
   readonly takerId: PlayerId | null
 }
+/** Positions frozen at the instant an eligible teammate PHYSICALLY plays the ball.
+ * Merely occupying an offside position is not an offence. */
+export interface OffsidePhase {
+  readonly playedTick: number
+  readonly passerId: PlayerId
+  readonly attackingTeamId: ClubId
+  readonly playerIds: readonly PlayerId[]
+}
+export interface OffsideEvent {
+  readonly tick: number
+  readonly playedTick: number
+  readonly passerId: PlayerId
+  readonly offenderId: PlayerId
+  readonly awardedTeamId: ClubId
+  readonly takerId: PlayerId
+  readonly spot: Point2
+}
+export interface IndirectFreeKick {
+  readonly kickedTick: number
+  readonly takerId: PlayerId
+}
 export interface AIState {
   readonly passIntent: CoordinatedPassIntent | null
   readonly enabledTeams: readonly [boolean, boolean]
@@ -175,6 +196,10 @@ export interface MatchState {
   readonly goalEvents: readonly GoalEvent[]
   readonly outOfPlayEvents: readonly OutOfPlayEvent[]
   readonly restart: OutOfPlayEvent | null
+  readonly offsidePhase: OffsidePhase | null
+  readonly offsideEvents: readonly OffsideEvent[]
+  readonly offsideRestart: OffsideEvent | null
+  readonly indirectFreeKick: IndirectFreeKick | null
   readonly teams: readonly [TeamMatchState, TeamMatchState]
   readonly players: readonly PlayerMatchState[]
   readonly ball: BallMatchState

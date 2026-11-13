@@ -376,6 +376,22 @@ export function scheduleMatchCommand(
        req.playerId !== postGoal.kickerId ||
        req.power !== .19 || req.lift !== 0))
   )) return reject('Only the awarded physical centre kick is allowed after a goal')
+  const offside=state.offsideRestart
+  const offsidePrefix=offside ? 'ai-pass-offside-'+offside.tick+'-' : null
+  if (req.type==='attemptKick' &&
+      req.commandId.startsWith('ai-pass-offside-') &&
+      (!offsidePrefix || !req.commandId.startsWith(offsidePrefix))) {
+    return reject('No legal offside indirect free-kick award')
+  }
+  if (offside && (
+    ['attemptFirstTouch','attemptGoalkeeperThrow','diagnosticBallLaunch',
+      'attemptThrowIn','attemptGoalKick','attemptCornerKick'].includes(req.type) ||
+    (req.type==='attemptKick' &&
+      (!offsidePrefix || !req.commandId.startsWith(offsidePrefix) ||
+       req.teamId!==offside.awardedTeamId ||
+       req.playerId!==offside.takerId ||
+       req.power!==.34 || req.lift!==0))
+  )) return reject('Only the awarded indirect free kick may restart play')
   // During a dead-ball stoppage, a regular touch/kick cannot secretly
   // bypass the authorized restart. Tactical commands can still be queued.
   if (restart && ['attemptKick', 'attemptFirstTouch',

@@ -162,7 +162,8 @@ export function recordOutOfPlay(
     velocity: { xMps: 0, yMps: 0, zMps: 0 },
   }
   return {
-    ...after, ball, restart: event,
+    ...after, ball, restart: event, offsidePhase: null,
+    indirectFreeKick: null,
     outOfPlayEvents: [...after.outOfPlayEvents, event],
     ai: { ...after.ai, passIntent: null, decisionSnapshot: [] },
   }
@@ -190,7 +191,8 @@ export function forbiddenRestartSecondTouch(
       event.outcome === 'cornerKicked' ||
       (event.outcome === 'kicked' &&
         (event.commandId.startsWith('ai-pass-postgoal-') ||
-          event.commandId.startsWith('ai-pass-secondhalf-')))) &&
+          event.commandId.startsWith('ai-pass-secondhalf-') ||
+          event.commandId.startsWith('ai-pass-offside-')))) &&
       event.playerId === playerId
     break
   }
