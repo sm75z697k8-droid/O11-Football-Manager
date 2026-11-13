@@ -1,7 +1,7 @@
 /** O11 project metadata. Real-time landscape Canvas now visualizes the authoritative headless engine; no official match rules or results yet. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = '6.9K' as const
-export const ENGINE_STATUS = 'goalkeeper-held-ball-team-shape' as const
+export const PROJECT_PHASE = '6.9L' as const
+export const ENGINE_STATUS = 'physical-goalkeeper-distribution-preview' as const
 
 export const FOUNDATION_STAGES = [
   { id: '0A', title: 'Project foundation', summary: 'App, TypeScript, tests and deployment' },
@@ -32,4 +32,5 @@ export const FOUNDATION_STAGES = [
   { id: '6.9I', title: 'Contact-loop stability', summary: 'Re-arm failed tackles after renewed contact; maintain pressure-aware AI decisions and bound mobile event-feed work' },
   { id: '6.9J', title: 'Long-match command continuity', summary: 'Prevent the old 256-action hard stop and expose build identity for bug replay' },
   { id: '6.9K', title: 'Goalkeeper distribution shape', summary: 'Real caught ball creates spaced build-out outlets while opponents regroup and screen passes' },
+  { id: '6.9L', title: 'Goalkeeper distribution choices', summary: 'Physically preview hand throws and compare reachable outlets by real pressure and keeper attributes' },
 ] as const
