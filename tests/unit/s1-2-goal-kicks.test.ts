@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
 import { createFoundationMatch } from '../../src/game/match/engine'
-import { applyDueMatchCommands } from '../../src/game/match/commands'
+import { applyDueMatchCommands, scheduleMatchCommand } from '../../src/game/match/commands'
 import { resolveContactAttempts } from '../../src/game/physics/contact'
 import { advanceBallPhysics, BALL_RADIUS_M } from '../../src/game/physics/ball'
 import { classifyOutOfPlay, recordOutOfPlay, forbiddenRestartSecondTouch } from '../../src/game/match/restarts'
@@ -10,7 +10,6 @@ import {
   insideRestartPenaltyArea, stageGoalKick, advanceGoalKickStoppage,
 } from '../../src/game/match/goal-kicks'
 import type { MatchState } from '../../src/game/match/state'
-import type { Point2 } from '../../src/game/model/pitch'
 
 function exit(side: 'left' | 'right') {
   const setup = makeFictionalMatchSetup()
@@ -168,7 +167,6 @@ describe('S1.2 real Law 16 goal-kick continuations', () => {
       target: { xM: 25, yM: 34 }, power: .4, lift: 0,
     }).accepted).toBe(false)
     const dead = recordOutOfPlay(scene.before, scene.after, scene.setup)
-    const { scheduleMatchCommand } = requireCommandScheduler()
     const wrong = scheduleMatchCommand(dead, {
       commandId: 'wrong-team-goal-kick',
       type: 'attemptGoalKick',
@@ -243,8 +241,3 @@ describe('S1.2 real Law 16 goal-kick continuations', () => {
   })
 })
 
-// Keep the scheduler import static and tree-shakeable in the production build.
-function requireCommandScheduler() {
-  return { scheduleMatchCommand: originalScheduleMatchCommand }
-}
-import { scheduleMatchCommand as originalScheduleMatchCommand } from '../../src/game/match/commands'
