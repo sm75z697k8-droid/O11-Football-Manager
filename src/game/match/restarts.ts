@@ -187,6 +187,9 @@ export function stageThrowIn(
   const event = state.restart
   if (event?.kind !== 'throwIn' || !event.awardedTeamId ||
       !event.takerId) return state
+  const aiIndex = state.teams.findIndex(t => t.clubId === event.awardedTeamId)
+  // Autonomous choreography cannot take over a team whose AI is disabled.
+  if (aiIndex < 0 || !state.ai.enabledTeams[aiIndex]) return state
 
   const taker = state.players.find(p => p.playerId === event.takerId)
   if (!taker) throw new Error('Missing throw-in taker')
@@ -213,6 +216,8 @@ export function stageThrowIn(
       [p.playerId, targets[index]] as [string, Point2]),
   ])
   const players = state.players.map(p => {
+    const teamIndex = state.teams.findIndex(t => t.clubId === p.clubId)
+    if (teamIndex < 0 || !state.ai.enabledTeams[teamIndex]) return p
     const target = byId.get(p.playerId) ?? p.position
     const same = p.intention.kind === 'moveToPoint' &&
       Math.hypot(p.intention.target.xM - target.xM,
@@ -236,9 +241,7 @@ export function stageThrowIn(
       p.position.yM - targets[index].yM) < 2.0)
   const pending = [...staged.pendingCommands, ...staged.appliedCommands].some(c =>
     c.type === 'attemptThrowIn' && c.commandId === 'ai-restart-throwin-' + event.tick)
-  const aiIndex = staged.teams.findIndex(t => t.clubId === event.awardedTeamId)
-  if (aiIndex >= 0 && staged.ai.enabledTeams[aiIndex] &&
-      travelled < .8 && receiverReady &&
+  if (travelled < .8 && receiverReady &&
       state.clock.tick - event.tick >= 14 && !pending) {
     const nearest = receivers.find((p, index) =>
       Math.hypot(p.position.xM - targets[index].xM,
