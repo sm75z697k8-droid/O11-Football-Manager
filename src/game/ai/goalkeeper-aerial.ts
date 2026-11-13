@@ -17,8 +17,6 @@ import { separationM, boundedTarget } from './coordination'
  * resolver separately decides whether the goalkeeper touches the ball.
  */
 export const GOALKEEPER_AERIAL_VERSION = 'real-lofted-cross-claim-punch-p69t-v1'
-const clamp = (value: number, lo: number, hi: number) =>
-  Math.min(hi, Math.max(lo, value))
 const MAX_CROSS_AGE_TICKS = 58
 const MAX_LOOKAHEAD_TICKS = 42
 
