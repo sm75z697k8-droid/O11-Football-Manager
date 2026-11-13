@@ -248,6 +248,11 @@ function candidate(
       saveWindow?.maximumHeightM ?? reach?.maximumHeightM ??
         FOOT_CONTACT_MAX_HEIGHT_M)
     if (!result) continue
+    // The goalkeeper's BODY being inside the box does not legalize a hand
+    // claim where the actual ball impact is outside the penalty boundary.
+    if (aerial && !withinOwnPenaltyArea({
+      ...p, position: result.impact,
+    }, setup)) continue
     if (owner && alreadyHeldOffWithoutReapproach(
       before, after, old, p)) continue
     options.push({ player: p, sample: result })
