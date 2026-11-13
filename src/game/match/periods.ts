@@ -305,7 +305,14 @@ export function advanceSecondHalfKickoff(
 export function formatMatchTime(state: MatchState): string {
   if (state.period === 'notStarted') return '00:00'
   if (state.period === 'halfTime') return 'HT · 45:00'
-  if (state.period === 'fullTime') return 'FT · 90:00'
+  if (state.period === 'fullTime') {
+    const started = state.periodTiming.secondHalfStartTick
+    const elapsed = started === null ? HALF_TICKS :
+      state.clock.tick - started
+    const extra = Math.max(0, elapsed - HALF_TICKS)
+    return 'FT · ' + (extra === 0 ? '90:00' :
+      '90+' + Math.ceil(extra / TICKS_PER_MINUTE))
+  }
   const first = state.period === 'firstHalf'
   const start = first
     ? state.periodTiming.firstHalfStartTick
@@ -318,6 +325,8 @@ export function formatMatchTime(state: MatchState): string {
     FIXED_STEP_MILLISECONDS/1000)
   if (minutes >= HALF_MINUTES) {
     const limit = first ? 45 : 90
+    if (minutes === HALF_MINUTES && seconds === 0)
+      return String(limit) + ':00'
     return String(limit) + '+' + String(minutes-HALF_MINUTES+1) +
       ':' + String(seconds).padStart(2,'0')
   }
