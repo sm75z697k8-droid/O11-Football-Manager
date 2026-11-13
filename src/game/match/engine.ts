@@ -143,6 +143,94 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       throw new Error('Goal event not supported by physical goalmouth state')
     }
   }
+  // Restarts must belong to real whole-ball exits. Audit the award, legal
+  // boundary and chronology without trusting client-supplied restart data.
+  let precedingExit = 0
+  for (const exit of state.outOfPlayEvents) {
+    if (!object(exit) ||
+        Object.keys(exit).sort().join(',') !==
+          'awardedTeamId,kind,lastTouchPlayerId,side,spot,takerId,tick' ||
+        !Number.isSafeInteger(exit.tick) || exit.tick <= precedingExit ||
+        exit.tick > state.clock.tick ||
+        !['throwIn', 'corner', 'goalKick', 'unassigned'].includes(exit.kind as string) ||
+        !['top', 'bottom', 'left', 'right'].includes(exit.side as string) ||
+        !object(exit.spot) || !insidePitch(exit.spot, setup.pitch) ||
+        !Number.isFinite(exit.spot.xM) ||
+        !Number.isFinite(exit.spot.yM)) {
+      throw new Error('Invalid out-of-play event history')
+    }
+    precedingExit = exit.tick
+    const lastTouch = state.players.find(p => p.playerId === exit.lastTouchPlayerId)
+    const taking = state.teams.find(t => t.clubId === exit.awardedTeamId)
+    if (exit.kind === 'unassigned') {
+      if (lastTouch || taking || exit.takerId !== null) {
+        throw new Error('Unassigned exit has an invented award')
+      }
+      continue
+    }
+    if (!lastTouch || !taking) throw new Error('Out-of-play award missing physical last touch')
+    if (exit.kind === 'throwIn') {
+      const taker = state.players.find(p => p.playerId === exit.takerId)
+      if (!['top', 'bottom'].includes(exit.side) ||
+          (exit.side === 'top' ? exit.spot.yM !== 0 :
+            exit.spot.yM !== setup.pitch.widthM) ||
+          taker?.clubId !== taking.clubId || taker.formationSlot === 'GK' ||
+          taking.clubId === lastTouch.clubId) {
+        throw new Error('Illegal touchline throw-in award')
+      }
+    } else {
+      if (!['left', 'right'].includes(exit.side) ||
+          exit.takerId !== null ||
+          (exit.side === 'left' ? exit.spot.xM !== .35 :
+            exit.spot.xM !== setup.pitch.lengthM - .35)) {
+        throw new Error('Invalid goal-line restart classification')
+      }
+      const defending = state.teams.find(t =>
+        t.attackingDirection === (exit.side === 'left' ? 1 : -1))
+      if (!defending ||
+          (exit.kind === 'corner' &&
+            (lastTouch.clubId !== defending.clubId ||
+              taking.clubId === defending.clubId)) ||
+          (exit.kind === 'goalKick' &&
+            (lastTouch.clubId === defending.clubId ||
+              taking.clubId !== defending.clubId))) {
+        throw new Error('Incorrect goal-line restart award')
+      }
+    }
+  }
+  const lastExit = state.outOfPlayEvents.at(-1)
+  if (state.restart !== null) {
+    if (!lastExit || JSON.stringify(state.restart) !== JSON.stringify(lastExit) ||
+        !state.ball.outsidePitch || state.goalEvents.length > 0 ||
+        state.ball.controllerId !== null ||
+        state.ball.velocity.xMps !== 0 ||
+        state.ball.velocity.yMps !== 0 ||
+        state.ball.velocity.zMps !== 0) {
+      throw new Error('Active restart disagrees with recorded stoppage')
+    }
+  }
+  for (const command of state.appliedCommands) {
+    if (command.type !== 'attemptThrowIn') continue
+    const original = state.outOfPlayEvents.find(exit =>
+      exit.kind === 'throwIn' && exit.awardedTeamId === command.teamId &&
+      exit.takerId === command.playerId &&
+      exit.tick <= command.requestedTick &&
+      (state.outOfPlayEvents.find(next =>
+        next.tick > exit.tick)?.tick ?? Infinity) > command.appliedTick)
+    if (!original || state.contactEvents.find(e =>
+      e.commandId === command.commandId && e.outcome === 'thrownIn') &&
+      (command.appliedTick < original.tick + 14 ||
+       Math.hypot(command.target.xM - original.spot.xM,
+         command.target.yM - original.spot.yM) > 28)) {
+      throw new Error('Throw-in command not supported by chronological award')
+    }
+  }
+  if (lastExit?.kind === 'throwIn' && state.restart === null &&
+      !state.contactEvents.some(e => e.kind === 'throwIn' &&
+        e.outcome === 'thrownIn' && e.tick > lastExit.tick)) {
+    throw new Error('Throw-in restart finished without a physical hand release')
+  }
+
   if (Object.keys(state.randomStreams).length !== MATCH_RANDOM_STREAM_IDS.length) {
     throw new Error('Unexpected number of RNG streams')
   }
