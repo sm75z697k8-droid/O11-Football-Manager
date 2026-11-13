@@ -187,7 +187,10 @@ export function forbiddenRestartSecondTouch(
     lastTick = event.tick
     thrower = (event.outcome === 'thrownIn' ||
       event.outcome === 'goalKicked' ||
-      event.outcome === 'cornerKicked') && event.playerId === playerId
+      event.outcome === 'cornerKicked' ||
+      (event.outcome === 'kicked' &&
+        event.commandId.startsWith('ai-pass-postgoal-'))) &&
+      event.playerId === playerId
     break
   }
   if (!thrower) return false

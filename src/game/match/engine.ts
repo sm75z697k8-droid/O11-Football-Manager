@@ -10,6 +10,11 @@ import {
   advanceCornerStoppage, cornerBallSpot, selectCornerTaker,
 } from './corners'
 import {
+  advancePostGoalKickoff, postGoalKickoffAward,
+  postGoalKickoffBallStationary, postGoalKickoffCommandPrefix,
+  postGoalKickoffPlayersLegal,
+} from './post-goal-kickoff'
+import {
   AUTO_CONTACT_COOLDOWN_TICKS, resolveAutomaticBallContact,
 } from '../physics/automatic-contact'
 import {
@@ -38,7 +43,7 @@ import {
 } from './state'
 import type { MatchState, PressingIntensity } from './state'
 
-export const MATCH_CHECKPOINT_VERSION = 12 as const
+export const MATCH_CHECKPOINT_VERSION = 13 as const
 export const MAX_ADVANCE_STEPS_PER_CALL = 10_000 as const
 
 export interface FoundationMatchCheckpoint {
@@ -93,6 +98,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       !Array.isArray(state.pendingCommands) || !Array.isArray(state.appliedCommands) ||
       !Array.isArray(state.contactEvents) ||
       !Array.isArray(state.goalEvents) ||
+      (state.postGoalKickoff !== null && !object(state.postGoalKickoff)) ||
       !Array.isArray(state.outOfPlayEvents) ||
       !Array.isArray(state.automaticContactEvents) ||
       !Number.isSafeInteger(state.ballContactCooldownUntilTick) ||
@@ -112,24 +118,23 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     !['low', 'standard', 'high'].includes(team.pressingIntensity))) {
     throw new Error('Invalid team state in checkpoint')
   }
-  // No restart yet: only one actual goal can conclude this exhibition.
-  // The event is checked against team identity, physical line geometry,
-  // last touch and current stopped ball—not a renderer counter.
-  if (state.goalEvents.length > 1) throw new Error('Goal restarts are not implemented')
-  if (state.goalEvents.length) {
-    const ev = state.goalEvents[0]
+  // A physically scored goal is a chronological, immutable match event.
+  // Previous goals cannot be erased, and neither the score nor kickoff
+  // status may be synthesized from the renderer. Each event is audited
+  // independently rather than assuming the game ends after goal number 1.
+  let previousGoalTick = 0
+  for (const ev of state.goalEvents) {
     const scorer = state.players.find(p => p.playerId === ev?.lastTouchPlayerId)
     const goalTeam = state.teams.find(t => t.clubId === ev?.scoringTeamId)
     const expectedSide = goalTeam?.attackingDirection === 1 ? 'right' : 'left'
-    const expectedX = expectedSide === 'right'
-      ? setup.pitch.lengthM + BALL_RADIUS_M : -BALL_RADIUS_M
-    if (!object(ev) || Object.keys(ev).sort().join(',') !==
+    if (!ev || typeof ev !== 'object' ||
+        Object.keys(ev).sort().join(',') !==
         'crossingHeightM,crossingY,lastTouchPlayerId,ownGoal,scoringTeamId,side,tick' ||
         !scorer || !goalTeam || ev.side !== expectedSide ||
         typeof ev.ownGoal !== 'boolean' ||
         ev.ownGoal !== (scorer.clubId !== goalTeam.clubId) ||
-        !Number.isSafeInteger(ev.tick) || ev.tick !== state.clock.tick ||
-        ev.tick < 1 ||
+        !Number.isSafeInteger(ev.tick) || ev.tick <= previousGoalTick ||
+        ev.tick > state.clock.tick ||
         typeof ev.crossingY !== 'number' ||
         !Number.isFinite(ev.crossingY) ||
         typeof ev.crossingHeightM !== 'number' ||
@@ -137,16 +142,51 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         Math.abs(ev.crossingY - setup.pitch.widthM / 2) >
           setup.pitch.goalWidthM / 2 - BALL_RADIUS_M + 1e-7 ||
         ev.crossingHeightM < BALL_RADIUS_M - 1e-7 ||
-        ev.crossingHeightM > setup.pitch.goalHeightM - BALL_RADIUS_M + 1e-7 ||
-        !state.ball.outsidePitch ||
-        (expectedSide === 'right'
-          ? state.ball.position.xM < expectedX
-          : state.ball.position.xM > expectedX) ||
-        state.ball.lastTouchPlayerId !== ev.lastTouchPlayerId ||
-        state.kickoff?.phase === 'awaitingKick') {
-      throw new Error('Goal event not supported by physical goalmouth state')
+        ev.crossingHeightM > setup.pitch.goalHeightM - BALL_RADIUS_M + 1e-7) {
+      throw new Error('Goal event has invalid chronological physical-goal geometry')
+    }
+    previousGoalTick = ev.tick
+  }
+  if (state.postGoalKickoff !== null) {
+    const restart = state.postGoalKickoff
+    const lastGoal = state.goalEvents.at(-1)
+    const expected = lastGoal
+      ? postGoalKickoffAward(state, setup, lastGoal) : null
+    const taker = state.players.find(p => p.playerId === restart.kickerId)
+    const receiver = state.players.find(p => p.playerId === restart.receiverId)
+    if (!lastGoal || !expected || !object(restart) ||
+        Object.keys(restart).sort().join(',') !==
+          'goalTick,kickedTick,kickerId,phase,receiverId,teamId' ||
+        restart.goalTick !== lastGoal.tick ||
+        restart.teamId !== expected.teamId ||
+        restart.kickerId !== expected.kickerId ||
+        restart.receiverId !== expected.receiverId ||
+        !taker || !receiver ||
+        !['staging', 'awaitingMovement'].includes(restart.phase) ||
+        state.kickoff?.phase === 'awaitingKick' ||
+        state.restart !== null ||
+        state.clock.tick - restart.goalTick < 0 ||
+        (restart.phase === 'staging' &&
+          (restart.kickedTick !== null ||
+            !postGoalKickoffBallStationary(state, setup))) ||
+        (restart.phase === 'awaitingMovement' &&
+          (!Number.isSafeInteger(restart.kickedTick) ||
+            restart.kickedTick !== state.clock.tick ||
+            !postGoalKickoffPlayersLegal(state, setup, restart) ||
+            state.ball.controllerId !== null ||
+            state.ball.outsidePitch ||
+            Math.hypot(state.ball.velocity.xMps,
+              state.ball.velocity.yMps) <= .25 ||
+            !state.contactEvents.some(e =>
+              e.tick === restart.kickedTick &&
+              e.playerId === restart.kickerId &&
+              e.outcome === 'kicked' &&
+              e.commandId.startsWith(
+                postGoalKickoffCommandPrefix(restart.goalTick)))))) {
+      throw new Error('Post-goal kickoff is not backed by a real scored goal and physical contact')
     }
   }
+
   // Restarts must belong to real whole-ball exits. Audit the award, legal
   // boundary and chronology without trusting client-supplied restart data.
   let precedingExit = 0
@@ -490,7 +530,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         ![0, 1].includes(recorded.drawUsed) ||
         !(
           command.type === 'attemptKick'
-            ? ['kicked', 'outOfReach', 'occupied', 'invalidDirection', 'secondTouch'].includes(recorded.outcome)
+            ? ['kicked', 'outOfReach', 'occupied', 'invalidDirection', 'secondTouch', 'notReady'].includes(recorded.outcome)
             : command.type === 'attemptGoalkeeperThrow'
               ? ['thrown', 'occupied', 'notHolding', 'tooSoon', 'invalidDirection'].includes(recorded.outcome)
               : command.type === 'attemptThrowIn'
@@ -499,7 +539,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
                   ? ['goalKicked', 'notReady', 'invalidDirection'].includes(recorded.outcome)
                   : command.type === 'attemptCornerKick'
                     ? ['cornerKicked', 'notReady', 'invalidDirection'].includes(recorded.outcome)
-                    : ['controlled', 'miscontrolled', 'outOfReach', 'occupied', 'alreadyControlled', 'secondTouch'].includes(recorded.outcome)
+                    : ['controlled', 'miscontrolled', 'outOfReach', 'occupied', 'alreadyControlled', 'secondTouch', 'notReady'].includes(recorded.outcome)
         ) ||
         recorded.drawUsed !== (['kicked', 'controlled', 'miscontrolled', 'thrown', 'thrownIn', 'goalKicked', 'cornerKicked'].includes(recorded.outcome) ? 1 : 0) ||
         Object.keys(recorded).sort().join(',') !==
@@ -509,6 +549,38 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     consumedDraws += recorded.drawUsed
     eventById.set(recorded.commandId, recorded)
   }
+  // Every completed goal must lead to exactly one authorized, physically
+  // successful centre kick by the CONCEDING team. In-progress staging is
+  // deliberately allowed to have no kick yet.
+  for (const goal of state.goalEvents) {
+    const expected = postGoalKickoffAward(state, setup, goal)
+    const prefix = postGoalKickoffCommandPrefix(goal.tick)
+    const goalKicks = state.contactEvents.filter(e =>
+      e.commandId.startsWith(prefix) && e.outcome === 'kicked')
+    const active = state.postGoalKickoff?.goalTick === goal.tick
+    const awaiting = active &&
+      state.postGoalKickoff?.phase === 'awaitingMovement'
+    if (goalKicks.length > 1 ||
+        (!active && goalKicks.length !== 1) ||
+        (active && goalKicks.length !== (awaiting ? 1 : 0))) {
+      throw new Error('Physical goal lacks exactly one genuine completed kickoff')
+    }
+    for (const kicked of goalKicks) {
+      const command = orderedApplied.find(c =>
+        c.commandId === kicked.commandId)
+      if (!command || command.type !== 'attemptKick' ||
+          command.teamId !== expected.teamId ||
+          command.playerId !== expected.kickerId ||
+          command.power !== .19 || command.lift !== 0 ||
+          command.requestedTick <= goal.tick ||
+          kicked.tick <= goal.tick ||
+          (state.goalEvents.find(next => next.tick > goal.tick)?.tick ??
+            Infinity) <= kicked.tick) {
+        throw new Error('Centre kick is not supported by a physical goal award')
+      }
+    }
+  }
+
   if (JSON.stringify(state.randomStreams['ball/contact']) !==
       JSON.stringify(expectedContactStream(setup.seed, consumedDraws))) {
     throw new Error('Contact RNG stream does not match the recorded draw history')
@@ -870,11 +942,15 @@ export class FoundationMatchEngine {
       throw new RangeError('Invalid engine advance step count')
     }
     for (let i = 0; i < steps; i += 1) {
-      if (this.state.goalEvents.length ||
-          (this.state.restart && !['throwIn', 'goalKick', 'corner']
-            .includes(this.state.restart.kind))) break
+      if (this.state.restart && !['throwIn', 'goalKick', 'corner']
+          .includes(this.state.restart.kind)) break
       const clock = advanceSimulationClock(this.state.clock)
       const applied = applyDueMatchCommands({ ...this.state, clock })
+      if (applied.postGoalKickoff) {
+        this.state = advancePostGoalKickoff(
+          applied, this.setup, resolveContactAttempts)
+        continue
+      }
       if (applied.restart?.kind === 'throwIn') {
         this.state = advanceThrowInStoppage(
           applied, this.setup, resolveContactAttempts)

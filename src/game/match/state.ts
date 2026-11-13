@@ -5,8 +5,8 @@ import type { ClubId, PlayerId } from '../model/player'
 import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
-export const MATCH_STATE_SCHEMA_VERSION = 12 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-physical-corners-s13-v1' as const
+export const MATCH_STATE_SCHEMA_VERSION = 13 as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-post-goal-kickoffs-s14-v1' as const
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
   'ball/contact', 'match/referee', 'match/injuries',
@@ -75,6 +75,17 @@ export interface KickoffState {
   readonly phase: 'awaitingKick' | 'inPlay'
   readonly takenTick: number | null
 }
+/** After a real scored goal, the conceding team physically restarts at
+ * centre. This does not mutate the opening kick-off record or goal history.
+ */
+export interface PostGoalKickoffState {
+  readonly goalTick: number
+  readonly teamId: ClubId
+  readonly kickerId: PlayerId
+  readonly receiverId: PlayerId
+  readonly phase: 'staging' | 'awaitingMovement'
+  readonly kickedTick: number | null
+}
 export type AgentAction = 'shape' | 'support' | 'press' | 'pursue' | 'carry' | 'receive' | 'cover' | 'mark' | 'recover' | 'shoot' | 'save' | 'oneOnOne' | 'claimCross'
 export interface AgentDecision {
   readonly tick: number
@@ -135,6 +146,7 @@ export interface MatchState {
   readonly clock: SimulationClock
   readonly period: 'notStarted'
   readonly kickoff: KickoffState | null
+  readonly postGoalKickoff: PostGoalKickoffState | null
   readonly goalEvents: readonly GoalEvent[]
   readonly outOfPlayEvents: readonly OutOfPlayEvent[]
   readonly restart: OutOfPlayEvent | null

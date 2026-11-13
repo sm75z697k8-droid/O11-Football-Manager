@@ -20,12 +20,21 @@ export function copyableMatchDiagnostics(state: MatchState): string {
     seed: state.seed.toString(16).toUpperCase().padStart(8, '0'),
     time: formatDiagnosticTime(state.clock.tick),
     tick: state.clock.tick,
-    terminal: state.goalEvents.length ? 'goal' :
+    terminal: state.postGoalKickoff
+      ? 'post-goal-' + state.postGoalKickoff.phase :
       state.restart?.kind === 'throwIn' ? 'throw-in-staging' :
         state.restart?.kind === 'goalKick' ? 'goal-kick-staging' :
         state.restart?.kind === 'corner' ? 'corner-staging' :
         ball.outsidePitch ? 'out-of-play' : 'playing',
     restart: state.restart,
+    postGoalKickoff: state.postGoalKickoff,
+    lastGoal: state.goalEvents.at(-1) ?? null,
+    scoreboard: state.teams.map(t => ({
+      clubId: t.clubId, goals: t.score,
+    })),
+    completedPostGoalKickoffs: state.contactEvents.filter(e =>
+      e.outcome === 'kicked' &&
+      e.commandId.startsWith('ai-pass-postgoal-')).length,
     outOfPlayCounts: {
       total: state.outOfPlayEvents.length,
       throwIns: state.outOfPlayEvents.filter(e => e.kind === 'throwIn').length,

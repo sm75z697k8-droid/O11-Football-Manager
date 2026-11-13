@@ -335,6 +335,24 @@ export function scheduleMatchCommand(
     return reject('Player does not belong to the specified team')
   }
   const restart = state.restart
+  const postGoal = state.postGoalKickoff
+  const postGoalPrefix = postGoal
+    ? 'ai-pass-postgoal-' + postGoal.goalTick + '-' : null
+  if (req.type === 'attemptKick' &&
+      req.commandId.startsWith('ai-pass-postgoal-') &&
+      (!postGoalPrefix || !req.commandId.startsWith(postGoalPrefix))) {
+    return reject('No recorded scored goal authorizes this centre kick')
+  }
+  if (postGoal && (
+    ['attemptFirstTouch', 'attemptGoalkeeperThrow', 'diagnosticBallLaunch',
+      'attemptThrowIn', 'attemptGoalKick', 'attemptCornerKick'].includes(req.type) ||
+    (req.type === 'attemptKick' &&
+      (postGoal.phase !== 'staging' ||
+       !postGoalPrefix || !req.commandId.startsWith(postGoalPrefix) ||
+       req.teamId !== postGoal.teamId ||
+       req.playerId !== postGoal.kickerId ||
+       req.power !== .19 || req.lift !== 0))
+  )) return reject('Only the awarded physical centre kick is allowed after a goal')
   // During a dead-ball stoppage, a regular touch/kick cannot secretly
   // bypass the authorized restart. Tactical commands can still be queued.
   if (restart && ['attemptKick', 'attemptFirstTouch',
