@@ -137,13 +137,26 @@ function pressContext(
   // Genuine goalward momentum is more threatening than a sideways jog.
   const drivingAtGoal = !!carrier &&
     carrier.velocity.xMps * team.attackingDirection < -1.1
-  const lastControlled = Math.max(
-    ...state.contactEvents.filter(e => e.playerId === carrier?.playerId &&
-      e.outcome === 'controlled').slice(-1).map(e => e.tick),
-    ...state.automaticContactEvents.filter(e =>
-      e.playerId === carrier?.playerId &&
-      (e.outcome === 'intercepted' || e.outcome === 'wonChallenge'))
-      .slice(-1).map(e => e.tick), -1000)
+  // The latest relevant first touch matters, not the entire ever-growing
+  // event history. Reverse scan with no .filter/.map allocations on iPhone.
+  let lastControlled = -1000
+  if (carrier) {
+    for (let i = state.contactEvents.length - 1; i >= 0; i--) {
+      const e = state.contactEvents[i]
+      if (e.playerId === carrier.playerId && e.outcome === 'controlled') {
+        lastControlled = e.tick
+        break
+      }
+    }
+    for (let i = state.automaticContactEvents.length - 1; i >= 0; i--) {
+      const e = state.automaticContactEvents[i]
+      if (e.playerId === carrier.playerId &&
+          (e.outcome === 'intercepted' || e.outcome === 'wonChallenge')) {
+        lastControlled = Math.max(lastControlled, e.tick)
+        break
+      }
+    }
+  }
   const settledReception = !!carrier &&
     state.clock.tick - lastControlled <= 8 &&
     state.clock.tick - lastControlled >= 0
