@@ -93,7 +93,8 @@ export function stageGoalKick(
 ): MatchState {
   const event = state.restart
   if (event?.kind !== 'goalKick' || !event.awardedTeamId) return state
-  const takingIndex = state.teams.findIndex(t => t.clubId === event.awardedTeamId)
+  const awardedTeamId = event.awardedTeamId
+  const takingIndex = state.teams.findIndex(t => t.clubId === awardedTeamId)
   if (takingIndex < 0 || !state.ai.enabledTeams[takingIndex]) return state
 
   const keeper = goalKickTaker(state, event)
@@ -109,7 +110,7 @@ export function stageGoalKick(
     yM: ballSpot.yM,
   }
   const [rcb, lcb] = ['RCB', 'LCB'].map(slot =>
-    state.players.find(p => p.clubId === event.awardedTeamId &&
+    state.players.find(p => p.clubId === awardedTeamId &&
       p.formationSlot === slot))
   if (!rcb || !lcb) throw new Error('No central defenders for goal-kick outlets')
   const receiverTargets = goalKickReceiverTargets(event, setup)
@@ -124,7 +125,7 @@ export function stageGoalKick(
   const players = state.players.map(p => {
     const teamIndex = state.teams.findIndex(t => t.clubId === p.clubId)
     if (teamIndex < 0 || !state.ai.enabledTeams[teamIndex]) return p
-    const point = p.clubId === event.awardedTeamId
+    const point = p.clubId === awardedTeamId
       ? (designated.get(p.playerId) ?? p.position)
       : clearOpponentTarget(p, event, setup.pitch)
     const unchanged = p.intention.kind === 'moveToPoint' &&
@@ -143,21 +144,21 @@ export function stageGoalKick(
   }
 
   const opponentClear = state.players.every(p =>
-    p.clubId === event.awardedTeamId ||
+    p.clubId === awardedTeamId ||
     !insideRestartPenaltyArea(p.position, event, setup.pitch))
   const keeperReady = distance(keeper.position, ballSpot) <= .85 &&
     Math.hypot(keeper.velocity.xMps, keeper.velocity.yMps) <= 1.7
   const nearbyReceivers = [rcb, lcb].map((p, i) => ({
     player: p, target: receiverTargets[i],
     ready: distance(p.position, receiverTargets[i]) < 2.4,
-    space: nearestOpponentM(state.players, event.awardedTeamId, p.position),
+    space: nearestOpponentM(state.players, awardedTeamId, p.position),
   }))
   const short = nearbyReceivers.filter(r => r.ready).sort((a, b) =>
     b.space - a.space ||
     a.player.playerId.localeCompare(b.player.playerId))[0]
   const pending = staged.pendingCommands.some(c => c.type === 'attemptGoalKick')
   const previousAttempt = [...staged.appliedCommands].reverse().find(c =>
-    c.type === 'attemptGoalKick' && c.teamId === event.awardedTeamId &&
+    c.type === 'attemptGoalKick' && c.teamId === awardedTeamId &&
     c.appliedTick > event.tick)
   const previousContact = previousAttempt && state.contactEvents.find(e =>
     e.commandId === previousAttempt.commandId)
@@ -172,11 +173,11 @@ export function stageGoalKick(
     // release when both centre-backs are marked; no assumed completion.
     const underPressure = short.space < 5.8
     const fallback = state.players.filter(p =>
-      p.clubId === event.awardedTeamId &&
+      p.clubId === awardedTeamId &&
       ['DM', 'RCM', 'LCM'].includes(p.formationSlot))
       .sort((a, b) =>
-        nearestOpponentM(state.players, event.awardedTeamId, b.position) -
-          nearestOpponentM(state.players, event.awardedTeamId, a.position) ||
+        nearestOpponentM(state.players, awardedTeamId, b.position) -
+          nearestOpponentM(state.players, awardedTeamId, a.position) ||
         a.playerId.localeCompare(b.playerId))[0]
     const useLong = underPressure && !!fallback &&
       (goalkeeping.kickingDistribution >= 54 ||
@@ -199,7 +200,7 @@ export function stageGoalKick(
       '-' + staged.nextCommandSequence
     const receipt = scheduleMatchCommand(staged, {
       commandId, type: 'attemptGoalKick',
-      teamId: event.awardedTeamId,
+      teamId: awardedTeamId,
       playerId: keeper.playerId,
       target, power, lift: long ? .42 : 0,
     }, setup.pitch)
@@ -212,7 +213,7 @@ export function stageGoalKick(
         ...receipt.state.ai,
         lastPassTick: state.clock.tick,
         passIntent: {
-          commandId, teamId: event.awardedTeamId,
+          commandId, teamId: awardedTeamId,
           passerId: keeper.playerId,
           receiverId: receiver.playerId,
           requestedTick: state.clock.tick,
