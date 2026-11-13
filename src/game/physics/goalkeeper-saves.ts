@@ -65,5 +65,5 @@ export function goalkeeperCatchStretchPenalty(
     (contactDistanceM - .82) /
       Math.max(.01, window.reachM - .82),
     0, 1)
-  return stretchFraction * 12 + Math.max(0, contactHeightM - 1.4) * 9
+  return stretchFraction * 22 + Math.max(0, contactHeightM - 1.4) * 9
 }
