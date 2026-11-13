@@ -46,7 +46,7 @@ function scenario(options: Options = {}) {
   }
   const goalkeeperPosition = {
     xM: goalX + direction * 5.5,
-    yM: 32,
+    yM: 33,
   }
   const setup: MatchSetup = {
     ...base,
