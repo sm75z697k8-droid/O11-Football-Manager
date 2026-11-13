@@ -1,3 +1,15 @@
+## ATT-S1 — Coordinated attacking movement for the whole 4-3-3
+
+The attack no longer relies on isolated support decisions alone. A dedicated **team-level, deterministic attacking coordinator** can reserve several complementary **physically reachable** off-ball targets while a real outfielder controls the ball in the attacking half: an inside winger, a late-arriving central midfielder, a linking striker, an opposite-side wide outlet, and a conservative/conditional full-back support option.
+
+Run suggestions are **not scripted passes, receptions, shots, goals, or animations**. Every candidate is evaluated against actual teammate and defender positions, individual player movement/technical/mental attributes, defender clearance, the projected passing lane, flank discipline, the current offside line, and walking/running distance. Nearby threats, unsuitable lanes and excessive distances veto runs. The support shape reserves non-colliding targets before filling other players using the existing open-space search. A physically established third-man combination or winger underlap retains precedence, and the intended pass receiver is never replaced. Centre-backs and the defensive midfielder continue their rest-defence positions; full-backs cannot charge forward in attack duty unless the holding midfielder provides cover. No player is instantly repositioned: the existing 20Hz locomotion, stamina, real ball contact and short-horizon possession decisions remain authoritative.
+
+The system applies symmetrically to both teams, with winger/midfielder candidates evaluated before the centre-forward rather than forcing attacks to terminate at the striker. It intentionally **does not guarantee a particular goal scorer or even a shot**, and it does not yet add tactical crossing/cutback decisions, specialized attacking role presets, or opponent-adaptive playbooks. All thresholds are estimated simulation values; true match-calibrated movement frequency and iPhone Safari performance are still to be tested.
+
+New independent unit and integration tests cover mirrored directions, winger and central-midfielder involvement, relative skill, separation, reach, offside-aware ceilings, no-phantom possessions, loss of possession, and deterministic checkpoint replay. The match state/checkpoint *shape* is unchanged; attacks can evolve differently when continuing an earlier save in a newer engine build.
+
+---
+
 ## S1.7.1 — Restart-aware physical goal validation
 
 The referee now checks more than crossing the goal line. Every proposed goal is matched to the **latest successful physical player touch** (from the existing commanded touch or swept contact event histories). A missed kick or a failed/held-off tackle does **not** count as an intervening touch; a real save, rebound from a player, interception or deflection does. The ball may bounce from the ground or goal frame without losing the origin of the last player contact.

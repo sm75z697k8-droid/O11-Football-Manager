@@ -5,13 +5,14 @@ import { boundedTarget, separationM, supportTarget } from './coordination'
 import { laneObstruction } from './possession'
 import { attackingOpportunityAt } from './goal-directed'
 import { planThirdManRun, planWideUnderlap } from './combination-runs'
+import { planCoordinatedAttack } from './attack-coordination'
 
 /**
  * Local space search, not scripted runs. Every support location is chosen
  * from actual opponent positions, passing corridors, and formation anchors.
  * Small fixed candidate set keeps 22-player iPhone workloads bounded.
  */
-export const SUPPORT_SPACE_VERSION = 'third-man-combination-support-v3'
+export const SUPPORT_SPACE_VERSION = 'team-reserved-multi-role-support-att-s1-v1'
 const MIN_OUTLET_DISTANCE_M = 5.5
 const MAX_OUTLET_DISTANCE_M = 34
 const MIN_SEPARATION_M = 5.2
@@ -84,7 +85,8 @@ function supportOpportunity(
   const maxFromAnchor = player.formationSlot === 'RCB' ||
     player.formationSlot === 'LCB' ? 19 :
     player.formationSlot === 'RB' ||
-    player.formationSlot === 'LB' ||
+    player.formationSlot === 'LB'
+      ? player.duty === 'defend' ? 28 : 56 :
     player.formationSlot === 'DM' ? 28 : 38
   if (fromAnchor > maxFromAnchor) return null
   const defenderGapM = nearestOpponent(target, opponents)
@@ -153,6 +155,43 @@ export function chooseDynamicSupport(
   // kicked pass. The existing receiver still pursues the physical ball.
   const combination = planThirdManRun(state, setup, teamId) ??
     planWideUnderlap(state, setup, teamId)
+  // Reserve the pre-existing physical third-man/underlap first. A new
+  // attacking run must never overwrite the intended receiver or steal
+  // the space a real kicked-pass combination is already using.
+  if(combination && !excludedIds.has(combination.playerId)) {
+    const runner=teammates.find(p=>p.playerId===combination.playerId)
+    const anchor=state.ai.formationPositions[combination.playerId]
+    if(runner&&anchor){
+      const scored=supportOpportunity(runner,combination.target,
+        supportTarget(runner,anchor,reference,
+          team.attackingDirection,setup),anchor,reference,
+        opponents,teammates,reserved,team.attackingDirection,
+        combination.utilityBonus)
+      if(scored){
+        selected.set(runner.playerId,scored)
+        reserved.push(scored.target)
+      }
+    }
+  }
+  // Team-level view: a winger, arriving CM, linking striker and (only
+  // where safe) a fullback offer complementary targets. The existing
+  // physics, on-ball decision planner and other support search still own
+  // execution and all non-reserved movement.
+  const coordinated=planCoordinatedAttack(state,setup,teamId,new Set([
+    ...excludedIds,...selected.keys(),
+  ]))
+  for(const run of coordinated.values()){
+    const runner=teammates.find(p=>p.playerId===run.playerId)
+    const anchor=state.ai.formationPositions[run.playerId]
+    if(!runner||!anchor)continue
+    const scored=supportOpportunity(runner,run.target,
+      supportTarget(runner,anchor,reference,team.attackingDirection,setup),
+      anchor,reference,opponents,teammates,reserved,
+      team.attackingDirection,run.utilityBonus)
+    if(!scored)continue
+    selected.set(run.playerId,scored)
+    reserved.push(scored.target)
+  }
   const attackDistance = team.attackingDirection === 1
     ? setup.pitch.lengthM - reference.xM : reference.xM
   // Only an actually controlled team attack can trigger an aggressive run.
@@ -190,6 +229,7 @@ export function chooseDynamicSupport(
     [-5, -5], [-5, 5], [5, -5], [5, 5],
   ]
   for (const player of eligible) {
+    if(selected.has(player.playerId))continue
     const anchor = state.ai.formationPositions[player.playerId]
     if (!anchor) throw new Error('Missing support formation anchor')
     const base = supportTarget(
