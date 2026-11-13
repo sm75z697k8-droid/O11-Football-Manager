@@ -51,7 +51,7 @@ function physicalEvents(state: MatchState): FeedItem[] {
     .map((event, index) => ({
       key: 'manual-' + (index + manualOffset),
       tick: event.tick,
-      kind: event.kind === 'kick' ? 'kick' as const : 'contact' as const,
+      kind: event.kind === 'kick' || event.kind === 'goalKick' ? 'kick' as const : 'contact' as const,
       title: event.outcome.toUpperCase(),
       detail: event.playerId.replaceAll('_', ' ') + ' · ' + event.kind,
     }))
@@ -170,10 +170,10 @@ export default function App() {
         setHud(active.state)
         hudTime = now
       }
-      // Touchline exits continue through a physically staged throw-in.
-      // Goal-line exits and goals still stop until their own laws exist.
+      // Only corners and post-goal kickoffs stop the exhibition.
       const restart = active.state.restart
       const blocked = active.state.goalEvents.length > 0 ||
+        (restart && !['throwIn','goalKick'].includes(restart.kind)) ||
         (active.state.ball.outsidePitch && restart?.kind !== 'throwIn')
       if (blocked) {
         setHud(active.state)
@@ -261,7 +261,8 @@ export default function App() {
 
   const stepOne = () => {
     if (playing || failure ||
-        (hud.ball.outsidePitch && hud.restart?.kind !== 'throwIn')) return
+        (hud.ball.outsidePitch && hud.restart?.kind !== 'throwIn') ||
+        (hud.restart && !['throwIn', 'goalKick'].includes(hud.restart.kind))) return
     try {
       const next = sessionRef.current?.advance(1)
       if (next) setHud(next)
@@ -301,17 +302,19 @@ export default function App() {
   const goalScorer = hud.players.find(p => p.playerId === goal?.lastTouchPlayerId)
   const out = hud.ball.outsidePitch
   const throwIn = hud.restart?.kind === 'throwIn'
-  const blocked = out && !throwIn
+  const goalKick = hud.restart?.kind === 'goalKick'
+  const blocked = (out && !throwIn) ||
+    (hud.restart !== null && !throwIn && !goalKick)
   const awarded = session.setup.clubs.find(c =>
     c.id === hud.restart?.awardedTeamId)
   const activeTeam = hud.ai.enabledTeams.filter(Boolean).length
   const successContacts = hud.contactEvents.filter(e =>
-    ['controlled', 'miscontrolled', 'kicked', 'thrownIn'].includes(e.outcome)).length
+    ['controlled', 'miscontrolled', 'kicked', 'thrownIn', 'goalKicked'].includes(e.outcome)).length
   const statuses = failure ? 'ENGINE ERROR' :
     goal ? 'GOAL · ' + (scoringClub?.shortName ?? 'MATCH') :
     throwIn ? 'THROW-IN · ' + (awarded?.shortName ?? 'RESTART') :
+    goalKick ? 'GOAL KICK · ' + (awarded?.shortName ?? 'RESTART') :
     out ? (hud.restart?.kind === 'corner' ? 'CORNER · ' :
-      hud.restart?.kind === 'goalKick' ? 'GOAL KICK · ' :
         'OUT OF PLAY · ') + (awarded?.shortName ?? 'MATCH') :
     hud.kickoff?.phase === 'awaitingKick' ? 'KICK-OFF · HARBOR' :
     playing ? 'LIVE SIMULATION' : 'PAUSED'
@@ -341,7 +344,7 @@ export default function App() {
           </div>
           <div className="match-centre">
             <strong>{hud.teams[0].score} <span>:</span> {hud.teams[1].score}</strong>
-            <small>EXHIBITION · TOUCHLINE RESTARTS</small>
+            <small>EXHIBITION · LIVE RESTARTS</small>
           </div>
           <div className="team-side away-side">
             <span className="team-names"><strong>VAL</strong><small>VALE ROVERS</small></span>
@@ -470,7 +473,7 @@ export default function App() {
                 {diagnosticCopied ? '✓ Debug report copied' : 'Copy match debug report'}
               </button>
               <div className="drawer-stat"><span>BALL CONTROLLER</span><strong>{owner ? ownerClub?.shortName + ' #' + owner.shirtNumber : 'NONE'}</strong></div>
-              <p className="drawer-legal">Goals are recorded only when the physical ball crosses the goalmouth. This is an exhibition with live throw-ins. Corners, goal kicks, goal restarts and full match periods are not implemented yet.</p>
+              <p className="drawer-legal">Goals are recorded only when the physical ball crosses the goalmouth. This exhibition has real throw-ins and goal kicks. Corners, kickoffs after goals and full match periods are not implemented yet.</p>
             </div>
           ) : panel === 'keepers' ? (
             <div className="drawer-content keeper-lab">
@@ -592,8 +595,9 @@ export default function App() {
         </div>
         <div className="transport-tail">
           <span>{goal ? 'PHYSICAL GOAL' : throwIn ? 'THROW-IN PREPARATION' :
+            goalKick ? 'GOAL KICK PREPARATION' :
             out ? 'OUT OF PLAY' : '20 HZ PHYSICS'}</span>
-          <small>PHYSICAL THROW-INS / OTHER RESTARTS PENDING</small>
+          <small>LIVE THROW-INS & GOAL KICKS / CORNERS PENDING</small>
         </div>
       </footer>
 

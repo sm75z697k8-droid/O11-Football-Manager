@@ -4,6 +4,7 @@ import type { BallMatchState, MatchState, OutOfPlayEvent, PlayerMatchState } fro
 import { BALL_RADIUS_M } from '../physics/ball'
 import { advancePlayerLocomotion } from '../physics/locomotion'
 import { scheduleMatchCommand } from './commands'
+import { goalKickSpot } from './goal-kicks'
 
 /**
  * S1.1: genuine touchline awards and deliberate legal throw-in releases.
@@ -146,7 +147,13 @@ export function recordOutOfPlay(
     return { ...after, outOfPlayEvents: [...after.outOfPlayEvents, event] }
   }
   const ball: BallMatchState = {
-    ...after.ball, controllerId: null, controlOffset: null,
+    ...after.ball,
+    // A dead goal kick is placed inside the GOAL AREA, not left outside
+    // or automatically handed to the keeper. Restarts block ordinary AI.
+    position: event.kind === 'goalKick'
+      ? goalKickSpot(event, setup.pitch) : after.ball.position,
+    outsidePitch: event.kind === 'goalKick' ? false : after.ball.outsidePitch,
+    controllerId: null, controlOffset: null,
     heightM: BALL_RADIUS_M,
     velocity: { xMps: 0, yMps: 0, zMps: 0 },
   }
@@ -157,12 +164,12 @@ export function recordOutOfPlay(
   }
 }
 
-/** Law 15: the taker cannot play the ball a second time until someone
- * else has touched it. Reconstruct the LATEST successful touch only from
+/** Laws 15 & 16: the restart kicker cannot play the ball a second time
+ * until someone else has touched it. Reconstruct the LATEST touch from
  * real manual/automatic histories, so a later ordinary touch by the same
  * footballer is not incorrectly treated as the original throw.
  */
-export function forbiddenThrowInSecondTouch(
+export function forbiddenRestartSecondTouch(
   state: MatchState, playerId: string,
 ): boolean {
   if (state.ball.lastTouchPlayerId !== playerId ||
@@ -171,11 +178,11 @@ export function forbiddenThrowInSecondTouch(
   let thrower = false
   for (let i = state.contactEvents.length - 1; i >= 0; i--) {
     const event = state.contactEvents[i]
-    if (!['controlled', 'miscontrolled', 'kicked', 'thrown', 'thrownIn']
+    if (!['controlled', 'miscontrolled', 'kicked', 'thrown', 'thrownIn', 'goalKicked']
       .includes(event.outcome)) continue
     lastTick = event.tick
-    thrower = event.outcome === 'thrownIn' &&
-      event.playerId === playerId
+    thrower = (event.outcome === 'thrownIn' ||
+      event.outcome === 'goalKicked') && event.playerId === playerId
     break
   }
   if (!thrower) return false
@@ -189,6 +196,9 @@ export function forbiddenThrowInSecondTouch(
   }
   return true
 }
+
+/** Previous name retained to avoid breaking existing Law 15 callers. */
+export const forbiddenThrowInSecondTouch = forbiddenRestartSecondTouch
 
 export function throwInTakerTarget(event: OutOfPlayEvent, setup: MatchSetup): Point2 {
   return {
