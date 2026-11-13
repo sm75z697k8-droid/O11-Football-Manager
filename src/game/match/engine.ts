@@ -4,6 +4,7 @@ import { runAutonomousDecisions } from '../ai/runner'
 import { maintainPassReception } from '../ai/pass-coordination'
 import { GOALKEEPER_HAND_HEIGHT_M, GOALKEEPER_HOLD_MIN_TICKS } from '../physics/goalkeeper-handling'
 import { adjudicatePhysicalGoal } from './goals'
+import { disallowedDirectGoal, latestPhysicalGoalTouch } from './goal-eligibility'
 import { applyOffsideLaw, advanceOffsideRestart } from './offside'
 import { adjudicatePhysicalFoul, advanceFoulRestart, foulKickPrefix } from './fouls'
 import { advanceThrowInStoppage, recordOutOfPlay } from './restarts'
@@ -299,6 +300,14 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         ev.crossingHeightM < BALL_RADIUS_M - 1e-7 ||
         ev.crossingHeightM > setup.pitch.goalHeightM - BALL_RADIUS_M + 1e-7) {
       throw new Error('Goal event has invalid chronological physical-goal geometry')
+    }
+    // A saved score must be supported by the latest genuine player touch
+    // at the historical crossing. Prevent a forged checkpoint from crediting
+    // a direct throw, GK hand distribution, indirect kick or illegal own goal.
+    const physical = latestPhysicalGoalTouch(state, ev.tick)
+    if (!physical || physical.playerId !== ev.lastTouchPlayerId ||
+        disallowedDirectGoal(state, ev.scoringTeamId, ev.tick)) {
+      throw new Error('Goal checkpoint lacks a legal last physical touch')
     }
     previousGoalTick = ev.tick
   }
