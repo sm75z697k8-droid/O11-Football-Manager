@@ -147,14 +147,14 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   // boundary and chronology without trusting client-supplied restart data.
   let precedingExit = 0
   for (const exit of state.outOfPlayEvents) {
-    if (!object(exit) ||
+    if (!exit || typeof exit !== 'object' ||
         Object.keys(exit).sort().join(',') !==
           'awardedTeamId,kind,lastTouchPlayerId,side,spot,takerId,tick' ||
         !Number.isSafeInteger(exit.tick) || exit.tick <= precedingExit ||
         exit.tick > state.clock.tick ||
         !['throwIn', 'corner', 'goalKick', 'unassigned'].includes(exit.kind as string) ||
         !['top', 'bottom', 'left', 'right'].includes(exit.side as string) ||
-        !object(exit.spot) || !insidePitch(exit.spot, setup.pitch) ||
+        !exit.spot || !insidePitch(exit.spot, setup.pitch) ||
         !Number.isFinite(exit.spot.xM) ||
         !Number.isFinite(exit.spot.yM)) {
       throw new Error('Invalid out-of-play event history')
