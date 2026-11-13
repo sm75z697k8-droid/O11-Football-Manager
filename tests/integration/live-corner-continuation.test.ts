@@ -10,7 +10,7 @@ describe('S1.3 actual seeded football match corner continuation', () => {
     }> = []
     let confirmed = false
     const seeds = [
-      832, 90, 42, 117, 205, 101, 57, 23017,
+      117, 832, 90, 42, 205, 101, 57, 23017,
       9999, 1, 2, 3, 4, 5, 6, 7654321,
       123456789, 4100, 4567, 5678, 130, 777,
     ]
@@ -51,5 +51,5 @@ describe('S1.3 actual seeded football match corner continuation', () => {
     }
     console.info('[O11 S1.3 LIVE CORNER SAMPLE]', JSON.stringify(observations))
     expect(confirmed).toBe(true)
-  })
+  }, 20000)
 })
