@@ -73,9 +73,14 @@ function stage(side: 0 | 1, options: SceneOptions = {}) {
     kickoff:null,
     clock:{...original.clock,tick:120},
     players,
-    teams: original.teams.map((t,i) =>
-      i===side?{...t,pressingIntensity:options.type??'standard'}:t)
-      as MatchState['teams'],
+    teams: [
+      {...original.teams[0],
+        pressingIntensity: side===0 ?
+          options.type ?? 'standard' : original.teams[0].pressingIntensity},
+      {...original.teams[1],
+        pressingIntensity: side===1 ?
+          options.type ?? 'standard' : original.teams[1].pressingIntensity},
+    ],
     ball:{...original.ball,position:ballPoint,
       heightM:.11,controllerId: options.looseBall ? null : carrier.playerId,
       lastTouchPlayerId:carrier.playerId,
