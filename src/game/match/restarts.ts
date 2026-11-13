@@ -224,7 +224,7 @@ export function stageThrowIn(
   const receiverReady = receivers.some((p, index) =>
     Math.hypot(p.position.xM - targets[index].xM,
       p.position.yM - targets[index].yM) < 2.0)
-  const pending = staged.pendingCommands.some(c =>
+  const pending = [...staged.pendingCommands, ...staged.appliedCommands].some(c =>
     c.type === 'attemptThrowIn' && c.commandId === 'ai-restart-throwin-' + event.tick)
   const aiIndex = staged.teams.findIndex(t => t.clubId === event.awardedTeamId)
   if (aiIndex >= 0 && staged.ai.enabledTeams[aiIndex] &&
