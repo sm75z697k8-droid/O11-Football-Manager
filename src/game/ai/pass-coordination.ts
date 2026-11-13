@@ -34,7 +34,8 @@ export function shouldYieldPassReception(
       !state.contactEvents.some(e =>
         e.commandId === intent.commandId &&
     (e.outcome === 'kicked' || e.outcome === 'thrown' ||
-      e.outcome === 'thrownIn' || e.outcome === 'goalKicked'))) return false
+      e.outcome === 'thrownIn' || e.outcome === 'goalKicked' ||
+      e.outcome === 'cornerKicked'))) return false
 
   const original = state.players.find(p => p.playerId === intent.receiverId)
   if (!original) return false
@@ -71,7 +72,8 @@ export function activePassIntent(state: MatchState): CoordinatedPassIntent | nul
       state.ball.outsidePitch) return null
   const contact = state.contactEvents.find(e => e.commandId === intent.commandId)
   if (contact && contact.outcome !== 'kicked' && contact.outcome !== 'thrown' && contact.outcome !== 'thrownIn' &&
-      contact.outcome !== 'goalKicked') return null
+      contact.outcome !== 'goalKicked' &&
+      contact.outcome !== 'cornerKicked') return null
   // A different player touching the ball, or a new controller, ends this
   // particular pass. Subsequent decisions can generate a different one.
   if (state.ball.controllerId !== null &&
@@ -94,7 +96,8 @@ export function intendedReceiverTarget(
   const hasKicked = state.contactEvents.some(e =>
     e.commandId === intent.commandId &&
     (e.outcome === 'kicked' || e.outcome === 'thrown' ||
-      e.outcome === 'thrownIn' || e.outcome === 'goalKicked'))
+      e.outcome === 'thrownIn' || e.outcome === 'goalKicked' ||
+      e.outcome === 'cornerKicked'))
   if (!hasKicked || state.ball.controllerId !== null) {
     return boundedTarget(intent.target, setup.pitch)
   }
