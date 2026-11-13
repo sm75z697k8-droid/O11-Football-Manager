@@ -67,8 +67,7 @@ function clearOpponentTarget(
   pitch: PitchDefinition,
 ): Point2 {
   if (!insideRestartPenaltyArea(player.position, event, pitch)) {
-    return player.intention.kind === 'moveToPoint'
-      ? player.position : player.position
+    return player.position
   }
   const dir = event.side === 'left' ? 1 : -1
   const goalX = event.side === 'left' ? 0 : pitch.lengthM
