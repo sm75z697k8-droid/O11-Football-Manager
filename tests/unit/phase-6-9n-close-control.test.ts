@@ -139,7 +139,7 @@ describe('Phase 6.9N — bounded, direction-aware physical close control',()=>{
     let ball:BallMatchState={...a.ball,
       position:{xM:player.position.xM+.75,yM:34},
       controlOffset:{xM:.75,yM:0},
-      velocity:{xMps:6,yMps:0}}
+      velocity:{xMps:6,yMps:0,zMps:0}}
     for(let tick=0;tick<25;tick++){
       ball=advanceControlledBall(ball,player,a.setup.pitch,a.definition)
       expect(ball.outsidePitch).toBe(false)
