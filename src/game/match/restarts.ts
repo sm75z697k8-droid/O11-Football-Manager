@@ -220,7 +220,7 @@ export function stageThrowIn(
       },
     }
   })
-  let staged = {
+  let staged: MatchState = {
     ...state, players,
     ai: { ...state.ai, decisionSnapshot: [] },
   }
