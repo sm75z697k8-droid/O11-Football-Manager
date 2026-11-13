@@ -11,6 +11,10 @@ import { goalKickSpot, insideRestartPenaltyArea } from '../match/goal-kicks'
 import {
   cornerBallSpot, cornerOpponentsClear, selectCornerTaker,
 } from '../match/corners'
+import {
+  postGoalKickoffPlayersLegal, postGoalKickoffBallStationary,
+  postGoalKickoffCommandPrefix,
+} from '../match/post-goal-kickoff'
 
 /**
  * Contact tests are intentionally explicit in Phase 3: no football AI is
@@ -234,6 +238,22 @@ export function resolveContactAttempts(
     if (ball.controllerId && ball.controllerId !== command.playerId) {
       events.push(event(command, kind, 'occupied', 0))
       continue
+    }
+    if (state.postGoalKickoff) {
+      const restart = state.postGoalKickoff
+      const authorized = command.type === 'attemptKick' &&
+        restart.phase === 'staging' &&
+        command.commandId.startsWith(
+          postGoalKickoffCommandPrefix(restart.goalTick)) &&
+        command.playerId === restart.kickerId &&
+        command.teamId === restart.teamId &&
+        state.clock.tick - restart.goalTick >= 22 &&
+        postGoalKickoffBallStationary({ ...state, ball }, setup) &&
+        postGoalKickoffPlayersLegal(state, setup, restart)
+      if (!authorized) {
+        events.push(event(command, kind, 'notReady', 0))
+        continue
+      }
     }
     if (command.type === 'attemptThrowIn') {
       const restart = state.restart
