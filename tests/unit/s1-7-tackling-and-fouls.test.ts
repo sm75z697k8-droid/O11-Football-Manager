@@ -10,6 +10,7 @@ import {
   foulKickPrefix, insideDefendingPenaltyArea,
 } from '../../src/game/match/fouls'
 import type { MatchState } from '../../src/game/match/state'
+import { shouldCommitTackle } from '../../src/game/ai/defensive-shape'
 
 function collision(direction:1|-1=1, penalty=false){
   const setup=makeFictionalMatchSetup()
@@ -110,6 +111,25 @@ describe('S1.7 physical tackling, fouls and real referee restarts',()=>{
     expect(assessBodyChallenge(s.before,crowd,s.setup)).toBeNull()
     expect(adjudicatePhysicalFoul(s.before,crowd,s.setup).foulEvents)
       .toHaveLength(0)
+  })
+  it('uses defender quality and body angle to decide tackle versus jockey',()=>{
+    const s=collision()
+    const tackler=s.before.players.find(p=>p.playerId===s.defender.playerId)!
+    const carrier=s.before.players.find(p=>p.playerId===s.carrier.playerId)!
+    const modified=(quality:number)=>({
+      ...s.setup,
+      players:s.setup.players.map(p=>p.id===tackler.playerId
+        ? {...p,abilities:{...p.abilities,
+          technical:{...p.abilities.technical,tackling:quality},
+          mental:{...p.abilities.mental,decisions:quality,
+            anticipation:quality,composure:quality,
+            aggression:quality},
+        }} :p),
+    })
+    expect(shouldCommitTackle(modified(20),tackler,carrier,
+      s.defence)).toBe(false)
+    expect(shouldCommitTackle(modified(95),tackler,carrier,
+      s.defence)).toBe(true)
   })
   it('uses the defending penalty area and an actual 11m penalty mark',()=>{
     for(const dir of [1,-1] as const){
