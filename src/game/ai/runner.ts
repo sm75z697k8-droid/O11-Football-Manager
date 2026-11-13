@@ -112,7 +112,12 @@ export function runAutonomousDecisions(
     (c.commandId.startsWith('ai-pass-') ||
       c.commandId.startsWith('ai-shot-')))
   if (attempt && !alreadyPending &&
-      result.nextCommandSequence <= MAX_COMMANDS_PER_MATCH) {
+      result.nextCommandSequence > MAX_COMMANDS_PER_MATCH) {
+    // Never silently continue a match in which players can no longer
+    // issue real kicks. The viewer must surface this to the user.
+    throw new RangeError('Football action history capacity exhausted')
+  }
+  if (attempt && !alreadyPending) {
     // The physical contact and goalkeeper systems recognize ai-shot-;
     // 'shoot' is the decision enum, not the command namespace.
     const commandId = (attempt.kind === 'shoot' ? 'ai-shot-' :
