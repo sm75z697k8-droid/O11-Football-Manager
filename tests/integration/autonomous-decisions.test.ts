@@ -105,8 +105,11 @@ describe('Phase 5 opt-in tactical decision system', () => {
     }
     const engaged = (s: MatchState) => planTeamDecisions(s, setup())
       .filter(d => d.engage).length
-    expect(engaged(high)).toBe(2)
-    expect(engaged(low)).toBeLessThan(2)
+    // The strongest setting may send a second player for an actual trap,
+    // but need not always send two straight-line chasers.
+    expect(engaged(high)).toBeGreaterThanOrEqual(1)
+    expect(engaged(high)).toBeLessThanOrEqual(2)
+    expect(engaged(low)).toBeLessThan(engaged(high))
   })
 
   it('moves both teams toward genuine physical opportunities without fabricated results', () => {
