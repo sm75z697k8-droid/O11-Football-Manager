@@ -1,7 +1,7 @@
 /** O11 project metadata. Real-time landscape Canvas now visualizes the authoritative headless engine; no official match rules or results yet. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = 'S1.7.1' as const
-export const ENGINE_STATUS = 'restart-aware-goal-adjudication' as const
+export const PROJECT_PHASE = 'ATT-S1' as const
+export const ENGINE_STATUS = 'coordinated-multi-role-attacking-runs' as const
 
 export const FOUNDATION_STAGES = [
   { id: '0A', title: 'Project foundation', summary: 'App, TypeScript, tests and deployment' },
@@ -49,4 +49,5 @@ export const FOUNDATION_STAGES = [
   { id: 'S1.6', title: 'Law 11 offside', summary: 'Physical-touch snapshots, active-involvement calls, indirect free kicks, and offside-aware pass decisions for both teams' },
   { id: 'S1.7', title: 'Tackling, contact and fouls', summary: 'Jockey-or-tackle AI, physical first-body-entry judgement, clean tackle protection and lawful direct free kick or penalty restarts' },
   { id: 'S1.7.1', title: 'Restart-aware goal validation', summary: 'Real last-touch tracing, direct-restart goal restrictions and lawful goal-line restarts without fabricated scores' },
+  { id: 'ATT-S1', title: 'Coordinated attacking movement', summary: 'Team-level complementary winger, midfield, striker and conditional full-back movement with physical reach, offside advice and rest defence' },
 ] as const
