@@ -602,8 +602,16 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     const active = state.postGoalKickoff?.goalTick === goal.tick
     const awaiting = active &&
       state.postGoalKickoff?.phase === 'awaitingMovement'
+    // The referee may blow at the end of a half immediately after a goal.
+    // An unfinished restart is then CANCELLED by the period boundary;
+    // no physical kickoff can be fabricated just to close the audit.
+    const cancelledAtBreak = !active && goalKicks.length === 0 &&
+      state.periodTiming.halfTimeTick !== null &&
+      goal.tick <= state.periodTiming.halfTimeTick &&
+      goal.tick >= state.periodTiming.halfTimeTick - TICKS_PER_MINUTE &&
+      (state.period === 'secondHalf' || state.period === 'fullTime')
     if (goalKicks.length > 1 ||
-        (!active && goalKicks.length !== 1) ||
+        (!active && !cancelledAtBreak && goalKicks.length !== 1) ||
         (active && goalKicks.length !== (awaiting ? 1 : 0))) {
       throw new Error('Physical goal lacks exactly one genuine completed kickoff')
     }
