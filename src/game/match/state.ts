@@ -5,8 +5,8 @@ import type { ClubId, PlayerId } from '../model/player'
 import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
-export const MATCH_STATE_SCHEMA_VERSION = 9 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-gk-aerial-claims-p69t-v1' as const
+export const MATCH_STATE_SCHEMA_VERSION = 10 as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-touchline-throwins-s11-v1' as const
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
   'ball/contact', 'match/referee', 'match/injuries',
@@ -47,11 +47,11 @@ export interface BallMatchState {
   readonly controlOffset: Point2 | null
   readonly lastTouchPlayerId: PlayerId | null
 }
-export type ContactKind = 'control' | 'kick' | 'throw'
+export type ContactKind = 'control' | 'kick' | 'throw' | 'throwIn'
 export type ContactOutcome =
   | 'controlled' | 'miscontrolled' | 'kicked'
   | 'outOfReach' | 'occupied' | 'alreadyControlled' | 'invalidDirection'
-  | 'thrown' | 'notHolding' | 'tooSoon'
+  | 'thrown' | 'thrownIn' | 'notReady' | 'notHolding' | 'tooSoon'
 export interface ContactEvent {
   readonly commandId: string
   readonly playerId: PlayerId
@@ -105,6 +105,17 @@ export interface GoalEvent {
   readonly crossingY: number
   readonly crossingHeightM: number
 }
+/** Each real crossing is logged exactly once; stage a legal restart only
+ * after the WHOLE ball has left the field of play. */
+export interface OutOfPlayEvent {
+  readonly tick: number
+  readonly kind: 'throwIn' | 'goalKick' | 'corner' | 'unassigned'
+  readonly side: 'top' | 'bottom' | 'left' | 'right'
+  readonly spot: Point2
+  readonly lastTouchPlayerId: PlayerId | null
+  readonly awardedTeamId: ClubId | null
+  readonly takerId: PlayerId | null
+}
 export interface AIState {
   readonly passIntent: CoordinatedPassIntent | null
   readonly enabledTeams: readonly [boolean, boolean]
@@ -125,6 +136,8 @@ export interface MatchState {
   readonly period: 'notStarted'
   readonly kickoff: KickoffState | null
   readonly goalEvents: readonly GoalEvent[]
+  readonly outOfPlayEvents: readonly OutOfPlayEvent[]
+  readonly restart: OutOfPlayEvent | null
   readonly teams: readonly [TeamMatchState, TeamMatchState]
   readonly players: readonly PlayerMatchState[]
   readonly ball: BallMatchState
