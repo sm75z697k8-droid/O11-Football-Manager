@@ -24,8 +24,13 @@ describe('Real seeded matches — close-control is authoritative, not cosmetic',
           (e.outcome==='kicked'||e.outcome==='thrown'))
         const actualContest=after.automaticContactEvents.some(e=>
           e.tick===after.clock.tick&&e.outcome==='wonChallenge')
+        // A genuine Law 12 whistle also puts a previously held ball dead.
+        // Keep detecting unexplained loss, but do not mistake a recorded
+        // referee award for a broken foot-control simulation.
+        const refereeWhistle=after.foulRestart?.tick===after.clock.tick ||
+          after.offsideRestart?.tick===after.clock.tick
         if(after.ball.controllerId===null &&
-          !actualRelease&&!actualContest)noContactLosses++
+          !actualRelease&&!actualContest&&!refereeWhistle)noContactLosses++
         if(after.ball.controllerId!==oldId||!prior.ball.controlOffset||
           !after.ball.controlOffset)continue
         checkedControlledTicks++
