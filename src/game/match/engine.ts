@@ -990,7 +990,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         }
       }
       const centreKicks = state.contactEvents.filter(e =>
-        e.commandId.startsWith(periodKickoffPrefix(timing.halfTimeTick)) &&
+        e.commandId.startsWith(periodKickoffPrefix(timing.halfTimeTick!)) &&
         e.outcome === 'kicked')
       if (centreKicks.length !== (restart?.phase === 'staging' ? 0 : 1) ||
           (timing.secondHalfStartTick !== null &&
