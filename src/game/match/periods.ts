@@ -328,8 +328,22 @@ export function formatMatchEventTime(
 
 /** Game-clock display, independent of the world/physics tick count. */
 export function formatMatchTime(state: MatchState): string {
-  if (state.period === 'notStarted') return '00:00'
-  if (state.period === 'halfTime') return 'HT · 45:00'
+  if (state.period === 'notStarted') {
+    // Physics-only legacy fixtures have no referee kickoff; keep their
+    // historical diagnostic timer rather than misleadingly showing zero.
+    if (!state.kickoff) {
+      const seconds = Math.floor(state.clock.tick *
+        FIXED_STEP_MILLISECONDS / 1000)
+      return String(Math.floor(seconds / 60)).padStart(2,'0') +
+        ':' + String(seconds % 60).padStart(2,'0')
+    }
+    return '00:00'
+  }
+  if (state.period === 'halfTime') {
+    const allowance = state.periodTiming.firstHalfAddedTicks ?? 0
+    return allowance > 0 ? 'HT · 45+' +
+      String(allowance / TICKS_PER_MINUTE) : 'HT · 45:00'
+  }
   if (state.period === 'fullTime') {
     const started = state.periodTiming.secondHalfStartTick
     const elapsed = started === null ? HALF_TICKS :
