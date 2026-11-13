@@ -5,13 +5,14 @@ import type {
   MatchState, PlayerMatchState, TeamMatchState,
 } from '../match/state'
 import { boundedTarget, predictBallAt, separationM } from './coordination'
+import { evaluatePhysicalShotWindows } from './shot-window'
 
 /**
  * Phase 6.7 — objective-driven attacking options.
  * These are deterministic EXPECTED-OPPORTUNITY estimates, never generated
  * goals or xG claims. The actual kicked ball and goalkeeper decide outcomes.
  */
-export const GOAL_DIRECTED_AI_VERSION = 'shooting-and-chance-creation-v1'
+export const GOAL_DIRECTED_AI_VERSION = 'physics-rehearsed-shot-intent-p69m-v1'
 const clamp = (v: number, low: number, high: number) =>
   Math.min(high, Math.max(low, v))
 
@@ -24,6 +25,10 @@ export interface ShootingOpportunity {
   readonly lift: number
   readonly utility: number
   readonly chanceQuality: number
+  /** Sampled chance to HIT the goal frame, not a probability of scoring. */
+  readonly onFrameShare: number
+  /** Physical geometry estimate outside GK's immediate reach. */
+  readonly keeperGap: number
 }
 
 /** Defender occlusion of the actual shooting segment. This does not
@@ -93,33 +98,45 @@ export function evaluateShootingOpportunity(
   const lateral = Math.abs(shooter.position.yM - setup.pitch.widthM / 2)
   if (distanceToLine < 1 || distanceToLine > 26 ||
       lateral > Math.min(17, distanceToLine * .5 + 4)) return null
-  const keeper = opponents.find(p => p.formationSlot === 'GK')
-  const keeperSide = keeper &&
-    keeper.position.yM > setup.pitch.widthM / 2 ? -1 : 1
-  const intendedY = setup.pitch.widthM / 2 + keeperSide *
-    Math.min(2.4, setup.pitch.goalWidthM / 2 - .6)
-  const target = {
-    xM: goalX(team.attackingDirection, length),
-    yM: intendedY,
-  }
-  const obstruction = shootingCorridorObstruction(shooter.position, target, opponents)
+  const power = clamp(.74 + distanceToLine * .009, .76, .98)
+  const lift = distanceToLine < 15 ? .09 : .12
+  // A shot to the far post that would mostly miss under actual angular
+  // error is not automatically better than an on-frame central shot.
+  // Check three potential targets against real radial ball physics and
+  // skill-dependent seeded-error ENVELOPE, not a goal-success RNG.
+  const windows = evaluatePhysicalShotWindows(
+    shooter, definition, opponents, team, setup, power, lift)
   const a = definition.abilities
-  const technique = a.technical.technique
   const quality = (
     .45 * a.technical.finishing +
     .20 * a.technical.longShots +
-    .18 * technique +
+    .18 * a.technical.technique +
     .17 * a.mental.composure
   ) / 100
   const range = clamp(1 - Math.max(0, distanceToLine - 7) / 29, .15, 1)
   const angle = clamp(1 - lateral / (distanceToLine * .55 + 4), .1, 1)
-  const chanceQuality = quality * range * angle *
-    clamp(1 - obstruction * .12, .1, 1)
-  const utility = 43 + chanceQuality * 34 -
-    distanceToLine * .40 - lateral * .27 - obstruction * 3
-  const power = clamp(.74 + distanceToLine * .009, .76, .98)
-  const lift = distanceToLine < 15 ? .09 : .12
-  return { target, power, lift, utility, chanceQuality }
+  const options = windows.map(window => {
+    const obstruction = shootingCorridorObstruction(
+      shooter.position, window.target, opponents)
+    const chanceQuality = quality * range * angle *
+      clamp(1 - obstruction * .12, .1, 1) *
+      (.7 + .3 * window.onFrameShare)
+    const utility = 43 + chanceQuality * 34 -
+      distanceToLine * .40 - lateral * .27 - obstruction * 3 +
+      window.onFrameShare * 4 + window.keeperGap * 5
+    return {
+      target: window.target, power, lift, chanceQuality,
+      onFrameShare: window.onFrameShare,
+      keeperGap: window.keeperGap, utility,
+    }
+  })
+  // The actual keeper and players still move and challenge in the real
+  // match. Rehearsal cannot mint a goal or an on-target match statistic.
+  return options.sort((a,b) =>
+    b.utility - a.utility ||
+    Math.abs(a.target.yM - setup.pitch.widthM / 2) -
+      Math.abs(b.target.yM - setup.pitch.widthM / 2) ||
+    a.target.yM - b.target.yM)[0] ?? null
 }
 
 /** Existing match commands identify a real shot; a normal pass or diagnostic
