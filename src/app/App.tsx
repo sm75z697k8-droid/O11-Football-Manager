@@ -306,7 +306,7 @@ export default function App() {
     c.id === hud.restart?.awardedTeamId)
   const activeTeam = hud.ai.enabledTeams.filter(Boolean).length
   const successContacts = hud.contactEvents.filter(e =>
-    ['controlled', 'miscontrolled', 'kicked'].includes(e.outcome)).length
+    ['controlled', 'miscontrolled', 'kicked', 'thrownIn'].includes(e.outcome)).length
   const statuses = failure ? 'ENGINE ERROR' :
     goal ? 'GOAL · ' + (scoringClub?.shortName ?? 'MATCH') :
     throwIn ? 'THROW-IN · ' + (awarded?.shortName ?? 'RESTART') :
