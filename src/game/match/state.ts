@@ -51,7 +51,7 @@ export type ContactKind = 'control' | 'kick' | 'throw' | 'throwIn'
 export type ContactOutcome =
   | 'controlled' | 'miscontrolled' | 'kicked'
   | 'outOfReach' | 'occupied' | 'alreadyControlled' | 'invalidDirection'
-  | 'thrown' | 'thrownIn' | 'notReady' | 'notHolding' | 'tooSoon'
+  | 'thrown' | 'thrownIn' | 'notReady' | 'secondTouch' | 'notHolding' | 'tooSoon'
 export interface ContactEvent {
   readonly commandId: string
   readonly playerId: PlayerId
