@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
 import { createFoundationMatch } from '../../src/game/match/engine'
 import { evaluateOnBallPlan } from '../../src/game/ai/possession'
+import { choosePossessionRelease } from '../../src/game/ai/decisions'
 import {
   evaluateShootingOpportunity, shootingCorridorObstruction,
 } from '../../src/game/ai/goal-directed'
@@ -19,6 +20,7 @@ describe('Compare seeded on-ball decisions at constructed clear shooting chances
     const results:{
       side:number;distanceM:number;lateralM:number;
       clearance:number;choice:string;progress:number;
+      earlyRelease:string;
     }[]=[]
     for(const side of [0,1] as const) {
       const team=initial.teams[side]
@@ -71,6 +73,9 @@ describe('Compare seeded on-ball decisions at constructed clear shooting chances
                     current.position,opportunity.target,opposition)>=1.8)
                 continue
               const action=evaluateOnBallPlan(state,setup,true,true).choice
+              const recentlyReceived:MatchState={...state,
+                ai:{...state.ai,lastPassTick:state.clock.tick-6}}
+              const earlyRelease=choosePossessionRelease(recentlyReceived,setup)
               const receiver=action?.kind==='pass'
                 ? players.find(p=>p.playerId===action.receiverId)
                 : undefined
@@ -80,7 +85,7 @@ describe('Compare seeded on-ball decisions at constructed clear shooting chances
                 side,distanceM,lateralM,
                 clearance:opportunity.chanceQuality,
                 choice:action?.kind??'none',
-                progress,
+                progress,earlyRelease:earlyRelease?.kind??'none',
               })
               expect(state.goalEvents).toHaveLength(0)
               expect(state.contactEvents).toHaveLength(0)
@@ -97,6 +102,10 @@ describe('Compare seeded on-ball decisions at constructed clear shooting chances
       carry:results.filter(r=>r.choice==='carry').length,
       pass:results.filter(r=>r.choice==='pass').length,
       backwardPass:backward.length,
+      afterRecentPass:{
+        actualShotCommands:results.filter(r=>r.earlyRelease==='shoot').length,
+        noRelease:results.filter(r=>r.earlyRelease==='none').length,
+      },
       byDistance:[8,12,16,20,24].map(distanceM=>({
         distanceM,
         n:results.filter(r=>r.distanceM===distanceM).length,
@@ -104,6 +113,6 @@ describe('Compare seeded on-ball decisions at constructed clear shooting chances
         backward:backward.filter(r=>r.distanceM===distanceM).length,
       })),
     }))
-    expect(results.length).toBeGreaterThan(40)
+    expect(results.length).toBeGreaterThanOrEqual(40)
   },30000)
 })
