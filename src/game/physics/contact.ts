@@ -1,6 +1,6 @@
 import { createRandomStream, restoreRandomStream } from '../core/rng'
 import { BALL_RADIUS_M, isBallFullyOutsidePitch } from './ball'
-import { GOALKEEPER_HAND_HEIGHT_M, GOALKEEPER_HOLD_MIN_TICKS, activeGoalkeeperCatch } from './goalkeeper-handling'
+import { GOALKEEPER_HAND_HEIGHT_M, GOALKEEPER_HOLD_MIN_TICKS, activeGoalkeeperCatch, goalkeeperThrowVelocity } from './goalkeeper-handling'
 import type { MatchSetup } from '../model/match'
 import type { PlayerDefinition } from '../model/player'
 import type { PitchDefinition, Point2 } from '../model/pitch'
@@ -158,19 +158,14 @@ export function resolveContactAttempts(
       const quality = (
         .6 * a.goalkeeping.throwingDistribution +
         .25 * a.technical.technique + .15 * a.mental.composure) / 100
-      const heading = Math.atan2(dy, dx)
       const spread = .015 + (1 - quality) * .12
-      const angle = heading + (contactRng.nextFloat() - .5) * 2 * spread
-      // A release at hand height follows real airborne ball physics;
-      // success still depends on a teammate's physical first touch.
-      const speed = 4.8 + command.power * 9.3
+      const angleError = (contactRng.nextFloat() - .5) * 2 * spread
+      // The non-awarding preview and this REAL release share the same
+      // nominal throw model; only actual contact consumes a seeded error.
       ball = {
         ...ball,
-        velocity: {
-          xMps: Math.cos(angle) * speed,
-          yMps: Math.sin(angle) * speed,
-          zMps: .4 + command.power * 1.2,
-        },
+        velocity: goalkeeperThrowVelocity(
+          ball.position, command.target, command.power, angleError),
         controllerId: null, controlOffset: null,
         lastTouchPlayerId: player.playerId,
       }

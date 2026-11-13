@@ -1,3 +1,11 @@
+## Phase 6.9L — Realistic goalkeeper throw choices
+
+Following the 6.9K goalkeeper positioning improvement, a goalkeeper who has **physically caught** the ball now examines whether a real hand-throw trajectory could reach a moving teammate. A bounded rehearsal uses the match engine's own 50ms ball-flight, turning and first-touch collision equations, while estimated opposition interception timing, passing lanes, touchline margins and individual goalkeeper Vision, Decisions, Composure, Technique and Throwing Distribution influence selection. Actual seeded physics still controls the released ball: no pass, interception or reception is awarded by the forecast.
+
+Goalkeepers can wait briefly for a credible outlet, but will choose a riskier real release if safe choices fail to appear rather than holding forever. The distribution mechanism is **still physical throws only**, not rolls, punts or long kicks. Team shapes from 6.9K are retained for both sides, and after the release all normal 22-agent tactics resume.
+
+The historic and current **nine-seed actual throw reception** benchmark is important to interpret correctly: the 6.9K planner recorded **5/5** intended-receiver controls, while the 6.9L planner recorded **4/4** from generally longer distribution choices. This is **not evidence of increased completion probability** and one fewer throw occurred in this sample. The upgrade is to physically informed selection and use of safer/forward options, not guaranteed higher short-run statistics. See [Phase 6.9L implementation and testing](docs/design/phase-6-9l-keeper-throw-intelligence.md).
+
 ## Phase 6.9K — Intelligent team positioning after a goalkeeper catches
 
 A physically confirmed goalkeeper **hand catch** now activates a separate team tactical phase instead of treating the keeper as an ordinary foot-level ball carrier. Centre-backs and full-backs spread into passing outlets, midfielders offer progressive positions, and forwards maintain useful attacking depth. The opposition regroups into a coherent block and may screen nearby receivers according to pressing intensity, without racing straight toward a ball securely held in the goalkeeper's hands.

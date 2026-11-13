@@ -21,3 +21,23 @@ export function activeGoalkeeperCatch(
   }
   return null
 }
+
+/**
+ * Shared hand-throw flight model for the authoritative resolver and the
+ * non-awarding preview. `angleErrorRad` is drawn only by the REAL contact
+ * engine; preview always uses the nominal intended bearing.
+ */
+export function goalkeeperThrowVelocity(
+  from: {readonly xM:number;readonly yM:number},
+  to: {readonly xM:number;readonly yM:number},
+  power: number, angleErrorRad = 0,
+): {readonly xMps:number;readonly yMps:number;readonly zMps:number} {
+  const heading = Math.atan2(to.yM - from.yM, to.xM - from.xM)
+  const angle = heading + angleErrorRad
+  const speed = 4.8 + power * 9.3
+  return {
+    xMps: Math.cos(angle) * speed,
+    yMps: Math.sin(angle) * speed,
+    zMps: .4 + power * 1.2,
+  }
+}
