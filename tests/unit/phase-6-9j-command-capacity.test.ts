@@ -3,6 +3,7 @@ import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
 import { createFoundationMatch, restoreFoundationMatch } from '../../src/game/match/engine'
 import { MAX_COMMANDS_PER_MATCH } from '../../src/game/match/commands'
 import { MatchViewerSession } from '../../src/game/viewer/session'
+import { copyableMatchDiagnostics } from '../../src/game/viewer/match-diagnostics'
 
 describe('Phase 6.9J — long-match AI command continuity', () => {
   it('accepts and replays real commands past the previous 256-action limit', () => {
@@ -39,6 +40,20 @@ describe('Phase 6.9J — long-match AI command continuity', () => {
     expect(engine.getState().appliedCommands).toHaveLength(count + 1)
     expect(restoreFoundationMatch(engine.checkpoint()).checkpoint())
       .toEqual(engine.checkpoint())
+  })
+  it('exports a copyable exact-version report with no altered simulation state', () => {
+    const session = new MatchViewerSession(0x8BE673A4)
+    session.advance(8)
+    const before = JSON.stringify(session.state)
+    const report = JSON.parse(copyableMatchDiagnostics(session.state))
+    expect(report.seed).toBe('8BE673A4')
+    expect(report.time).toBe('00:00')
+    expect(report.tick).toBe(8)
+    expect(report.engineVersion).toBe(session.state.engineVersion)
+    expect(report.commandsUsed).toBe(session.state.nextCommandSequence - 1)
+    expect(report.aiTeams).toEqual([true,true])
+    expect(report.ball.controller).toEqual(session.state.ball.controllerId)
+    expect(JSON.stringify(session.state)).toBe(before)
   })
   it('keeps both AI teams autonomous when using a reported seed', () => {
     const session = new MatchViewerSession(0x8BE673A4)
