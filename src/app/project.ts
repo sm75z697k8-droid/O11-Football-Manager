@@ -1,7 +1,7 @@
 /** O11 project metadata. Real-time landscape Canvas now visualizes the authoritative headless engine; no official match rules or results yet. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = '6.9R' as const
-export const ENGINE_STATUS = 'controlled-goalkeeper-comparison' as const
+export const PROJECT_PHASE = '6.9S' as const
+export const ENGINE_STATUS = 'goalkeeper-one-on-one-decisions' as const
 
 export const FOUNDATION_STAGES = [
   { id: '0A', title: 'Project foundation', summary: 'App, TypeScript, tests and deployment' },
@@ -39,4 +39,5 @@ export const FOUNDATION_STAGES = [
   { id: '6.9P', title: 'Goalkeeper open-play positioning', summary: 'Geometry-aware defensive depth and goal-angle coverage on both sides' },
   { id: '6.9Q', title: 'Goalkeeper shot reactions', summary: 'Reflex delay, physical reach, diving, handling and parry response to real shots' },
   { id: '6.9R', title: 'Goalkeeper matchup comparison', summary: 'Selectable fictional goalkeeper archetypes with a preserved balanced control fixture and same-seed replay' },
+  { id: '6.9S', title: 'Goalkeeper one-on-one judgement', summary: 'Breakaway hold/close decisions, respect for defensive cover and real in-area smothers by physical contact' },
 ] as const
