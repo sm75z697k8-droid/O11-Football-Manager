@@ -52,7 +52,8 @@ export function detectGoalMouthCrossing(
 export function adjudicatePhysicalGoal(
   before: MatchState, after: MatchState, setup: MatchSetup,
 ): MatchState {
-  if (after.goalEvents.length !== before.goalEvents.length ||
+  if (after.offsideRestart || after.indirectFreeKick ||
+      after.goalEvents.length !== before.goalEvents.length ||
       after.postGoalKickoff !== null ||
       after.kickoff?.phase === 'awaitingKick' ||
       after.ball.lastTouchPlayerId === null) return after
@@ -77,6 +78,7 @@ export function adjudicatePhysicalGoal(
       ...team, score: team.score + (team.clubId === goal.scoringTeamId ? 1 : 0),
     })) as unknown as MatchState['teams'],
     goalEvents: [...after.goalEvents, goal],
+    offsidePhase: null, indirectFreeKick: null,
     // Referee replaces the dead scored ball on the centre mark. This is
     // an actual legal restart placement, NOT a teleporting active pass.
     ball: {

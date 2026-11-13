@@ -7,6 +7,7 @@ import type { PitchDefinition, Point2 } from '../model/pitch'
 import type { PlayerMatchState, BallMatchState, MatchState, ContactEvent } from '../match/state'
 import type { AppliedMatchCommand } from '../match/commands'
 import { throwInTakerTarget, forbiddenRestartSecondTouch } from '../match/restarts'
+import { offsideKickPrefix, offsideKickStationary, offsideOpponentsClear } from '../match/offside'
 import { goalKickSpot, insideRestartPenaltyArea } from '../match/goal-kicks'
 import {
   cornerBallSpot, cornerOpponentsClear, selectCornerTaker,
@@ -242,6 +243,20 @@ export function resolveContactAttempts(
     if (ball.controllerId && ball.controllerId !== command.playerId) {
       events.push(event(command, kind, 'occupied', 0))
       continue
+    }
+    if (state.offsideRestart) {
+      const free=state.offsideRestart
+      const authorized=command.type==='attemptKick' &&
+        command.commandId.startsWith(offsideKickPrefix(free.tick)) &&
+        command.teamId===free.awardedTeamId &&
+        command.playerId===free.takerId &&
+        state.clock.tick-free.tick>=14 &&
+        offsideKickStationary({...state,ball}) &&
+        offsideOpponentsClear(state,setup)
+      if (!authorized) {
+        events.push(event(command,kind,'notReady',0))
+        continue
+      }
     }
     if (state.periodKickoff) {
       const half = state.periodKickoff

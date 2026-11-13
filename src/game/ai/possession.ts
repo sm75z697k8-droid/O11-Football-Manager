@@ -11,6 +11,7 @@ import { chooseSeededOption } from './decision-variation'
 import { GOALKEEPER_HAND_HEIGHT_M } from '../physics/goalkeeper-handling'
 import { reviewOnBallActions } from './short-horizon'
 import type { ActionAssessment } from './short-horizon'
+import { isOffsidePosition } from '../match/offside'
 
 /**
  * Context-aware on-ball choices: estimate opportunities, NEVER match results.
@@ -194,7 +195,7 @@ function passCandidates(
   teammates: readonly PlayerMatchState[],
   opponents: readonly PlayerMatchState[],
   setup: MatchSetup, team: TeamMatchState, def: PlayerDefinition,
-  ball: BallMatchState,
+  ball: BallMatchState, state: MatchState,
 ): PossessionChoice[] {
   const options: PossessionChoice[] = []
   const direction = team.attackingDirection
@@ -204,6 +205,11 @@ function passCandidates(
   const composure = def.abilities.mental.composure
   for (const receiver of teammates) {
     if (receiver.playerId === carrier.playerId) continue
+    // Legal position is judged at actual contact, not the projected reception.
+    // This 50ms preview is advice only; the referee is authoritative.
+    const atContact = {xM:receiver.position.xM + receiver.velocity.xMps*.05,
+      yM:receiver.position.yM + receiver.velocity.yMps*.05}
+    if (isOffsidePosition(state,setup,team.clubId,atContact,ball.position)) continue
     // Even the goalkeeper may be a safe backwards outlet. This does not
     // imply that goalkeeper distribution intelligence is complete.
     const separation = distance(carrier.position, receiver.position)
@@ -332,7 +338,7 @@ export function evaluateOnBallPlan(
   }))
   if (allowPass) {
     options.push(...passCandidates(owner, teammates, opponents,
-      setup, team, definition, state.ball))
+      setup, team, definition, state.ball, state))
   }
   const shot = evaluateShootingOpportunity(owner, definition, opponents, team, setup)
   if (shot) options.push({

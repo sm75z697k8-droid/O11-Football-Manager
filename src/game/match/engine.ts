@@ -4,6 +4,7 @@ import { runAutonomousDecisions } from '../ai/runner'
 import { maintainPassReception } from '../ai/pass-coordination'
 import { GOALKEEPER_HAND_HEIGHT_M, GOALKEEPER_HOLD_MIN_TICKS } from '../physics/goalkeeper-handling'
 import { adjudicatePhysicalGoal } from './goals'
+import { applyOffsideLaw, advanceOffsideRestart } from './offside'
 import { advanceThrowInStoppage, recordOutOfPlay } from './restarts'
 import {
   adjudicatePeriodTime, advanceSecondHalfKickoff, prepareSecondHalf,
@@ -50,7 +51,7 @@ import {
 } from './state'
 import type { MatchState, PressingIntensity } from './state'
 
-export const MATCH_CHECKPOINT_VERSION = 14 as const
+export const MATCH_CHECKPOINT_VERSION = 15 as const
 export const MAX_ADVANCE_STEPS_PER_CALL = 10_000 as const
 
 export interface FoundationMatchCheckpoint {
@@ -106,6 +107,10 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       !Array.isArray(state.pendingCommands) || !Array.isArray(state.appliedCommands) ||
       !Array.isArray(state.contactEvents) ||
       !Array.isArray(state.goalEvents) ||
+      !Array.isArray(state.offsideEvents) ||
+      (state.offsidePhase !== null && !object(state.offsidePhase)) ||
+      (state.offsideRestart !== null && !object(state.offsideRestart)) ||
+      (state.indirectFreeKick !== null && !object(state.indirectFreeKick)) ||
       (state.postGoalKickoff !== null && !object(state.postGoalKickoff)) ||
       !Array.isArray(state.outOfPlayEvents) ||
       !Array.isArray(state.automaticContactEvents) ||
@@ -130,6 +135,64 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       g.scoringTeamId === team.clubId).length ||
     !['low', 'standard', 'high'].includes(team.pressingIntensity))) {
     throw new Error('Invalid team state in checkpoint')
+  }
+  // A referee call must be attributable to physical contact. Preserve
+  // chronology and the authorised stationary free kick in checkpoints.
+  if (state.offsidePhase) {
+    const phase=state.offsidePhase
+    const passer=state.players.find(p=>p.playerId===phase.passerId)
+    if (!passer || passer.clubId!==phase.attackingTeamId ||
+        !Number.isSafeInteger(phase.playedTick) ||
+        phase.playedTick<0 || phase.playedTick>state.clock.tick ||
+        !Array.isArray(phase.playerIds) ||
+        new Set(phase.playerIds).size!==phase.playerIds.length ||
+        phase.playerIds.some(id=>id===phase.passerId ||
+          !state.players.some(p=>p.playerId===id &&
+            p.clubId===phase.attackingTeamId)))
+      throw new Error('Invalid offside position snapshot')
+  }
+  for (const [index,offence] of state.offsideEvents.entries()) {
+    const player=state.players.find(p=>p.playerId===offence.offenderId)
+    const passer=state.players.find(p=>p.playerId===offence.passerId)
+    const taker=state.players.find(p=>p.playerId===offence.takerId)
+    const physical=state.contactEvents.some(e=>e.tick===offence.tick &&
+      e.playerId===offence.offenderId &&
+      ['controlled','miscontrolled','kicked','thrown','thrownIn',
+        'goalKicked','cornerKicked'].includes(e.outcome)) ||
+      state.automaticContactEvents.some(e=>e.tick===offence.tick &&
+        e.playerId===offence.offenderId && e.outcome!=='heldOff')
+    if (!Number.isSafeInteger(offence.tick) ||
+        !Number.isSafeInteger(offence.playedTick) ||
+        offence.tick<offence.playedTick || offence.tick>state.clock.tick ||
+        (index>0 && state.offsideEvents[index-1].tick>=offence.tick) ||
+        !player || !passer || !taker || player.clubId!==passer.clubId ||
+        taker.clubId!==offence.awardedTeamId ||
+        player.clubId===offence.awardedTeamId ||
+        !insidePitch(offence.spot,setup.pitch) || !physical)
+      throw new Error('Offside award lacks physical active involvement')
+  }
+  if (state.offsideRestart) {
+    const last=state.offsideEvents.at(-1)
+    if (!last || JSON.stringify(last)!==JSON.stringify(state.offsideRestart) ||
+        state.restart!==null || state.postGoalKickoff!==null ||
+        state.periodKickoff!==null ||
+        state.ball.outsidePitch || state.ball.controllerId!==null ||
+        state.ball.heightM!==BALL_RADIUS_M ||
+        state.ball.velocity.xMps!==0 ||
+        state.ball.velocity.yMps!==0 ||
+        state.ball.velocity.zMps!==0 ||
+        JSON.stringify(state.ball.position)!==JSON.stringify(last.spot))
+      throw new Error('Invalid offside indirect free-kick staging')
+  }
+  if (state.indirectFreeKick) {
+    const active=state.indirectFreeKick
+    if (!Number.isSafeInteger(active.kickedTick) ||
+        active.kickedTick>state.clock.tick ||
+        state.offsideRestart!==null ||
+        !state.contactEvents.some(e=>e.tick===active.kickedTick &&
+          e.playerId===active.takerId && e.outcome==='kicked' &&
+          e.commandId.startsWith('ai-pass-offside-')))
+      throw new Error('Indirect free kick lacks physical kick')
   }
   // A physically scored goal is a chronological, immutable match event.
   // Previous goals cannot be erased, and neither the score nor kickoff
@@ -1149,6 +1212,11 @@ export class FoundationMatchEngine {
           .includes(this.state.restart.kind)) break
       const clock = advanceSimulationClock(this.state.clock)
       const applied = applyDueMatchCommands({ ...this.state, clock })
+      if (applied.offsideRestart) {
+        this.state = adjudicatePeriodTime(advanceOffsideRestart(
+          applied, this.setup, resolveContactAttempts))
+        continue
+      }
       if (applied.periodKickoff) {
         this.state = adjudicatePeriodTime(advanceSecondHalfKickoff(
           applied, this.setup, resolveContactAttempts))
@@ -1228,8 +1296,10 @@ export class FoundationMatchEngine {
       // earlier in this same tick. Retire stale receiver instructions NOW,
       // rather than letting a teammate chase a ball already lost.
       const resolved = resolveAutomaticBallContact(this.state, kickedOff, this.setup)
-      const adjudicated = adjudicatePhysicalGoal(this.state,
+      const reviewed = applyOffsideLaw(this.state,
         maintainPassReception(resolved, this.setup), this.setup)
+      const adjudicated = adjudicatePhysicalGoal(this.state,
+        reviewed, this.setup)
       this.state = adjudicatePeriodTime(startFirstHalfAfterOpening(
         recordOutOfPlay(this.state, adjudicated, this.setup)))
     }

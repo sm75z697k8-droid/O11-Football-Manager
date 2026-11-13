@@ -1,7 +1,7 @@
 /** O11 project metadata. Real-time landscape Canvas now visualizes the authoritative headless engine; no official match rules or results yet. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = 'S1.5' as const
-export const ENGINE_STATUS = 'two-half-referee-timekeeping' as const
+export const PROJECT_PHASE = 'S1.6' as const
+export const ENGINE_STATUS = 'touch-based-offside-refereeing' as const
 
 export const FOUNDATION_STAGES = [
   { id: '0A', title: 'Project foundation', summary: 'App, TypeScript, tests and deployment' },
@@ -46,4 +46,5 @@ export const FOUNDATION_STAGES = [
   { id: 'S1.3', title: 'Physical corners', summary: 'Real corner-area ball placement, marked-area runs, arc-clear defending and seeded attribute-driven corner delivery' },
   { id: 'S1.4', title: 'After-goal physical kickoffs', summary: 'Retain scored goals and match history while the conceding team physically returns to legal centre-kickoff positions and restarts play' },
   { id: 'S1.5', title: 'Two halves and referee timing', summary: 'Real 45-minute halves, estimated lost-time allowance, halftime interval, changed ends, physical second-half kickoff and final whistle' },
+  { id: 'S1.6', title: 'Law 11 offside', summary: 'Physical-touch snapshots, active-involvement calls, indirect free kicks, and offside-aware pass decisions for both teams' },
 ] as const

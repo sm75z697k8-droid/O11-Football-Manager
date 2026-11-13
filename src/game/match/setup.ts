@@ -89,6 +89,8 @@ export function createInitialMatchState(input: unknown): {
     goalEvents: [],
     outOfPlayEvents: [],
     restart: null,
+    offsidePhase: null, offsideEvents: [], offsideRestart: null,
+    indirectFreeKick: null,
     teams,
     players,
     ball: {
