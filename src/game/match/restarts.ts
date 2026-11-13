@@ -140,6 +140,11 @@ export function recordOutOfPlay(
 ): MatchState {
   const event = classifyOutOfPlay(before, after, setup)
   if (!event) return after
+  if (event.kind === 'unassigned') {
+    // Diagnostic ball launches have no legal last touch. Record geometry
+    // without inventing a referee award or stopping the physics workload.
+    return { ...after, outOfPlayEvents: [...after.outOfPlayEvents, event] }
+  }
   const ball: BallMatchState = {
     ...after.ball, controllerId: null, controlOffset: null,
     heightM: BALL_RADIUS_M,
