@@ -9,7 +9,8 @@ export const MATCH_DIAGNOSTICS_VERSION = 'o11-debug-report-v1'
 
 export function copyableMatchDiagnostics(state: MatchState): string {
   const lastKick = [...state.contactEvents].reverse().find(e =>
-    e.outcome === 'kicked' || e.outcome === 'thrown')
+    e.outcome === 'kicked' || e.outcome === 'thrown' ||
+    e.outcome === 'thrownIn')
   const player = state.players.find(p => p.playerId === state.ball.controllerId)
   const ball = state.ball
   return JSON.stringify({
