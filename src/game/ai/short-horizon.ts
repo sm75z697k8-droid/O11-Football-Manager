@@ -345,8 +345,7 @@ export function reviewOnBallActions(
   // A single physical preview per decision cycle is important on iPhone.
   const shooterDefinition = setup.players.find(p => p.id === owner.playerId)
   if (!shooterDefinition) throw new Error('Missing on-ball footballer definition')
-  const immediateShot = options.some(choice => choice.kind === 'pass') &&
-      options.some(choice => choice.kind === 'shoot')
+  const immediateShot = options.some(choice => choice.kind === 'pass')
     ? evaluateShootingOpportunity(
       owner, shooterDefinition, opponents,
       state.teams.find(t => t.clubId === owner.clubId)!, setup)
