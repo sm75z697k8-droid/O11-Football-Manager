@@ -76,11 +76,11 @@ describe('S1.5 referee-controlled two 45-minute halves', () => {
     expect(counted.periodTiming.firstHalfLostTicks).toBe(1)
     expect(counted.periodTiming.firstHalfAddedTicks).toBe(TICKS_PER_MINUTE)
     const later=adjudicatePeriodTime({
-      ...counted, clock:{...counted.clock,tick:HALF_TICKS+1200},
+      ...counted, clock:{...counted.clock,tick:HALF_TICKS+1201},
       restart:null,
     })
     expect(later.period).toBe('halfTime')
-    expect(later.periodTiming.halfTimeTick).toBe(HALF_TICKS+1200)
+    expect(later.periodTiming.halfTimeTick).toBe(HALF_TICKS+1201)
     expect(later.periodTiming.firstHalfAddedTicks).toBe(TICKS_PER_MINUTE)
     expect(adjudicatePeriodTime(later)).toEqual(later)
   })
