@@ -49,7 +49,10 @@ function caughtShot(side: 0 | 1) {
   expect(held.automaticContactEvents.at(-1)?.outcome).toBe('caught')
   expect(held.ball.controllerId).toBe(keeper.playerId)
   expect(activeGoalkeeperCatch(held)).not.toBeNull()
-  return {setup,held,keeper,club,opponent,before}
+  // Swept hand contact uses the transformed on-field keeper position,
+  // not the original fixture marker from before arranging the shot.
+  const caughtKeeper=held.players.find(p=>p.playerId===keeper.playerId)!
+  return {setup,held,keeper:caughtKeeper,club,opponent,before}
 }
 
 describe('Phase 6.9K — real goalkeeper hand-possession shape',()=>{
