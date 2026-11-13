@@ -1,7 +1,7 @@
 /** O11 project metadata. Real-time landscape Canvas now visualizes the authoritative headless engine; no official match rules or results yet. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = 'S1.3' as const
-export const ENGINE_STATUS = 'physical-corner-restarts' as const
+export const PROJECT_PHASE = 'S1.4' as const
+export const ENGINE_STATUS = 'post-goal-physical-kickoffs' as const
 
 export const FOUNDATION_STAGES = [
   { id: '0A', title: 'Project foundation', summary: 'App, TypeScript, tests and deployment' },
@@ -44,4 +44,5 @@ export const FOUNDATION_STAGES = [
   { id: 'S1.1', title: 'Restart foundation and touchline throws', summary: 'Real boundary crossings, correct throw-in/corner/goal-kick awards and physically staged throw-ins that return to play' },
   { id: 'S1.2', title: 'Physical goal kicks', summary: 'Stationary legal goal-area placement, keeper build-up movement, penalty-area opponent clearance and skill-driven physical kicks' },
   { id: 'S1.3', title: 'Physical corners', summary: 'Real corner-area ball placement, marked-area runs, arc-clear defending and seeded attribute-driven corner delivery' },
+  { id: 'S1.4', title: 'After-goal physical kickoffs', summary: 'Retain scored goals and match history while the conceding team physically returns to legal centre-kickoff positions and restarts play' },
 ] as const
