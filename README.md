@@ -1,3 +1,13 @@
+## GK-S1 — Goal-kick realism: setup, approach, decisions
+
+A targeted code audit found three flaws in the previous S1.2 implementation: the goalkeeper was aimed **0.43 m in front of the dead ball**, short distribution was normally limited to two centre-backs with an emergency midfield kick, and all other outfield players essentially kept their old positions during the dead-ball setup. These facts concern the prior implementation; realistic on-device match behaviour is not yet calibrated.
+
+GK-S1 corrects the keeper's run-up to approach from behind the stationary goal-area ball and requires a real physically oriented upfield approach before commanding contact. Teammates now move through the existing 20 Hz locomotive physics into a bounded 4-3-3 build-out: two centre-backs near the box, two outside full-backs, a central holding midfield outlet, secondary midfield receivers and separated forwards. Opponents inside the penalty area must retreat on foot; standard/high pressing can optionally create a legal outside-area screen. Goal-kick decisions evaluate actual receiver locations, pressure around the first touch, pass-corridor screening, player first-touch attributes and target distance. When centre-backs are pressed, the goalkeeper may use an open full-back/holding midfielder instead of mindlessly passing into pressure, or strike a lofted pass to an actual upfield midfielder. All reception remains physical and fallible; there are no guaranteed passes, automatic ownership changes, scripted goals or direct checkpoint schema changes.
+
+New tests specifically exercise both sides, physical run-ups from unstaged positions, body orientation, non-teleportation, adaptive receivers, crowded short choices, and deterministic option calculations alongside the existing match regression suite. **Remaining realism debt:** physical ball trajectories and kick skill calibration, optional non-GK goal-kick takers, 2026/27 Law 16 five-second countdown, sophisticated pressing triggers and time-bounded whole-team readiness. The estimate constants must be calibrated on iPhone game sessions, not assumed accurate just because automated tests pass.
+
+---
+
 ## ATT-S1 — Coordinated attacking movement for the whole 4-3-3
 
 The attack no longer relies on isolated support decisions alone. A dedicated **team-level, deterministic attacking coordinator** can reserve several complementary **physically reachable** off-ball targets while a real outfielder controls the ball in the attacking half: an inside winger, a late-arriving central midfielder, a linking striker, an opposite-side wide outlet, and a conservative/conditional full-back support option.

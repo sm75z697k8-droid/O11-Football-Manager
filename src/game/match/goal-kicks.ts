@@ -3,6 +3,10 @@ import type { PitchDefinition, Point2 } from '../model/pitch'
 import type { MatchState, OutOfPlayEvent, PlayerMatchState } from './state'
 import { advancePlayerLocomotion } from '../physics/locomotion'
 import { scheduleMatchCommand } from './commands'
+import {
+  goalKickBuildOutTarget, goalKickOpponentTarget,
+  assessGoalKickOptions, chooseGoalKickOption,
+} from './goal-kick-intelligence'
 
 /**
  * S1.2: genuine Law 16 placement, 20Hz build-up, opponent clearance and
@@ -11,7 +15,7 @@ import { scheduleMatchCommand } from './commands'
  * The ball is DEAD while restart is non-null, even though its goal-area
  * placement is geometrically inside the pitch. Ordinary play cannot run.
  */
-export const GOAL_KICK_VERSION = 'goal-area-physical-restarts-s12-v1'
+export const GOAL_KICK_VERSION = 'goal-kick-distribution-and-approach-gk-s1-v1'
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 const distance = (a: Point2, b: Point2) =>
   Math.hypot(a.xM - b.xM, a.yM - b.yM)
@@ -62,31 +66,6 @@ export function insideRestartPenaltyArea(
     Math.abs(point.yM - pitch.widthM / 2) < pitch.penaltyAreaWidthM / 2
 }
 
-function clearOpponentTarget(
-  player: PlayerMatchState, event: OutOfPlayEvent,
-  pitch: PitchDefinition,
-): Point2 {
-  if (!insideRestartPenaltyArea(player.position, event, pitch)) {
-    return player.position
-  }
-  const dir = event.side === 'left' ? 1 : -1
-  const goalX = event.side === 'left' ? 0 : pitch.lengthM
-  return {
-    xM: goalX + dir * (pitch.penaltyAreaDepthM + 1.65),
-    yM: player.position.yM,
-  }
-}
-
-function nearestOpponentM(
-  players: readonly PlayerMatchState[], team: string, point: Point2,
-): number {
-  let nearest = 120
-  for (const p of players) if (p.clubId !== team) {
-    nearest = Math.min(nearest, distance(p.position, point))
-  }
-  return nearest
-}
-
 export function stageGoalKick(
   state: MatchState, setup: MatchSetup,
 ): MatchState {
@@ -104,10 +83,15 @@ export function stageGoalKick(
   }
   const dir = event.side === 'left' ? 1 : -1
   const ballSpot = goalKickSpot(event, setup.pitch)
-  const keeperTarget = {
-    xM: ballSpot.xM + dir * .43,
-    yM: ballSpot.yM,
-  }
+  // A legal, natural run-up begins BEHIND the ball, not between the
+  // ball and the intended receiver. Approach the ball only after the keeper
+  // has actually reached that side; the locomotion integrator must turn
+  // the body upfield before a kick can be scheduled.
+  const behindBall = (ballSpot.xM - keeper.position.xM) * dir >= .28
+  const nearBall = distance(keeper.position, ballSpot) <= 1.12
+  const keeperTarget = behindBall && nearBall
+    ? {xM:ballSpot.xM+dir*.22,yM:ballSpot.yM}
+    : {xM:ballSpot.xM-dir*.62,yM:ballSpot.yM}
   const [rcb, lcb] = ['RCB', 'LCB'].map(slot =>
     state.players.find(p => p.clubId === awardedTeamId &&
       p.formationSlot === slot))
@@ -118,6 +102,20 @@ export function stageGoalKick(
     [rcb.playerId, receiverTargets[0]],
     [lcb.playerId, receiverTargets[1]],
   ])
+  const shortOutlets = new Map<string,Point2>([
+    [rcb.playerId,receiverTargets[0]],
+    [lcb.playerId,receiverTargets[1]],
+  ])
+  for(const p of state.players){
+    if(p.clubId!==awardedTeamId || designated.has(p.playerId))continue
+    const target=goalKickBuildOutTarget(p,event,setup)
+    if(!target)continue
+    designated.set(p.playerId,target)
+    if(['RB','LB','DM'].includes(p.formationSlot))
+      shortOutlets.set(p.playerId,target)
+  }
+  const opponentPressure=state.teams.find(t=>
+    t.clubId!==awardedTeamId)?.pressingIntensity ?? 'standard'
 
   // Both teams obey restart positioning; everyone moves by the existing
   // acceleration and turning integrator, never a reset/teleport.
@@ -126,7 +124,7 @@ export function stageGoalKick(
     if (teamIndex < 0 || !state.ai.enabledTeams[teamIndex]) return p
     const point = p.clubId === awardedTeamId
       ? (designated.get(p.playerId) ?? p.position)
-      : clearOpponentTarget(p, event, setup.pitch)
+      : goalKickOpponentTarget(p,event,setup,opponentPressure)
     const unchanged = p.intention.kind === 'moveToPoint' &&
       distance(p.intention.target, point) < .18
     return {
@@ -145,16 +143,10 @@ export function stageGoalKick(
   const opponentClear = state.players.every(p =>
     p.clubId === awardedTeamId ||
     !insideRestartPenaltyArea(p.position, event, setup.pitch))
-  const keeperReady = distance(keeper.position, ballSpot) <= .85 &&
+  const keeperReady = distance(keeper.position, ballSpot) <= .87 &&
+    (ballSpot.xM-keeper.position.xM)*dir >= .15 &&
+    Math.cos(keeper.orientationRad) * dir >= .72 &&
     Math.hypot(keeper.velocity.xMps, keeper.velocity.yMps) <= 1.7
-  const nearbyReceivers = [rcb, lcb].map((p, i) => ({
-    player: p, target: receiverTargets[i],
-    ready: distance(p.position, receiverTargets[i]) < 2.4,
-    space: nearestOpponentM(state.players, awardedTeamId, p.position),
-  }))
-  const short = nearbyReceivers.filter(r => r.ready).sort((a, b) =>
-    b.space - a.space ||
-    a.player.playerId.localeCompare(b.player.playerId))[0]
   const pending = staged.pendingCommands.some(c => c.type === 'attemptGoalKick')
   const previousAttempt = [...staged.appliedCommands].reverse().find(c =>
     c.type === 'attemptGoalKick' && c.teamId === awardedTeamId &&
@@ -165,39 +157,30 @@ export function stageGoalKick(
     (previousContact?.outcome !== 'goalKicked' &&
       state.clock.tick - previousAttempt.appliedTick >= 8)
 
-  if (keeperReady && opponentClear && short && !pending && canRetry &&
+  // Evaluate ACTUAL physical outlets. A free centre-back is preferred,
+  // but an exposed one must not force a predictable short pass while
+  // a full-back or midfielder offers a safer route. The engine still
+  // makes only one real, seed-sensitive foot contact.
+  const options = keeperReady && opponentClear && !pending && canRetry
+    ? assessGoalKickOptions(state,setup,event,ballSpot,shortOutlets)
+    : []
+  const choice = chooseGoalKickOption(options,state.clock.tick-event.tick)
+  if (keeperReady && opponentClear && choice && !pending && canRetry &&
       state.clock.tick - event.tick >= 14) {
+    const receiver=state.players.find(p=>p.playerId===choice.receiverId)
+    if(!receiver)throw new Error('Goal kick has lost a real outlet')
     const goalkeeping = definition.abilities.goalkeeping
-    // This is a limited choice between safer short build-up and a midfield
-    // release when both centre-backs are marked; no assumed completion.
-    const underPressure = short.space < 5.8
-    const goalX = event.side === 'left' ? 0 : setup.pitch.lengthM
-    const fallback = state.players.filter(p =>
-      p.clubId === awardedTeamId &&
-      ['DM', 'RCM', 'LCM'].includes(p.formationSlot) &&
-      // A midfielder can be goal-side of the keeper after a defensive
-      // scramble. Never propose that player as an illegal outward kick.
-      (p.position.xM - goalX) * dir > setup.pitch.goalAreaDepthM + 4 &&
-      distance(ballSpot, p.position) >= 9)
-      .sort((a, b) =>
-        nearestOpponentM(state.players, awardedTeamId, b.position) -
-          nearestOpponentM(state.players, awardedTeamId, a.position) ||
-        a.playerId.localeCompare(b.playerId))[0]
-    const useLong = underPressure && !!fallback &&
-      (goalkeeping.kickingDistribution >= 54 ||
-        state.clock.tick - event.tick > 115)
-    const receiver = useLong ? fallback : short.player
-    const target = useLong ? { ...receiver.position } : { ...short.player.position }
+    const target = choice.target
     const d = distance(ballSpot, target)
-    const long = d > 24
+    const long = choice.type === 'long'
     const accuracy = (
       .58 * goalkeeping.kickingDistribution +
       .25 * definition.abilities.technical.passing +
       .17 * definition.abilities.mental.composure) / 100
     const strikeFactor = 14 + .13 * definition.abilities.physical.strength +
       .065 * definition.abilities.technical.technique
-    const desiredSpeed = long ? clamp(d * .8, 19, 35) :
-      clamp(d / 1.18, 7, 18)
+    const desiredSpeed = long ? clamp(d * .82, 21, 34) :
+      clamp(d / 1.18, 7, 19)
     const power = clamp((desiredSpeed / (.9 + .1 * accuracy) - 3) /
       strikeFactor, .13, 1)
     const commandId = 'ai-pass-goalkick-' + event.tick +
