@@ -14,7 +14,6 @@ import { offsideSnapshot } from './offside'
 export const FOUL_RULES_VERSION='player-body-contest-and-physical-free-kicks-s17-v1'
 export const PLAYER_BODY_CONTACT_M=.86
 export const FOUL_CLEARANCE_M=9.15
-const DT=.05
 const clamp=(n:number,lo:number,hi:number)=>Math.min(hi,Math.max(lo,n))
 const distance=(a:Point2,b:Point2)=>Math.hypot(a.xM-b.xM,a.yM-b.yM)
 const interpolate=(a:Point2,b:Point2,t:number):Point2=>({
