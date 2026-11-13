@@ -189,12 +189,17 @@ export function stageThrowIn(
   const options = state.players.filter(p =>
     p.clubId === event.awardedTeamId &&
     p.playerId !== event.takerId && p.formationSlot !== 'GK')
-    .sort((a, b) =>
-      Math.hypot(a.position.xM - event.spot.xM,
-        a.position.yM - event.spot.yM) -
-      Math.hypot(b.position.xM - event.spot.xM,
-        b.position.yM - event.spot.yM) ||
-      a.playerId.localeCompare(b.playerId))
+    .sort((a, b) => {
+      // Keep roles fixed throughout the stoppage: sorting by each tick's
+      // MOVING coordinates causes receivers to exchange targets repeatedly.
+      const point = (p: PlayerMatchState) =>
+        state.ai.formationPositions[p.playerId] ?? p.position
+      return Math.hypot(point(a).xM - event.spot.xM,
+        point(a).yM - event.spot.yM) -
+        Math.hypot(point(b).xM - event.spot.xM,
+          point(b).yM - event.spot.yM) ||
+        a.playerId.localeCompare(b.playerId)
+    })
   const receivers = options.slice(0, 2)
   const targets = throwInReceiverTargets(event, setup)
   const byId = new Map<string, Point2>([
