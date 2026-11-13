@@ -64,6 +64,12 @@ function physicalEvents(state: MatchState): FeedItem[] {
     detail: goal.scoringTeamId.replaceAll('_', ' ') +
       ' · last touch ' + goal.lastTouchPlayerId.replaceAll('_', ' '),
   }))
+  const fouls=state.foulEvents.slice(-12).map(ev=>({
+    key:'foul-'+ev.tick,tick:ev.tick,kind:'restart' as const,
+    title:ev.kind==='penalty'?'PENALTY AWARDED':'DIRECT FREE KICK',
+    detail:ev.offenderId.replaceAll('_',' ')+' fouled '+
+      ev.victimId.replaceAll('_',' '),
+  }))
   const offsides = state.offsideEvents.slice(-12).map(ev => ({
     key: 'offside-' + ev.tick, tick: ev.tick,
     kind: 'restart' as const, title: 'OFFSIDE · INDIRECT FREE KICK',
@@ -80,7 +86,7 @@ function physicalEvents(state: MatchState): FeedItem[] {
     detail: (exit.awardedTeamId ?? 'UNKNOWN TEAM').replaceAll('_', ' ') +
       ' · ' + exit.side,
   }))
-  return [...automatic, ...manual, ...goals, ...restarts, ...offsides].sort((a, b) =>
+  return [...automatic, ...manual, ...goals, ...restarts, ...offsides, ...fouls].sort((a, b) =>
     b.tick - a.tick || a.key.localeCompare(b.key)).slice(0, 14)
 }
 
@@ -330,6 +336,7 @@ export default function App() {
   const goalKick = hud.restart?.kind === 'goalKick'
   const corner = hud.restart?.kind === 'corner'
   const offsideKick = hud.offsideRestart !== null
+  const foulKick = hud.foulRestart !== null
   const postGoal = hud.postGoalKickoff !== null
   const recentlyScored = !!goal && hud.clock.tick - goal.tick <= 26
   const kickoffClub = session.setup.clubs.find(c =>
@@ -354,6 +361,8 @@ export default function App() {
     goalKick ? 'GOAL KICK · ' + (awarded?.shortName ?? 'RESTART') :
     corner ? 'CORNER · ' + (awarded?.shortName ?? 'RESTART') :
     offsideKick ? 'OFFSIDE · INDIRECT FREE KICK' :
+    foulKick ? hud.foulRestart?.kind==='penalty'
+      ? 'PENALTY KICK' : 'DIRECT FREE KICK' :
     out ? 'OUT OF PLAY · ' + (awarded?.shortName ?? 'MATCH') :
     hud.kickoff?.phase === 'awaitingKick' ? 'KICK-OFF · HARBOR' :
     playing ? 'LIVE SIMULATION' : 'PAUSED'
@@ -512,7 +521,7 @@ export default function App() {
                 {diagnosticCopied ? '✓ Debug report copied' : 'Copy match debug report'}
               </button>
               <div className="drawer-stat"><span>BALL CONTROLLER</span><strong>{owner ? ownerClub?.shortName + ' #' + owner.shirtNumber : 'NONE'}</strong></div>
-              <p className="drawer-legal">Goals require a genuine whole-ball goalmouth crossing. The referee now calls offside on physical involvement after a teammate's real touch; indirect free kicks are physically taken. Interference without touching the ball, fouls, cards and substitutions remain future work.</p>
+              <p className="drawer-legal">Goals require physical goalmouth crossings. Offside is called on active physical involvement. Committed player-body challenges can now produce direct free kicks or penalties, all resumed by real contact. Cards, advantage and broader off-ball offences remain future work.</p>
             </div>
           ) : panel === 'keepers' ? (
             <div className="drawer-content keeper-lab">
@@ -648,6 +657,8 @@ export default function App() {
             goalKick ? 'GOAL KICK PREPARATION' :
             corner ? 'CORNER PREPARATION' :
             offsideKick ? 'OFFSIDE · FREE KICK PREPARATION' :
+            foulKick ? hud.foulRestart?.kind==='penalty'
+              ? 'PENALTY PREPARATION' : 'FREE KICK PREPARATION' :
             out ? 'OUT OF PLAY' : '20 HZ PHYSICS'}</span>
           <small>45 + ADDED · HALF-TIME · 45 + ADDED</small>
         </div>

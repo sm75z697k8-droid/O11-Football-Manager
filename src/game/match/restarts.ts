@@ -192,7 +192,9 @@ export function forbiddenRestartSecondTouch(
       (event.outcome === 'kicked' &&
         (event.commandId.startsWith('ai-pass-postgoal-') ||
           event.commandId.startsWith('ai-pass-secondhalf-') ||
-          event.commandId.startsWith('ai-pass-offside-')))) &&
+          event.commandId.startsWith('ai-pass-offside-') ||
+          event.commandId.startsWith('ai-pass-foul-') ||
+          event.commandId.startsWith('ai-shot-penalty-')))) &&
       event.playerId === playerId
     break
   }

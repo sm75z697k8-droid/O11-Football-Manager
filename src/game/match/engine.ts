@@ -5,6 +5,7 @@ import { maintainPassReception } from '../ai/pass-coordination'
 import { GOALKEEPER_HAND_HEIGHT_M, GOALKEEPER_HOLD_MIN_TICKS } from '../physics/goalkeeper-handling'
 import { adjudicatePhysicalGoal } from './goals'
 import { applyOffsideLaw, advanceOffsideRestart } from './offside'
+import { adjudicatePhysicalFoul, advanceFoulRestart, foulKickPrefix } from './fouls'
 import { advanceThrowInStoppage, recordOutOfPlay } from './restarts'
 import {
   adjudicatePeriodTime, advanceSecondHalfKickoff, prepareSecondHalf,
@@ -51,7 +52,7 @@ import {
 } from './state'
 import type { MatchState, PressingIntensity } from './state'
 
-export const MATCH_CHECKPOINT_VERSION = 15 as const
+export const MATCH_CHECKPOINT_VERSION = 16 as const
 export const MAX_ADVANCE_STEPS_PER_CALL = 10_000 as const
 
 export interface FoundationMatchCheckpoint {
@@ -108,6 +109,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       !Array.isArray(state.contactEvents) ||
       !Array.isArray(state.goalEvents) ||
       !Array.isArray(state.offsideEvents) ||
+      !Array.isArray(state.foulEvents) ||
+      (state.foulRestart !== null && !object(state.foulRestart)) ||
       (state.offsidePhase !== null && !object(state.offsidePhase)) ||
       (state.offsideRestart !== null && !object(state.offsideRestart)) ||
       (state.indirectFreeKick !== null && !object(state.indirectFreeKick)) ||
@@ -193,6 +196,77 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
           e.playerId===active.takerId && e.outcome==='kicked' &&
           e.commandId.startsWith('ai-pass-offside-')))
       throw new Error('Indirect free kick lacks physical kick')
+  }
+  // A verified physical body-contact foul must produce a correct Law 12
+  // award and exactly one authorized direct kick or penalty release.
+  for(const [index,ev] of state.foulEvents.entries()){
+    const offender=state.players.find(p=>p.playerId===ev.offenderId)
+    const victim=state.players.find(p=>p.playerId===ev.victimId)
+    const taker=state.players.find(p=>p.playerId===ev.takerId)
+    const penalty=ev.kind==='penalty'
+    const historicSecond=state.periodTiming.halfTimeTick!==null &&
+      ev.tick>state.periodTiming.halfTimeTick
+    const attacking=state.teams.find(t=>t.clubId===ev.awardedTeamId)
+    const historicalDirection=attacking
+      ? attacking.attackingDirection*(historicSecond===(switchedEnds)?1:-1)
+      : 0
+    const defendingDirection=historicalDirection===1?-1:1
+    const fromDefendingGoal=defendingDirection===1
+      ? ev.spot.xM:setup.pitch.lengthM-ev.spot.xM
+    const insideBox=fromDefendingGoal<=setup.pitch.penaltyAreaDepthM &&
+      Math.abs(ev.spot.yM-setup.pitch.widthM/2)<=
+        setup.pitch.penaltyAreaWidthM/2
+    const place=penalty?{
+      xM:historicalDirection===1
+        ? setup.pitch.lengthM-setup.pitch.penaltySpotDistanceM
+        : setup.pitch.penaltySpotDistanceM,
+      yM:setup.pitch.widthM/2,
+    }:ev.spot
+    if(!ev || !offender || !victim || !taker ||
+      !Number.isSafeInteger(ev.tick) || ev.tick<1 || ev.tick>state.clock.tick ||
+      (index>0 && state.foulEvents[index-1].tick>=ev.tick) ||
+      ev.awardedTeamId!==victim.clubId ||
+      offender.clubId===victim.clubId ||
+      taker.clubId!==victim.clubId || taker.formationSlot==='GK' ||
+      !['penalty','directFreeKick'].includes(ev.kind) ||
+      !insidePitch(ev.spot,setup.pitch) ||
+      !insidePitch(ev.ballSpot,setup.pitch) ||
+      (penalty!==insideBox) ||
+      Math.hypot(place.xM-ev.ballSpot.xM,
+        place.yM-ev.ballSpot.yM)>1e-6 ||
+      !Number.isFinite(ev.riskScore) || ev.riskScore<25.5 ||
+      !Number.isFinite(ev.impactSpeedMps) || ev.impactSpeedMps<1.15 ||
+      !Number.isFinite(ev.entryFraction) ||
+      ev.entryFraction<0 || ev.entryFraction>1)
+      throw new Error('Invalid chronological physical foul award')
+    const releases=state.contactEvents.filter(e=>
+      e.outcome==='kicked' && e.playerId===ev.takerId &&
+      e.commandId.startsWith(foulKickPrefix(ev)))
+    const active=state.foulRestart?.tick===ev.tick
+    // An awarded restart may be cancelled by the period whistle before
+    // its taker can physically strike the ball; never fabricate a kick.
+    const interrupted=!active && releases.length===0 &&
+      state.periodTiming.halfTimeTick!==null &&
+      ev.tick<=state.periodTiming.halfTimeTick &&
+      ev.tick>=state.periodTiming.halfTimeTick-TICKS_PER_MINUTE &&
+      (state.period==='secondHalf' || state.period==='fullTime')
+    if(releases.length>1 || (!active && !interrupted &&
+        releases.length!==1) || (active && releases.length!==0))
+      throw new Error('Foul award does not have a physical or pending restart')
+  }
+  if(state.foulRestart){
+    const ev=state.foulRestart
+    if(!state.foulEvents.length ||
+      JSON.stringify(ev)!==JSON.stringify(state.foulEvents.at(-1)) ||
+      state.restart!==null || state.offsideRestart!==null ||
+      state.postGoalKickoff!==null || state.periodKickoff!==null ||
+      state.ball.outsidePitch || state.ball.controllerId!==null ||
+      state.ball.heightM!==BALL_RADIUS_M ||
+      state.ball.velocity.xMps!==0 ||
+      state.ball.velocity.yMps!==0 ||
+      state.ball.velocity.zMps!==0 ||
+      JSON.stringify(state.ball.position)!==JSON.stringify(ev.ballSpot))
+      throw new Error('Invalid stationary foul restart')
   }
   // A physically scored goal is a chronological, immutable match event.
   // Previous goals cannot be erased, and neither the score nor kickoff
@@ -586,7 +660,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         !player || teamIdx < 0 || player.clubId !== d.clubId ||
         !state.ai.enabledTeams[teamIdx] ||
         !Number.isSafeInteger(d.tick) || d.tick !== state.ai.lastDecisionTick ||
-        !['shape','support','press','pursue','carry','receive','cover','mark','recover','shoot','save','oneOnOne','claimCross'].includes(d.action) ||
+        !['shape','support','press','jockey','pursue','carry','receive','cover','mark','recover','shoot','save','oneOnOne','claimCross'].includes(d.action) ||
         typeof d.engage !== 'boolean' ||
         !object(d.target) || !insidePitch(d.target, setup.pitch) ||
         liveDecisions.has(d.playerId)) {
@@ -855,7 +929,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         Math.hypot(ball.velocity.xMps, ball.velocity.yMps, ball.velocity.zMps) >
           MAX_LAUNCH_SPEED_MPS + 1e-8 ||
         (ball.heightM <= BALL_RADIUS_M + 1e-8 && ball.velocity.zMps < -1e-8) ||
-        ball.controllerId !== expectedController ||
+        ball.controllerId !== (state.foulRestart ? null : expectedController) ||
         ball.lastTouchPlayerId !== expectedLastTouch ||
         (ball.controllerId !== null &&
           (ball.heightM === GOALKEEPER_HAND_HEIGHT_M) !==
@@ -1212,6 +1286,11 @@ export class FoundationMatchEngine {
           .includes(this.state.restart.kind)) break
       const clock = advanceSimulationClock(this.state.clock)
       const applied = applyDueMatchCommands({ ...this.state, clock })
+      if (applied.foulRestart) {
+        this.state = adjudicatePeriodTime(advanceFoulRestart(
+          applied, this.setup, resolveContactAttempts))
+        continue
+      }
       if (applied.offsideRestart) {
         this.state = adjudicatePeriodTime(advanceOffsideRestart(
           applied, this.setup, resolveContactAttempts))
@@ -1298,8 +1377,10 @@ export class FoundationMatchEngine {
       const resolved = resolveAutomaticBallContact(this.state, kickedOff, this.setup)
       const reviewed = applyOffsideLaw(this.state,
         maintainPassReception(resolved, this.setup), this.setup)
-      const adjudicated = adjudicatePhysicalGoal(this.state,
+      const whistled = adjudicatePhysicalFoul(this.state,
         reviewed, this.setup)
+      const adjudicated = adjudicatePhysicalGoal(this.state,
+        whistled, this.setup)
       this.state = adjudicatePeriodTime(startFirstHalfAfterOpening(
         recordOutOfPlay(this.state, adjudicated, this.setup)))
     }

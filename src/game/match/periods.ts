@@ -41,6 +41,7 @@ export function startFirstHalfAfterOpening(state: MatchState): MatchState {
 
 function deadBallTime(state: MatchState): boolean {
   return state.restart !== null || state.offsideRestart !== null ||
+    state.foulRestart !== null ||
     state.postGoalKickoff !== null ||
     state.periodKickoff !== null
 }
@@ -139,6 +140,7 @@ export function prepareSecondHalf(
     teams: flippedTeams, period: 'secondHalf',
     periodKickoff: restart,
     restart: null, offsideRestart: null, offsidePhase: null,
+    foulRestart: null,
     indirectFreeKick: null, postGoalKickoff: null,
     ai: {
       ...state.ai, formationPositions: anchors,

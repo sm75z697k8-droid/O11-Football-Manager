@@ -8,6 +8,7 @@ import type { PlayerMatchState, BallMatchState, MatchState, ContactEvent } from 
 import type { AppliedMatchCommand } from '../match/commands'
 import { throwInTakerTarget, forbiddenRestartSecondTouch } from '../match/restarts'
 import { offsideKickPrefix, offsideKickStationary, offsideOpponentsClear } from '../match/offside'
+import { foulKickPrefix, foulKickStationary, foulRestartPlayersLegal } from '../match/fouls'
 import { goalKickSpot, insideRestartPenaltyArea } from '../match/goal-kicks'
 import {
   cornerBallSpot, cornerOpponentsClear, selectCornerTaker,
@@ -243,6 +244,20 @@ export function resolveContactAttempts(
     if (ball.controllerId && ball.controllerId !== command.playerId) {
       events.push(event(command, kind, 'occupied', 0))
       continue
+    }
+    if (state.foulRestart) {
+      const foul=state.foulRestart
+      const authorized=command.type==='attemptKick' &&
+        command.commandId.startsWith(foulKickPrefix(foul)) &&
+        command.playerId===foul.takerId &&
+        command.teamId===foul.awardedTeamId &&
+        state.clock.tick-foul.tick>=14 &&
+        foulKickStationary({...state,ball}) &&
+        foulRestartPlayersLegal({...state,ball},setup)
+      if(!authorized){
+        events.push(event(command,kind,'notReady',0))
+        continue
+      }
     }
     if (state.offsideRestart) {
       const free=state.offsideRestart

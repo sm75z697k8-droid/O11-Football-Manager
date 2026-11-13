@@ -92,7 +92,8 @@ export function applyOffsideLaw(
   before: MatchState, after: MatchState, setup: MatchSetup,
 ): MatchState {
   if (before.ball.outsidePitch || before.offsideRestart ||
-      before.restart || before.postGoalKickoff || before.periodKickoff ||
+      before.restart || before.foulRestart ||
+      before.postGoalKickoff || before.periodKickoff ||
       before.kickoff?.phase==='awaitingKick') return after
   const touches=touchesAtTick(after)
   if(!touches.length) return after.ball.outsidePitch && after.offsidePhase

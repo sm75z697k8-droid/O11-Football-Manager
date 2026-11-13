@@ -16,7 +16,7 @@ import { boundedTarget, separationM } from './coordination'
 const clamp = (n: number, low: number, high: number) =>
   Math.max(low, Math.min(high, n))
 
-type AssignedAction = 'press' | 'cover' | 'mark' | 'recover' | 'shape'
+type AssignedAction = 'press' | 'jockey' | 'cover' | 'mark' | 'recover' | 'shape'
 export interface DefensiveAssignment {
   readonly action: AssignedAction
   readonly target: Point2
@@ -113,7 +113,7 @@ function keeperPenalty(player: PlayerMatchState) {
  * trained on professional tracking data. Real movement and tackles remain
  * in the 50ms physics engine.
  */
-export const DEFENSIVE_PLANNER_VERSION = 'disciplined-pressure-triggers-p69o-v1'
+export const DEFENSIVE_PLANNER_VERSION = 'contact-aware-tackling-and-jockeying-s17-v1'
 export const PRESSING_SWITCH_MARGIN_M = 3.5
 
 interface PressContext {
@@ -246,6 +246,40 @@ function primaryPressers(
   return second ? [primary.player, second.player] : [primary.player]
 }
 
+/** A close defender may deliberately jockey rather than lunging through a
+ * ball carrier. Skill, relative angle and momentum affect that choice.
+ * The separate body-contact engine still decides if committed contact is foul.
+ */
+export function shouldCommitTackle(
+  setup:MatchSetup,
+  tackler:PlayerMatchState,carrier:PlayerMatchState,
+  team:TeamMatchState,
+):boolean{
+  const gap=separationM(tackler.position,carrier.position)
+  if(gap>2.5)return true // close the gap before attempting any foot contact
+  const def=setup.players.find(p=>p.id===tackler.playerId)
+  if(!def)return false
+  const vx=tackler.position.xM-carrier.position.xM
+  const vy=tackler.position.yM-carrier.position.yM
+  const behind=(vx*Math.cos(carrier.orientationRad)+
+    vy*Math.sin(carrier.orientationRad))/Math.max(gap,.01)<-.45
+  const relative=Math.hypot(
+    tackler.velocity.xMps-carrier.velocity.xMps,
+    tackler.velocity.yMps-carrier.velocity.yMps)
+  const skill=def.abilities
+  const judgement=.38*skill.technical.tackling+
+    .27*skill.mental.decisions+
+    .22*skill.mental.anticipation+
+    .13*skill.mental.composure
+  const pressure=skill.mental.aggression*.13+
+    (team.pressingIntensity==='high'?3:0)
+  const emergency=team.attackingDirection===1
+    ? carrier.position.xM<22 : carrier.position.xM>setup.pitch.lengthM-22
+  const threshold=(behind?61:43)+Math.max(0,relative-3)*2-
+    (emergency?7:0)
+  return judgement+pressure>=threshold
+}
+
 /** Goal-side approach while outside immediate challenge range. Only
  * physically closing inside 3.5m switches to the ball's exact position.
  * The contact solver—not this intention—decides actual tackle outcomes.
@@ -325,11 +359,21 @@ export function planDefensiveResponsibilities(
     let engage = false
     if (player.formationSlot === 'GK') action = 'shape'
     else if (pressingIds.has(player.playerId)) {
-      action = 'press'
-      engage = true
+      const carrier=state.players.find(p=>
+        p.playerId===state.ball.controllerId &&
+        p.clubId!==player.clubId)
+      const committed=!carrier ||
+        shouldCommitTackle(setup,player,carrier,team)
+      action=committed?'press':'jockey'
+      engage=committed
       // Current controller is the physical threat. The 50ms movement engine
       // approaches the actual ball, not a fake successful tackle.
-      target = pressingApproachTarget(player, ballPoint, team, setup)
+      target = committed
+        ? pressingApproachTarget(player, ballPoint, team, setup)
+        : boundedTarget({
+          xM:ballPoint.xM-team.attackingDirection*1.3,
+          yM:ballPoint.yM+(player.position.yM<ballPoint.yM?-1.1:1.1),
+        },setup.pitch)
     } else if (cover?.playerId === player.playerId) {
       action = 'cover'
       // Goal-side containment should SCREEN the carrier, not drag a

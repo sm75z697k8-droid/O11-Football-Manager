@@ -52,7 +52,7 @@ export function detectGoalMouthCrossing(
 export function adjudicatePhysicalGoal(
   before: MatchState, after: MatchState, setup: MatchSetup,
 ): MatchState {
-  if (after.offsideRestart || after.indirectFreeKick ||
+  if (after.foulRestart || after.offsideRestart || after.indirectFreeKick ||
       after.goalEvents.length !== before.goalEvents.length ||
       after.postGoalKickoff !== null ||
       after.kickoff?.phase === 'awaitingKick' ||
