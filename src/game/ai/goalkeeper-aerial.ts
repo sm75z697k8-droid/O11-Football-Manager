@@ -37,7 +37,7 @@ export function activeAerialDelivery(
   // attempts cannot create a cross or steal the original ball's provenance.
   for (let i = state.contactEvents.length - 1; i >= 0; i--) {
     const event = state.contactEvents[i]
-    if (event.outcome === 'kicked') {
+    if (event.outcome === 'kicked' || event.outcome === 'cornerKicked') {
       kick = event
       break
     }
@@ -57,7 +57,8 @@ export function activeAerialDelivery(
       break
     }
   }
-  if (!command || command.type !== 'attemptKick' || command.lift < .28)
+  if (!command || (command.type !== 'attemptKick' &&
+      command.type !== 'attemptCornerKick') || command.lift < .28)
     return null
   const { widthM, lengthM, penaltyAreaDepthM } = setup.pitch
   const goalX = team.attackingDirection === 1 ? 0 : lengthM
