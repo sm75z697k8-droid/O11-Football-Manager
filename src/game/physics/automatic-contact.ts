@@ -8,6 +8,7 @@ import { activePhysicalShot } from '../ai/goal-directed'
 import { GOALKEEPER_HAND_HEIGHT_M } from './goalkeeper-handling'
 import { goalkeeperCatchStretchPenalty, goalkeeperSaveWindow } from './goalkeeper-saves'
 import { planGoalkeeperOneOnOne } from '../ai/goalkeeper-one-on-one'
+import { activeAerialDelivery, goalkeeperCrossHandReach } from '../ai/goalkeeper-aerial'
 
 /**
  * Phase 4 — physical detection when an agent has declared intent to contest.
@@ -185,7 +186,8 @@ function alreadyHeldOffWithoutReapproach(
     // contest. Failed contacts by other players do not reset this one.
     if (event.outcome === 'intercepted' || event.outcome === 'wonChallenge' ||
         event.outcome === 'deflected' || event.outcome === 'caught' ||
-        event.outcome === 'parried') return false
+        event.outcome === 'parried' || event.outcome === 'punched')
+      return false
     if (event.playerId === playerAfter.playerId &&
         event.outcome === 'heldOff')
       return event.tick > lastManualTouch
@@ -232,9 +234,17 @@ function candidate(
     const smother = p.formationSlot === 'GK' && owner && team &&
       withinOwnPenaltyArea(p, setup) &&
       planGoalkeeperOneOnOne(after, setup, p, team)?.engage === true
+    const aerial = p.formationSlot === 'GK' && !owner && team &&
+      withinOwnPenaltyArea(p, setup) &&
+      !!activeAerialDelivery(after, setup, team) &&
+      !!definition?.abilities.goalkeeping
+    const reach = aerial && definition
+      ? goalkeeperCrossHandReach(definition) : null
     const result = sweptFootContact(old, p, before.ball, after.ball,
-      saveWindow?.reachM ?? (smother ? 1.05 : FOOT_REACH_M),
-      saveWindow?.maximumHeightM ?? FOOT_CONTACT_MAX_HEIGHT_M)
+      saveWindow?.reachM ?? reach?.horizontalM ??
+        (smother ? 1.05 : FOOT_REACH_M),
+      saveWindow?.maximumHeightM ?? reach?.maximumHeightM ??
+        FOOT_CONTACT_MAX_HEIGHT_M)
     if (!result) continue
     if (owner && alreadyHeldOffWithoutReapproach(
       before, after, old, p)) continue
@@ -338,6 +348,11 @@ export function resolveAutomaticBallContact(
     const saveWindow = keeperSave && activeShot
       ? goalkeeperSaveWindow(definition, tick, activeShot.tick)
       : null
+    const team = after.teams.find(t => t.clubId === player.clubId)
+    const aerial = player.formationSlot === 'GK' && !!team &&
+      !!definition.abilities.goalkeeping &&
+      withinOwnPenaltyArea(player, setup) &&
+      !!activeAerialDelivery(after, setup, team)
     const quality = keeperSave && definition.abilities.goalkeeping
       ? 0.45 * definition.abilities.goalkeeping.reflexes +
         0.35 * definition.abilities.goalkeeping.handling +
@@ -362,7 +377,58 @@ export function resolveAutomaticBallContact(
     const cleanCatch = keeperSave &&
       quality - challengeDifficulty - stretchPenalty >= 37 &&
       relativeSpeed <= 20
-    if (cleanCatch) {
+    if (aerial && definition.abilities.goalkeeping) {
+      const gk = definition.abilities.goalkeeping
+      const gloveQuality = .43 * gk.crossClaiming +
+        .30 * gk.handling + .17 * gk.commandOfArea +
+        .10 * definition.abilities.mental.concentration
+      let congestion = 0
+      for (const opponent of after.players) {
+        if (opponent.clubId !== player.clubId &&
+            opponent.formationSlot !== 'GK' &&
+            Math.hypot(
+              opponent.position.xM - sample.impact.xM,
+              opponent.position.yM - sample.impact.yM) < 2.25) {
+          congestion += 7
+        }
+      }
+      const difficulty = relativeSpeed * .65 +
+        Math.max(0, impactHeight - 1.2) * 10 +
+        sample.distanceM * 7 +
+        Math.min(18, congestion)
+      // No generated success roll: a REAL glove contact either securely
+      // claims the incoming cross or punches it away under pressure.
+      if (gloveQuality - difficulty >= 25) {
+        ball = attachToHands(ball, player, setup.pitch)
+        outcome = 'caught'
+      } else {
+        const outward = player.clubId === setup.clubs[0].id ? 1 : -1
+        const side = sample.impact.yM >= setup.pitch.widthM / 2 ? 1 : -1
+        const punch = gk.punching / 100
+        const x = outward * (.82 + .25 * punch)
+        const y = side * (.45 + .35 * punch)
+        const magnitude = Math.hypot(x, y)
+        const horizontal = Math.hypot(
+          ball.velocity.xMps, ball.velocity.yMps)
+        const speed = Math.min(17, 4.5 + horizontal * .23 +
+          gk.punching * .065)
+        ball = {
+          ...ball,
+          position: { ...sample.impact },
+          heightM: Math.max(BALL_RADIUS_M, impactHeight),
+          velocity: {
+            xMps: player.velocity.xMps * .25 + x / magnitude * speed,
+            yMps: player.velocity.yMps * .25 + y / magnitude * speed,
+            zMps: 1.2 + gk.punching * .009,
+          },
+          controllerId: null, controlOffset: null,
+          lastTouchPlayerId: player.playerId,
+          outsidePitch: isBallFullyOutsidePitch(
+            sample.impact.xM, sample.impact.yM, setup.pitch),
+        }
+        outcome = 'punched'
+      }
+    } else if (cleanCatch) {
       ball = attachToHands(ball, player, setup.pitch)
       outcome = 'caught'
     } else if (!keeperSave && quality - challengeDifficulty >= 24) {
