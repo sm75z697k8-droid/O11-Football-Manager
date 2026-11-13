@@ -6,7 +6,8 @@ import type { PlayerDefinition } from '../model/player'
 import type { PitchDefinition, Point2 } from '../model/pitch'
 import type { PlayerMatchState, BallMatchState, MatchState, ContactEvent } from '../match/state'
 import type { AppliedMatchCommand } from '../match/commands'
-import { throwInTakerTarget, forbiddenThrowInSecondTouch } from '../match/restarts'
+import { throwInTakerTarget, forbiddenRestartSecondTouch } from '../match/restarts'
+import { goalKickSpot, insideRestartPenaltyArea } from '../match/goal-kicks'
 
 /**
  * Contact tests are intentionally explicit in Phase 3: no football AI is
@@ -174,7 +175,8 @@ function event(
 ): ContactEvent {
   if (command.type !== 'attemptFirstTouch' && command.type !== 'attemptKick' &&
       command.type !== 'attemptGoalkeeperThrow' &&
-      command.type !== 'attemptThrowIn') {
+      command.type !== 'attemptThrowIn' &&
+      command.type !== 'attemptGoalKick') {
     throw new Error('Unexpected command supplied to contact resolver')
   }
   return {
@@ -199,7 +201,8 @@ export function resolveContactAttempts(
     command.appliedTick === state.clock.tick &&
     (command.type === 'attemptFirstTouch' || command.type === 'attemptKick' ||
       command.type === 'attemptGoalkeeperThrow' ||
-      command.type === 'attemptThrowIn'),
+      command.type === 'attemptThrowIn' ||
+      command.type === 'attemptGoalKick'),
   )
   if (!commands.length) return state
 
@@ -211,10 +214,12 @@ export function resolveContactAttempts(
   for (const command of commands) {
     if (command.type !== 'attemptFirstTouch' && command.type !== 'attemptKick' &&
         command.type !== 'attemptGoalkeeperThrow' &&
-        command.type !== 'attemptThrowIn') continue
+        command.type !== 'attemptThrowIn' &&
+        command.type !== 'attemptGoalKick') continue
     const kind = command.type === 'attemptFirstTouch' ? 'control' :
       command.type === 'attemptGoalkeeperThrow' ? 'throw' :
-        command.type === 'attemptThrowIn' ? 'throwIn' : 'kick'
+        command.type === 'attemptThrowIn' ? 'throwIn' :
+          command.type === 'attemptGoalKick' ? 'goalKick' : 'kick'
     const player = players.get(command.playerId)
     const definition = definitions.get(command.playerId)
     if (!player || !definition) throw new Error('Applied contact references an unknown player')
@@ -318,7 +323,33 @@ export function resolveContactAttempts(
       events.push(event(command, kind, 'thrown', 1))
       continue
     }
-    if (forbiddenThrowInSecondTouch({ ...state, ball }, player.playerId)) {
+    if (command.type === 'attemptGoalKick') {
+      const awarded = state.restart
+      const place = awarded?.kind === 'goalKick'
+        ? goalKickSpot(awarded, setup.pitch) : null
+      const opponentsClear = awarded && state.players.every(p =>
+        p.clubId === awarded.awardedTeamId ||
+        !insideRestartPenaltyArea(p.position, awarded, setup.pitch))
+      const legal = awarded?.kind === 'goalKick' && !!place &&
+        awarded.awardedTeamId === player.clubId &&
+        player.formationSlot === 'GK' &&
+        !!definition.abilities.goalkeeping &&
+        state.clock.tick - awarded.tick >= 14 &&
+        !ball.outsidePitch && ball.controllerId === null &&
+        ball.heightM === BALL_RADIUS_M &&
+        ball.velocity.xMps === 0 && ball.velocity.yMps === 0 &&
+        ball.velocity.zMps === 0 &&
+        Math.hypot(ball.position.xM - place.xM,
+          ball.position.yM - place.yM) < 1e-7 &&
+        Math.hypot(player.position.xM - ball.position.xM,
+          player.position.yM - ball.position.yM) <= FOOT_REACH_M &&
+        !!opponentsClear
+      if (!legal) {
+        events.push(event(command, kind, 'notReady', 0))
+        continue
+      }
+    }
+    if (forbiddenRestartSecondTouch({ ...state, ball }, player.playerId)) {
       events.push(event(command, kind, 'secondTouch', 0))
       continue
     }
@@ -394,7 +425,11 @@ export function resolveContactAttempts(
     }
     const a = definition.abilities
     const shooting = command.commandId.startsWith('ai-shot-')
-    const accuracy = contactAccuracy(definition, shooting)
+    const baseAccuracy = contactAccuracy(definition, shooting)
+    const accuracy = command.type === 'attemptGoalKick' &&
+      a.goalkeeping ? (.52 * a.goalkeeping.kickingDistribution +
+        .29 * a.technical.passing + .19 * a.mental.composure) / 100 :
+      baseAccuracy
     const heading = Math.atan2(dy, dx)
     const facingError = Math.abs(Math.atan2(
       Math.sin(heading - player.orientationRad),
@@ -422,7 +457,8 @@ export function resolveContactAttempts(
       controlOffset: null,
       lastTouchPlayerId: player.playerId,
     }
-    events.push(event(command, kind, 'kicked', 1))
+    events.push(event(command, kind,
+      command.type === 'attemptGoalKick' ? 'goalKicked' : 'kicked', 1))
   }
 
   const randomStreams = events.some((entry) => entry.drawUsed)
