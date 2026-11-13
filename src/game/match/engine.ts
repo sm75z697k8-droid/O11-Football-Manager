@@ -5,6 +5,12 @@ import { maintainPassReception } from '../ai/pass-coordination'
 import { GOALKEEPER_HAND_HEIGHT_M, GOALKEEPER_HOLD_MIN_TICKS } from '../physics/goalkeeper-handling'
 import { adjudicatePhysicalGoal } from './goals'
 import { advanceThrowInStoppage, recordOutOfPlay } from './restarts'
+import {
+  adjudicatePeriodTime, advanceSecondHalfKickoff, prepareSecondHalf,
+  startFirstHalfAfterOpening, secondHalfKickoffBallStationary,
+  secondHalfKickoffLegal, periodKickoffPrefix, HALF_TICKS,
+  TICKS_PER_MINUTE,
+} from './periods'
 import { advanceGoalKickStoppage, goalKickSpot } from './goal-kicks'
 import {
   advanceCornerStoppage, cornerBallSpot, selectCornerTaker,
@@ -43,7 +49,7 @@ import {
 } from './state'
 import type { MatchState, PressingIntensity } from './state'
 
-export const MATCH_CHECKPOINT_VERSION = 13 as const
+export const MATCH_CHECKPOINT_VERSION = 14 as const
 export const MAX_ADVANCE_STEPS_PER_CALL = 10_000 as const
 
 export interface FoundationMatchCheckpoint {
@@ -87,7 +93,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   if (!object(input) || input.schemaVersion !== MATCH_STATE_SCHEMA_VERSION ||
       input.engineVersion !== FOUNDATION_ENGINE_VERSION ||
       input.matchId !== setup.matchId || input.seed !== setup.seed ||
-      input.period !== 'notStarted') {
+      !['notStarted', 'firstHalf', 'halfTime',
+        'secondHalf', 'fullTime'].includes(input.period as string)) {
     throw new Error('Incompatible or invalid match state checkpoint')
   }
   const state = input as unknown as MatchState
@@ -103,15 +110,20 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       !Array.isArray(state.automaticContactEvents) ||
       !Number.isSafeInteger(state.ballContactCooldownUntilTick) ||
       state.ballContactCooldownUntilTick < 0 ||
+      !object(state.periodTiming) ||
+      (state.periodKickoff !== null && !object(state.periodKickoff)) ||
       !object(state.ai) || !Array.isArray(state.ai.enabledTeams) ||
       !Array.isArray(state.ai.decisionSnapshot) ||
       !object(state.ai.formationPositions)) {
     throw new Error('Incomplete match state checkpoint')
   }
   const baseline = createInitialMatchState(setup).state
+  const switchedEnds = state.period === 'secondHalf' ||
+    state.period === 'fullTime'
   if (state.teams.some((team, i) =>
     !object(team) || team.clubId !== baseline.teams[i].clubId ||
-    team.attackingDirection !== baseline.teams[i].attackingDirection ||
+    team.attackingDirection !==
+      baseline.teams[i].attackingDirection * (switchedEnds ? -1 : 1) ||
     !Number.isSafeInteger(team.score) || team.score < 0 ||
     team.score !== state.goalEvents.filter(g =>
       g.scoringTeamId === team.clubId).length ||
@@ -126,7 +138,12 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   for (const ev of state.goalEvents) {
     const scorer = state.players.find(p => p.playerId === ev?.lastTouchPlayerId)
     const goalTeam = state.teams.find(t => t.clubId === ev?.scoringTeamId)
-    const expectedSide = goalTeam?.attackingDirection === 1 ? 'right' : 'left'
+    const inSecondHalf = state.periodTiming.halfTimeTick !== null &&
+      ev.tick > state.periodTiming.halfTimeTick
+    const firstHalfDirection = goalTeam
+      ? goalTeam.attackingDirection * (switchedEnds ? -1 : 1) : 0
+    const expectedSide = firstHalfDirection * (inSecondHalf ? -1 : 1) === 1
+      ? 'right' : 'left'
     if (!ev || typeof ev !== 'object' ||
         Object.keys(ev).sort().join(',') !==
         'crossingHeightM,crossingY,lastTouchPlayerId,ownGoal,scoringTeamId,side,tick' ||
@@ -229,8 +246,12 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
             exit.spot.xM !== setup.pitch.lengthM - .35)) {
         throw new Error('Invalid goal-line restart classification')
       }
+      const historicalSecondHalf = state.periodTiming.halfTimeTick !== null &&
+        exit.tick > state.periodTiming.halfTimeTick
       const defending = state.teams.find(t =>
-        t.attackingDirection === (exit.side === 'left' ? 1 : -1))
+        t.attackingDirection * (switchedEnds ? -1 : 1) *
+          (historicalSecondHalf ? -1 : 1) ===
+          (exit.side === 'left' ? 1 : -1))
       if (!defending ||
           (exit.kind === 'corner' &&
             (lastTouch.clubId !== defending.clubId ||
@@ -279,17 +300,26 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       throw new Error('Throw-in command not supported by chronological award')
     }
   }
+  const exitAbandonedAtWhistle = !!lastExit &&
+    ((state.periodTiming.halfTimeTick !== null &&
+       lastExit.tick <= state.periodTiming.halfTimeTick &&
+       switchedEnds) ||
+     (state.periodTiming.fullTimeTick !== null &&
+       lastExit.tick <= state.periodTiming.fullTimeTick))
   if (lastExit?.kind === 'throwIn' && state.restart === null &&
+      !exitAbandonedAtWhistle &&
       !state.contactEvents.some(e => e.kind === 'throwIn' &&
         e.outcome === 'thrownIn' && e.tick > lastExit.tick)) {
     throw new Error('Throw-in restart finished without a physical hand release')
   }
   if (lastExit?.kind === 'goalKick' && state.restart === null &&
+      !exitAbandonedAtWhistle &&
       !state.contactEvents.some(e => e.kind === 'goalKick' &&
         e.outcome === 'goalKicked' && e.tick > lastExit.tick)) {
     throw new Error('Goal kick finished without a real goal-area foot contact')
   }
   if (lastExit?.kind === 'corner' && state.restart === null &&
+      !exitAbandonedAtWhistle &&
       !state.contactEvents.some(e => e.kind === 'cornerKick' &&
         e.outcome === 'cornerKicked' && e.tick > lastExit.tick)) {
     throw new Error('Corner finished without real physical foot contact')
@@ -301,7 +331,13 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       exit.tick <= command.requestedTick &&
       (state.outOfPlayEvents.find(next =>
         next.tick > exit.tick)?.tick ?? Infinity) > command.appliedTick)
-    const taker = award ? selectCornerTaker(state, award, setup) : null
+    const historicalState = award &&
+      state.periodTiming.halfTimeTick !== null &&
+      award.tick <= state.periodTiming.halfTimeTick && switchedEnds
+      ? { ...state, ai: {
+        ...state.ai, formationPositions: baseline.ai.formationPositions,
+      } } : state
+    const taker = award ? selectCornerTaker(historicalState, award, setup) : null
     const event = state.contactEvents.find(e => e.commandId === command.commandId)
     if (!award || taker?.playerId !== command.playerId ||
         command.appliedTick <= award.tick ||
@@ -414,11 +450,16 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   }
 
   // Team AI only becomes authoritative after an applied opt-in command.
-  // The fixture anchors must remain exactly the validated initial positions.
+  // Formation anchors switch ends only at the legal half-time interval.
   if (state.ai.enabledTeams.length !== 2 ||
       state.ai.enabledTeams.some((v,i) => v !== expectedAIEnabled[i]) ||
       JSON.stringify(state.ai.formationPositions) !==
-        JSON.stringify(baseline.ai.formationPositions) ||
+        JSON.stringify(switchedEnds
+          ? Object.fromEntries(Object.entries(baseline.ai.formationPositions)
+            .map(([id,p]) => [id, {
+              xM:setup.pitch.lengthM-p.xM,
+              yM:setup.pitch.widthM-p.yM,
+            }])) : baseline.ai.formationPositions) ||
       !Number.isSafeInteger(state.ai.lastDecisionTick) ||
       state.ai.lastDecisionTick < -1 ||
       state.ai.lastDecisionTick > state.clock.tick ||
@@ -857,7 +898,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     }
 
     const motion = lastMotion.get(player.playerId)
-    if (!motion && !everAutonomous.has(player.clubId)) {
+    if (!motion && !everAutonomous.has(player.clubId) && !switchedEnds) {
       if (JSON.stringify({ ...player, engagesBall: false }) !==
           JSON.stringify(original)) {
         throw new Error('Player moved without an authoritative movement command')
@@ -942,28 +983,35 @@ export class FoundationMatchEngine {
       throw new RangeError('Invalid engine advance step count')
     }
     for (let i = 0; i < steps; i += 1) {
+      if (this.state.period === 'halfTime' ||
+          this.state.period === 'fullTime') break
       if (this.state.restart && !['throwIn', 'goalKick', 'corner']
           .includes(this.state.restart.kind)) break
       const clock = advanceSimulationClock(this.state.clock)
       const applied = applyDueMatchCommands({ ...this.state, clock })
+      if (applied.periodKickoff) {
+        this.state = adjudicatePeriodTime(advanceSecondHalfKickoff(
+          applied, this.setup, resolveContactAttempts))
+        continue
+      }
       if (applied.postGoalKickoff) {
-        this.state = advancePostGoalKickoff(
-          applied, this.setup, resolveContactAttempts)
+        this.state = adjudicatePeriodTime(advancePostGoalKickoff(
+          applied, this.setup, resolveContactAttempts))
         continue
       }
       if (applied.restart?.kind === 'throwIn') {
-        this.state = advanceThrowInStoppage(
-          applied, this.setup, resolveContactAttempts)
+        this.state = adjudicatePeriodTime(advanceThrowInStoppage(
+          applied, this.setup, resolveContactAttempts))
         continue
       }
       if (applied.restart?.kind === 'goalKick') {
-        this.state = advanceGoalKickStoppage(
-          applied, this.setup, resolveContactAttempts)
+        this.state = adjudicatePeriodTime(advanceGoalKickStoppage(
+          applied, this.setup, resolveContactAttempts))
         continue
       }
       if (applied.restart?.kind === 'corner') {
-        this.state = advanceCornerStoppage(
-          applied, this.setup, resolveContactAttempts)
+        this.state = adjudicatePeriodTime(advanceCornerStoppage(
+          applied, this.setup, resolveContactAttempts))
         continue
       }
       const planned = runAutonomousDecisions(applied, this.setup)
@@ -1022,8 +1070,17 @@ export class FoundationMatchEngine {
       const resolved = resolveAutomaticBallContact(this.state, kickedOff, this.setup)
       const adjudicated = adjudicatePhysicalGoal(this.state,
         maintainPassReception(resolved, this.setup), this.setup)
-      this.state = recordOutOfPlay(this.state, adjudicated, this.setup)
+      this.state = adjudicatePeriodTime(startFirstHalfAfterOpening(
+        recordOutOfPlay(this.state, adjudicated, this.setup)))
     }
+    return this.getState()
+  }
+
+  /** Explicit referee-controlled break. Never silently advance an idle
+   * halftime clock or assign a successful kickoff from this action.
+   */
+  beginSecondHalf(): MatchState {
+    this.state = prepareSecondHalf(this.state, this.setup)
     return this.getState()
   }
 
