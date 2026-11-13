@@ -529,7 +529,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         ![0, 1].includes(recorded.drawUsed) ||
         !(
           command.type === 'attemptKick'
-            ? ['kicked', 'outOfReach', 'occupied', 'invalidDirection', 'secondTouch'].includes(recorded.outcome)
+            ? ['kicked', 'outOfReach', 'occupied', 'invalidDirection', 'secondTouch', 'notReady'].includes(recorded.outcome)
             : command.type === 'attemptGoalkeeperThrow'
               ? ['thrown', 'occupied', 'notHolding', 'tooSoon', 'invalidDirection'].includes(recorded.outcome)
               : command.type === 'attemptThrowIn'
@@ -538,7 +538,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
                   ? ['goalKicked', 'notReady', 'invalidDirection'].includes(recorded.outcome)
                   : command.type === 'attemptCornerKick'
                     ? ['cornerKicked', 'notReady', 'invalidDirection'].includes(recorded.outcome)
-                    : ['controlled', 'miscontrolled', 'outOfReach', 'occupied', 'alreadyControlled', 'secondTouch'].includes(recorded.outcome)
+                    : ['controlled', 'miscontrolled', 'outOfReach', 'occupied', 'alreadyControlled', 'secondTouch', 'notReady'].includes(recorded.outcome)
         ) ||
         recorded.drawUsed !== (['kicked', 'controlled', 'miscontrolled', 'thrown', 'thrownIn', 'goalKicked', 'cornerKicked'].includes(recorded.outcome) ? 1 : 0) ||
         Object.keys(recorded).sort().join(',') !==
@@ -909,11 +909,15 @@ export class FoundationMatchEngine {
       throw new RangeError('Invalid engine advance step count')
     }
     for (let i = 0; i < steps; i += 1) {
-      if (this.state.goalEvents.length ||
-          (this.state.restart && !['throwIn', 'goalKick', 'corner']
-            .includes(this.state.restart.kind))) break
+      if (this.state.restart && !['throwIn', 'goalKick', 'corner']
+          .includes(this.state.restart.kind)) break
       const clock = advanceSimulationClock(this.state.clock)
       const applied = applyDueMatchCommands({ ...this.state, clock })
+      if (applied.postGoalKickoff) {
+        this.state = advancePostGoalKickoff(
+          applied, this.setup, resolveContactAttempts)
+        continue
+      }
       if (applied.restart?.kind === 'throwIn') {
         this.state = advanceThrowInStoppage(
           applied, this.setup, resolveContactAttempts)
