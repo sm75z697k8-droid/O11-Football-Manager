@@ -332,6 +332,7 @@ function assessedShot(
 export function reviewOnBallActions(
   state: MatchState, setup: MatchSetup,
   options: readonly PossessionChoice[],
+  preparedShot?: ShootingOpportunity | null,
 ): ShortHorizonReview {
   const owner = state.players.find(p => p.playerId === state.ball.controllerId)
   if (!owner || !options.length) return {
@@ -345,11 +346,13 @@ export function reviewOnBallActions(
   // A single physical preview per decision cycle is important on iPhone.
   const shooterDefinition = setup.players.find(p => p.id === owner.playerId)
   if (!shooterDefinition) throw new Error('Missing on-ball footballer definition')
-  const immediateShot = options.some(choice => choice.kind === 'pass')
-    ? evaluateShootingOpportunity(
-      owner, shooterDefinition, opponents,
-      state.teams.find(t => t.clubId === owner.clubId)!, setup)
-    : null
+  const immediateShot = preparedShot !== undefined
+    ? preparedShot
+    : options.some(choice => choice.kind === 'pass')
+      ? evaluateShootingOpportunity(
+        owner, shooterDefinition, opponents,
+        state.teams.find(t => t.clubId === owner.clubId)!, setup)
+      : null
   const assessments = options.map(choice =>
     choice.kind === 'pass'
       ? assessedPass(choice, owner, state, setup, opponents, immediateShot)
