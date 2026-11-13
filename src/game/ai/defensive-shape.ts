@@ -175,18 +175,17 @@ export function shouldPressCarrier(
   if (player.formationSlot === 'GK') return false
   const distance = separationM(player.position, ballPoint)
   const emergency = context.goalDistanceM <= 26
-  const immediateContact = distance <= 4.5
+  const immediateContact = distance <= 3.5
   // Pressing is a deliberate event, not a permanent radius around the ball.
-  // Normal nearby ownership is primarily CONTAINED by goal-side cover and
-  // zonal recovery. A close player challenges when he can tackle NOW.
+  // Nearby but unthreatening ownership is CONTAINED from shape, not chased.
   const triggered = team.pressingIntensity === 'low'
-    ? (emergency && distance <= 12) || distance <= 3.2
+    ? (emergency && distance <= 10) || distance <= 3.2
     : team.pressingIntensity === 'standard'
       ? immediateContact ||
-        (emergency && distance <= 16) ||
-        (context.goalDistanceM <= 44 && distance <= 9.5) ||
-        (context.trappedWide && distance <= 10) ||
-        (context.drivingAtGoal && distance <= 11) ||
+        (emergency && distance <= 11) ||
+        (context.goalDistanceM <= 38 && distance <= 6.5) ||
+        (context.trappedWide && distance <= 8.5) ||
+        (context.drivingAtGoal && distance <= 8.5) ||
         (context.settledReception && distance <= 14)
       : distance <= (emergency ? 22 : 18) +
         ((context.trappedWide || context.drivingAtGoal ||
