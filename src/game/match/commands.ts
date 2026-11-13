@@ -57,6 +57,16 @@ export interface AttemptGoalkeeperThrowRequest {
 }
 /** Toggle physical contact intent; physics handles entry automatically thereafter. */
 /** Throw-in is a legal restart, never a ground kick or GK distribution. */
+/** A foot kick from a stationary ball in the defending goal area. */
+export interface AttemptGoalKickRequest {
+  readonly commandId: string
+  readonly teamId: string
+  readonly type: 'attemptGoalKick'
+  readonly playerId: string
+  readonly target: Point2
+  readonly power: number
+  readonly lift: number
+}
 export interface AttemptThrowInRequest {
   readonly commandId: string
   readonly teamId: string
@@ -83,6 +93,7 @@ export type MatchCommandRequest =
   | SetPressingCommandRequest | SetMovementTargetRequest
   | DiagnosticBallLaunchRequest | AttemptFirstTouchRequest | AttemptKickRequest
   | AttemptGoalkeeperThrowRequest | AttemptThrowInRequest
+  | AttemptGoalKickRequest
   | SetBallEngagementRequest | SetAutonomousTeamRequest
 export type ScheduledMatchCommand = MatchCommandRequest & {
   readonly requestedTick: number
@@ -102,6 +113,7 @@ const FIRST_TOUCH_FIELDS = ['commandId', 'teamId', 'type', 'playerId']
 const KICK_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target', 'power', 'lift']
 const THROW_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target', 'power']
 const THROW_IN_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target', 'power']
+const GOAL_KICK_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target', 'power', 'lift']
 const ENGAGEMENT_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'enabled']
 const AUTONOMY_FIELDS = ['commandId', 'teamId', 'type', 'enabled']
 
@@ -221,6 +233,27 @@ export function parseMatchCommandRequest(
       power: value.power,
     } }
   }
+  if (value.type === 'attemptGoalKick') {
+    const point = value.target
+    if (Object.keys(value).some(k => !GOAL_KICK_FIELDS.includes(k)) ||
+        typeof value.playerId !== 'string' || !value.playerId.trim() ||
+        !point || typeof point !== 'object' || Array.isArray(point) ||
+        Object.keys(point).some(k => k !== 'xM' && k !== 'yM') ||
+        !insidePitch(point as Point2, pitch) ||
+        typeof value.power !== 'number' || !Number.isFinite(value.power) ||
+        value.power < .05 || value.power > 1 ||
+        typeof value.lift !== 'number' || !Number.isFinite(value.lift) ||
+        value.lift < 0 || value.lift > 1) {
+      return { reason: 'Invalid physical goal-kick request', commandId }
+    }
+    const p = point as Point2
+    return { request: {
+      commandId, teamId: value.teamId, type: 'attemptGoalKick',
+      playerId: value.playerId,
+      target: { xM: p.xM, yM: p.yM },
+      power: value.power, lift: value.lift,
+    } }
+  }
   if (value.type === 'attemptKick') {
     const point = value.target
     if (Object.keys(value).some((k) => !KICK_FIELDS.includes(k)) ||
@@ -263,9 +296,33 @@ export function scheduleMatchCommand(
        req.type === 'attemptFirstTouch' || req.type === 'attemptKick' ||
        req.type === 'attemptGoalkeeperThrow' ||
        req.type === 'attemptThrowIn' ||
+       req.type === 'attemptGoalKick' ||
        req.type === 'setBallEngagement') &&
       !state.players.some((p) => p.playerId === req.playerId && p.clubId === req.teamId)) {
     return reject('Player does not belong to the specified team')
+  }
+  const restart = state.restart
+  // During a dead-ball stoppage, a regular touch/kick cannot secretly
+  // bypass the authorized restart. Tactical commands can still be queued.
+  if (restart && ['attemptKick', 'attemptFirstTouch',
+    'attemptGoalkeeperThrow', 'diagnosticBallLaunch'].includes(req.type)) {
+    return reject('Ball is dead until the awarded restart is taken')
+  }
+  if (req.type === 'attemptGoalKick') {
+    if (restart?.kind !== 'goalKick' ||
+        restart.awardedTeamId !== req.teamId ||
+        !state.players.some(p => p.playerId === req.playerId &&
+          p.clubId === req.teamId && p.formationSlot === 'GK')) {
+      return reject('Goal kick is not authorized for this goalkeeper')
+    }
+    const goalX = restart.side === 'left' ? 0 : pitch.lengthM
+    const direction = restart.side === 'left' ? 1 : -1
+    const projectedForward = (req.target.xM - goalX) * direction
+    if (projectedForward <= pitch.goalAreaDepthM + 2 ||
+        Math.hypot(req.target.xM - state.ball.position.xM,
+          req.target.yM - state.ball.position.yM) < 5) {
+      return reject('Goal kick must be directed into the field')
+    }
   }
   if (req.type === 'attemptThrowIn') {
     const restart = state.restart
