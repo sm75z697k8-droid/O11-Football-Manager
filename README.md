@@ -1,3 +1,11 @@
+## Phase 6.9R — Controlled goalkeeper profiles for two fictional teams
+
+The landscape match viewer now starts in **GK comparison** mode. Harbor Athletic's fictional goalkeeper is a **reflex specialist** (Reflexes 94, Diving 90, Handling 45), while Vale Rovers' goalkeeper is a **secure handler** (Reflexes 55, Diving 59, Handling 92, Parrying 93). These are deliberately contrasting, **estimated simulation values**, not real player data or save percentages. Both teams still start in 4-3-3 with standard pressing, and every **outfield player's attributes remain unchanged**; this phase tests goalkeeper differences only, not an entire tactical identity or calibrated comparative ability.
+
+Tap the **GK** control in the iPhone landscape match header to inspect both players' actual ratings. Switch between **GK comparison** and **Balanced** (both goalkeepers have the original rating 68) to replay from kick-off with the **same seed**. Replaying within either preset is deterministic; switching presets may produce different later events because actual physical keeper abilities differ. The balanced canonical fixture and historical seeded baseline tests are preserved unchanged. The viewer's seed caption and copied debug report include the fixture preset.
+
+This is a controlled goalkeeper testing feature, not evidence that the new attributes yield realistic save ratios over many matches. See `tests/unit/phase-6-9r-goalkeeper-profiles.test.ts` for profile, validation, physical reaction and replay checks.
+
 ## Phase 6.9O — Disciplined pressing instead of constant swarming
 
 The defending AI now decides **when** to press rather than nominating any footballer within 30–38 metres of the carrier. Low pressing generally guards its compact shape, standard pressing looks for a local physical challenge, danger toward goal, a touchline trap or a real fresh first touch, while high pressing remains aggressive and uses a second challenger only for a credible trap. The first presser closes on the goal side of the ball, and its role is stable across nearly equal alternatives; other defenders screen, mark or recover. Cover movement is bounded to its own defensive recovery zone instead of becoming a second long-range sprint toward the ball. Loose-ball recovery, real tackles and the existing 6.9M shot decisions/6.9N close control are preserved.
