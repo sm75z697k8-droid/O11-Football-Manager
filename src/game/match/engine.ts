@@ -127,7 +127,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     const scorer = state.players.find(p => p.playerId === ev?.lastTouchPlayerId)
     const goalTeam = state.teams.find(t => t.clubId === ev?.scoringTeamId)
     const expectedSide = goalTeam?.attackingDirection === 1 ? 'right' : 'left'
-    if (!object(ev) || Object.keys(ev).sort().join(',') !==
+    if (!ev || typeof ev !== 'object' ||
+        Object.keys(ev).sort().join(',') !==
         'crossingHeightM,crossingY,lastTouchPlayerId,ownGoal,scoringTeamId,side,tick' ||
         !scorer || !goalTeam || ev.side !== expectedSide ||
         typeof ev.ownGoal !== 'boolean' ||
