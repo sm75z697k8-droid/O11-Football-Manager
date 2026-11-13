@@ -422,12 +422,12 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         ![0, 1].includes(recorded.drawUsed) ||
         !(
           command.type === 'attemptKick'
-            ? ['kicked', 'outOfReach', 'occupied', 'invalidDirection'].includes(recorded.outcome)
+            ? ['kicked', 'outOfReach', 'occupied', 'invalidDirection', 'secondTouch'].includes(recorded.outcome)
             : command.type === 'attemptGoalkeeperThrow'
               ? ['thrown', 'occupied', 'notHolding', 'tooSoon', 'invalidDirection'].includes(recorded.outcome)
               : command.type === 'attemptThrowIn'
                 ? ['thrownIn', 'notReady', 'invalidDirection'].includes(recorded.outcome)
-                : ['controlled', 'miscontrolled', 'outOfReach', 'occupied', 'alreadyControlled'].includes(recorded.outcome)
+                : ['controlled', 'miscontrolled', 'outOfReach', 'occupied', 'alreadyControlled', 'secondTouch'].includes(recorded.outcome)
         ) ||
         recorded.drawUsed !== (['kicked', 'controlled', 'miscontrolled', 'thrown', 'thrownIn'].includes(recorded.outcome) ? 1 : 0) ||
         Object.keys(recorded).sort().join(',') !==
