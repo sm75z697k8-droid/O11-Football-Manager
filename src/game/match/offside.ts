@@ -1,6 +1,6 @@
 import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
-import type { MatchState, PlayerMatchState, OffsidePhase, OffsideEvent } from './state'
+import type { MatchState, OffsidePhase, OffsideEvent } from './state'
 import { BALL_RADIUS_M } from '../physics/ball'
 import { FOOT_REACH_M } from '../physics/contact'
 import { advancePlayerLocomotion } from '../physics/locomotion'
