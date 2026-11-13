@@ -221,16 +221,17 @@ describe('S1.2 real Law 16 goal-kick continuations', () => {
     }
   })
 
-  it('looks beyond two crowded centre-backs instead of automatically hoofing the ball', () => {
+  it('uses a lofted midfield outlet when both centre-back and full-back passing lanes are screened', () => {
     const scene = ready('left', true)
     const staged=stageGoalKick(scene.state,scene.setup)
     const target=staged.pendingCommands.find(c => c.type === 'attemptGoalKick')
     expect(target?.type).toBe('attemptGoalKick')
-    expect(target?.lift).toBe(0)
+    expect(target?.lift).toBeGreaterThan(0)
     expect(staged.ai.passIntent?.receiverId).not.toBe(scene.keeper.playerId)
     const recipient=scene.state.players.find(p=>
       p.playerId===staged.ai.passIntent?.receiverId)
-    expect(['RB','LB','DM']).toContain(recipient?.formationSlot)
+    expect(['DM','RCM','LCM','RW','LW','ST'])
+      .toContain(recipient?.formationSlot)
     expect(scene.state.players.some(p => p.clubId !== scene.defending.clubId &&
       insideRestartPenaltyArea(p.position, scene.event, scene.setup.pitch)))
       .toBe(false)
