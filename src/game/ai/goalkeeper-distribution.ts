@@ -4,6 +4,7 @@ import type { Point2 } from '../model/pitch'
 import { activeGoalkeeperCatch, GOALKEEPER_HOLD_MIN_TICKS } from '../physics/goalkeeper-handling'
 import { passMeetingPoint } from './pass-viability'
 import { segmentProximity } from './possession'
+import { boundedTarget } from './coordination'
 import {
   previewPhysicalGoalkeeperThrow,
 } from './goalkeeper-throw-preview'
@@ -181,10 +182,38 @@ export function chooseGoalkeeperThrow(
   // materializes, rather than spin forever.
   const selected = credible ??
     (heldTicks >= 78 ? assessed[0] : null)
-  if (!selected) return null
-  return {
+  if (selected) return {
     kind: 'throw', teamId: selected.teamId,
     playerId: selected.playerId, receiverId: selected.receiverId,
     target: selected.target, power: selected.power,
+  }
+
+  // If absolutely nobody has moved into the physically supported throw
+  // range, there must still be a way for the keeper to restart play. A
+  // late, explicitly RISKY real throw toward the nearest outfield player
+  // is preferable to endless hand possession. Cap the physical target to
+  // nearby pitch space rather than falsely assuming a 70m pinpoint throw.
+  // The receiver is only an intention; the other side may win the ball.
+  if (heldTicks < 120) return null
+  const nearest = state.players.filter(p =>
+    p.clubId === keeper.clubId && p.playerId !== keeper.playerId &&
+    p.formationSlot !== 'GK')
+    .sort((a, b) =>
+      distance(a.position, keeper.position) -
+        distance(b.position, keeper.position) ||
+      a.playerId.localeCompare(b.playerId))[0]
+  if (!nearest) return null
+  const dx = nearest.position.xM - state.ball.position.xM
+  const dy = nearest.position.yM - state.ball.position.yM
+  const length = Math.hypot(dx, dy)
+  if (length < .05) return null
+  const target = boundedTarget({
+    xM: state.ball.position.xM + dx / length * Math.min(24, length),
+    yM: state.ball.position.yM + dy / length * Math.min(24, length),
+  }, setup.pitch)
+  return {
+    kind: 'throw', teamId: keeper.clubId,
+    playerId: keeper.playerId, receiverId: nearest.playerId,
+    target, power: .9,
   }
 }
