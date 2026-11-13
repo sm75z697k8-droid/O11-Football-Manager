@@ -3,6 +3,7 @@ import type { BallMatchState, GoalEvent, MatchState } from './state'
 import type { MatchSetup } from '../model/match'
 import { BALL_RADIUS_M } from '../physics/ball'
 import { postGoalKickoffAward } from './post-goal-kickoff'
+import { disallowedDirectGoal } from './goal-eligibility'
 
 /**
  * Goal-line geometry in the same 105 x 68 metre coordinates as ball physics.
@@ -65,6 +66,10 @@ export function adjudicatePhysicalGoal(
   const scoringTeam = after.teams.find(team =>
     team.attackingDirection === (crossed.side === 'right' ? 1 : -1))
   if (!scoringTeam) throw new Error('Goal-side attacking direction is missing')
+  // A real whole-ball crossing can still be prohibited by the way the
+  // ball last entered play. Leave it outside for the existing Law 16/17
+  // goal-line restart classifier; never credit an illegal score.
+  if (disallowedDirectGoal(after, scoringTeam.clubId)) return after
   const goal: GoalEvent = {
     tick: after.clock.tick,
     scoringTeamId: scoringTeam.clubId,

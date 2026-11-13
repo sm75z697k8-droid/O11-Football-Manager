@@ -1,3 +1,17 @@
+## S1.7.1 — Restart-aware physical goal validation
+
+The referee now checks more than crossing the goal line. Every proposed goal is matched to the **latest successful physical player touch** (from the existing commanded touch or swept contact event histories). A missed kick or a failed/held-off tackle does **not** count as an intervening touch; a real save, rebound from a player, interception or deflection does. The ball may bounce from the ground or goal frame without losing the origin of the last player contact.
+
+**Goal legality, IFAB 2026/27:** direct throw-ins into either goal cannot score (goal kick against opponents, corner against the taker's club). A goalkeeper's direct hand throw into the *opponents'* goal is a goal kick. An indirect offside free kick cannot score directly into either goal. A direct own-goal attempt from a kick-off, goal kick, corner kick or direct free kick gives the opposition a corner, while a direct goal into the opponents' net from those legal kicks remains valid. Ordinary physical shots and own goals after another player's actual touch retain normal whole-ball goal adjudication. A legally prohibited crossing **never changes the score or starts a goal celebration**. Instead, the existing goal-line classifier awards and physically stages the correct goal kick or corner from the same crossing—no new phantom restart, ball contact or score is fabricated.
+
+The same rule check now audits historical scored goals during checkpoint restoration, guarding against a save that claims a prohibited direct goal. There is **no new match-state field or checkpoint-format change**: the referee reconstructs eligibility on demand from existing chronological contact events, keeping ordinary 20Hz live ticks lean. Existing successful goals, ball physics, offside decisions and restart flows are preserved. Regression tests cover both attacking directions, own/opposing goals, physical deflections and saves, unsuccessful contact attempts, kick-off variants, direct/indirect kicks, and historic contact order.
+
+Sources: [IFAB Law 8](https://www.theifab.com/laws/latest/the-start-and-restart-of-play/), [Law 10](https://www.theifab.com/laws/latest/determining-the-outcome-of-a-match/), [Law 13](https://www.theifab.com/laws/latest/free-kicks/), [Law 15](https://www.theifab.com/laws/latest/the-throw-in/), [Law 16](https://www.theifab.com/laws/latest/the-goal-kick/), [Law 17](https://www.theifab.com/laws/latest/the-corner-kick/).
+
+**Remaining scope:** this does not add new illegal second-touch officiating, referee/outsider ball deflections, throw-in execution offences, or penalty-specific end-of-half timing. These remain distinct future enhancements. The game still needs real iPhone Safari testing for full-match play.
+
+---
+
 ## S1.7 — Deliberate tackling, physical fouls and penalties
 
 O11 now separates a **defender's tackle decision** from the ball-contact result. When challenging a controlled carrier, the AI chooses whether to press into the ball or jockey and contain according to angle of approach, tackling, decisions, anticipation, composure, aggression and immediate defensive danger. This runs for either team; it is tactical guidance rather than a forced possession award.
