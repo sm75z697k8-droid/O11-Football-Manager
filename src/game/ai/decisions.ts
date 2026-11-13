@@ -8,6 +8,7 @@ import { planHeldGoalkeeperShape } from './goalkeeper-possession-shape'
 import { planGoalkeeperSave } from './goal-directed'
 import { planGoalkeeperPosition } from './goalkeeper-positioning'
 import { planGoalkeeperOneOnOne } from './goalkeeper-one-on-one'
+import { planGoalkeeperAerial } from './goalkeeper-aerial'
 import { assessLooseBallRace } from './loose-ball'
 import {
   canReleaseControlledBall, evaluateOnBallChoice,
@@ -143,8 +144,11 @@ export function planTeamDecisions(
         ? planGoalkeeperSave(state, setup, player, team) : null
       const keeperOneOnOne = !keeperSave && player.formationSlot === 'GK'
         ? planGoalkeeperOneOnOne(state, setup, player, team) : null
+      const keeperAerial = !keeperSave && !keeperOneOnOne &&
+        player.formationSlot === 'GK'
+        ? planGoalkeeperAerial(state, setup, player, team) : null
       const keeperPosition = !keeperSave && !keeperOneOnOne &&
-        player.formationSlot === 'GK' &&
+        !keeperAerial && player.formationSlot === 'GK' &&
         player.playerId !== owner?.playerId
         ? planGoalkeeperPosition(state, setup, player, team) : null
       if (keeperSave) {
@@ -155,6 +159,10 @@ export function planTeamDecisions(
         action = 'oneOnOne'
         engage = keeperOneOnOne.engage
         target = keeperOneOnOne.target
+      } else if (keeperAerial) {
+        action = 'claimCross'
+        engage = keeperAerial.engage
+        target = keeperAerial.target
       } else if (keeperPosition) {
         action = 'shape'
         engage = false
