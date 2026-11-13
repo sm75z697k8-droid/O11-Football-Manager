@@ -329,7 +329,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     throw new Error('Invalid autonomous team/checkpoint state')
   }
   const generated = commands.filter(c =>
-    (c.type === 'attemptKick' || c.type === 'attemptGoalkeeperThrow') &&
+    (c.type === 'attemptKick' || c.type === 'attemptGoalkeeperThrow' ||
+      c.type === 'attemptThrowIn') &&
     (c.commandId.startsWith('ai-pass-') || c.commandId.startsWith('ai-shot-')))
   const expectedLastPass = generated.length
     ? Math.max(...generated.map(c => c.requestedTick)) : -1000
@@ -350,7 +351,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     const receiver = state.players.find(p => p.playerId === intent.receiverId)
     const aiTeamIndex = state.teams.findIndex(t => t.clubId === intent.teamId)
     if (!candidate || (candidate.type !== 'attemptKick' &&
-        candidate.type !== 'attemptGoalkeeperThrow') ||
+        candidate.type !== 'attemptGoalkeeperThrow' &&
+        candidate.type !== 'attemptThrowIn') ||
         !candidate.commandId.startsWith('ai-pass-') ||
         candidate.teamId !== intent.teamId ||
         candidate.playerId !== intent.passerId ||
