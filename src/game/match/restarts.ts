@@ -273,7 +273,7 @@ export function stageThrowIn(
     Math.hypot(p.position.xM - targets[index].xM,
       p.position.yM - targets[index].yM) < 2.0)
   const pending = [...staged.pendingCommands, ...staged.appliedCommands].some(c =>
-    c.type === 'attemptThrowIn' && c.commandId === 'ai-restart-throwin-' + event.tick)
+    c.type === 'attemptThrowIn' && c.commandId === 'ai-pass-throwin-' + event.tick)
   if (travelled < .8 && receiverReady &&
       state.clock.tick - event.tick >= 14 && !pending) {
     const nearest = receivers.find((p, index) =>
@@ -281,7 +281,7 @@ export function stageThrowIn(
         p.position.yM - targets[index].yM) < 2.0)!
     const target = nearest.position
     const receipt = scheduleMatchCommand(staged, {
-      commandId: 'ai-restart-throwin-' + event.tick,
+      commandId: 'ai-pass-throwin-' + event.tick,
       type: 'attemptThrowIn',
       teamId: event.awardedTeamId,
       playerId: event.takerId,
@@ -291,7 +291,20 @@ export function stageThrowIn(
     if (!receipt.receipt.accepted) {
       throw new Error('Could not stage legal throw-in: ' + receipt.receipt.reason)
     }
-    staged = receipt.state
+    staged = {
+      ...receipt.state,
+      ai: {
+        ...receipt.state.ai, lastPassTick: state.clock.tick,
+        passIntent: {
+          commandId: 'ai-pass-throwin-' + event.tick,
+          teamId: event.awardedTeamId,
+          passerId: event.takerId,
+          receiverId: nearest.playerId,
+          requestedTick: state.clock.tick,
+          target: { ...target },
+        },
+      },
+    }
   }
   return staged
 }
