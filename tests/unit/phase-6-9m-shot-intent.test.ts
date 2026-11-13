@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
 import { createFoundationMatch } from '../../src/game/match/engine'
-import { evaluateOnBallPlan } from '../../src/game/ai/possession'
+import { AI_SHOT_MIN_INTERVAL_TICKS, AI_PASS_MIN_INTERVAL_TICKS, canReleaseControlledBall, evaluateOnBallPlan } from '../../src/game/ai/possession'
+import { choosePossessionRelease } from '../../src/game/ai/decisions'
 import {
   evaluateShootingOpportunity, shootingCorridorObstruction,
 } from '../../src/game/ai/goal-directed'
@@ -99,6 +100,30 @@ describe('Phase 6.9M — decisions and physical shot-frame preview',()=>{
       expect(JSON.stringify(a.state)).toBe(before)
       expect(a.state.contactEvents).toHaveLength(0)
       expect(a.state.goalEvents).toHaveLength(0)
+    })
+
+    it(`can shoot promptly after a legitimate recent pass, without reopening the rapid-pass loophole from goal ${side}`,()=>{
+      const a=stage(side)
+      const justReceived:MatchState={...a.state,
+        ai:{...a.state.ai,lastPassTick:120-6}}
+      expect(AI_PASS_MIN_INTERVAL_TICKS).toBeGreaterThan(
+        AI_SHOT_MIN_INTERVAL_TICKS)
+      expect(canReleaseControlledBall(justReceived,a.setup)).toBe(false)
+      expect(canReleaseControlledBall(justReceived,a.setup,'shot')).toBe(true)
+      const release=choosePossessionRelease(justReceived,a.setup)
+      expect(release?.kind).toBe('shoot')
+      expect(release?.playerId).toBe(a.shooter.playerId)
+      const premature:MatchState={...justReceived,
+        ai:{...justReceived.ai,lastPassTick:120-2}}
+      expect(choosePossessionRelease(premature,a.setup)).toBeNull()
+      expect(canReleaseControlledBall(premature,a.setup)).toBe(false)
+      // A real first touch STILL requires the controlled ball to settle.
+      const newContact:MatchState={...justReceived,
+        automaticContactEvents:[{tick:119,playerId:a.shooter.playerId,
+          outcome:'intercepted',kind:'interception',contactFraction:0}],
+      }
+      expect(canReleaseControlledBall(newContact,a.setup,'shot')).toBe(false)
+      expect(choosePossessionRelease(newContact,a.setup)).toBeNull()
     })
 
     it(`executes the chosen shot using genuine seeded kicking physics from goal ${side}`,()=>{
