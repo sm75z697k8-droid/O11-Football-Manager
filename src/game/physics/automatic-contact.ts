@@ -6,6 +6,7 @@ import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
 import { activePhysicalShot } from '../ai/goal-directed'
 import { GOALKEEPER_HAND_HEIGHT_M } from './goalkeeper-handling'
+import { goalkeeperCatchStretchPenalty, goalkeeperSaveWindow } from './goalkeeper-saves'
 
 /**
  * Phase 4 — physical detection when an agent has declared intent to contest.
@@ -213,9 +214,17 @@ function candidate(
     const goalkeeperSave = p.formationSlot === 'GK' &&
       !!shooter && shooter.clubId !== p.clubId &&
       withinOwnPenaltyArea(p, setup)
+    const definition = goalkeeperSave
+      ? setup.players.find(def => def.id === p.playerId) : undefined
+    const saveWindow = goalkeeperSave && shot &&
+      definition?.abilities.goalkeeping
+      ? goalkeeperSaveWindow(definition, after.clock.tick, shot.tick)
+      : null
+    // A point-blank shot can hit the keeper's body immediately. Extended
+    // hands and dives become reachable only after the reflex delay.
     const result = sweptFootContact(old, p, before.ball, after.ball,
-      goalkeeperSave ? 1.55 : FOOT_REACH_M,
-      goalkeeperSave ? 2.17 : FOOT_CONTACT_MAX_HEIGHT_M)
+      saveWindow?.reachM ?? FOOT_REACH_M,
+      saveWindow?.maximumHeightM ?? FOOT_CONTACT_MAX_HEIGHT_M)
     if (!result) continue
     if (owner && alreadyHeldOffWithoutReapproach(
       before, after, old, p)) continue
@@ -285,8 +294,13 @@ export function resolveAutomaticBallContact(
     }
   } else {
     kind = 'interception'
+    const activeShot = activePhysicalShot(after)
     const keeperSave = player.formationSlot === 'GK' &&
-      !!definition.abilities.goalkeeping && !!activePhysicalShot(after)
+      !!definition.abilities.goalkeeping && !!activeShot &&
+      withinOwnPenaltyArea(player, setup)
+    const saveWindow = keeperSave && activeShot
+      ? goalkeeperSaveWindow(definition, tick, activeShot.tick)
+      : null
     const quality = keeperSave && definition.abilities.goalkeeping
       ? 0.45 * definition.abilities.goalkeeping.reflexes +
         0.35 * definition.abilities.goalkeeping.handling +
@@ -299,11 +313,18 @@ export function resolveAutomaticBallContact(
       before.ball.velocity.yMps - player.velocity.yMps,
     )
     const challengeDifficulty = (keeperSave ? 1.12 : 1.6) * relativeSpeed +
-      9 * sample.distanceM / (keeperSave ? 1.55 : FOOT_REACH_M)
-    // Catching a ball requires a clean, manageable shot. A real contact
-    // that fails the catch threshold is physically parried, not held.
+      9 * sample.distanceM / (saveWindow?.reachM ?? FOOT_REACH_M)
+    const impactHeight = before.ball.heightM + sample.fraction *
+      (after.ball.heightM - before.ball.heightM)
+    const stretchPenalty = saveWindow
+      ? goalkeeperCatchStretchPenalty(sample.distanceM, impactHeight, saveWindow)
+      : 0
+    // Physically close, low-speed contacts can be caught. A late stretch
+    // or high ball is more likely to be pushed clear than held securely.
+    // A missed sweep never enters this branch, so it remains a real miss.
     const cleanCatch = keeperSave &&
-      quality - challengeDifficulty >= 37 && relativeSpeed <= 20
+      quality - challengeDifficulty - stretchPenalty >= 37 &&
+      relativeSpeed <= 20
     if (cleanCatch) {
       ball = attachToHands(ball, player, setup.pitch)
       outcome = 'caught'
@@ -318,15 +339,27 @@ export function resolveAutomaticBallContact(
       const nx = d > 1e-8 ? dirX / d : Math.cos(player.orientationRad)
       const ny = d > 1e-8 ? dirY / d : Math.sin(player.orientationRad)
       const horizontal = Math.hypot(ball.velocity.xMps, ball.velocity.yMps)
-      const reboundSpeed = Math.min(18, 1.2 + 0.27 * horizontal)
+      // Parrying skill influences the direction and strength of a REAL
+      // glove contact, favouring an outward deflection into the field.
+      // Poorer keepers exert less control; no rebound destination or
+      // successful save is manufactured.
+      const parrying = keeperSave
+        ? definition.abilities.goalkeeping!.parrying / 100 : 0
+      const outward = player.clubId === setup.clubs[0].id ? 1 : -1
+      const pushX = nx + (keeperSave ? outward * (.15 + .30 * parrying) : 0)
+      const pushY = ny
+      const pushLength = Math.hypot(pushX, pushY) || 1
+      const reboundSpeed = Math.min(18, 1.2 + 0.27 * horizontal) *
+        (keeperSave ? .72 + .35 * parrying : 1)
       const position = { ...sample.impact }
       ball = {
         ...ball, position, heightM: Math.max(BALL_RADIUS_M,
-          before.ball.heightM + sample.fraction *
-            (after.ball.heightM - before.ball.heightM)),
+          impactHeight),
         velocity: {
-          xMps: player.velocity.xMps * 0.4 + nx * reboundSpeed,
-          yMps: player.velocity.yMps * 0.4 + ny * reboundSpeed,
+          xMps: player.velocity.xMps * 0.4 +
+            pushX / pushLength * reboundSpeed,
+          yMps: player.velocity.yMps * 0.4 +
+            pushY / pushLength * reboundSpeed,
           zMps: Math.max(0, ball.velocity.zMps) * 0.35,
         },
         controllerId: null, controlOffset: null,
