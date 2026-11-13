@@ -11,7 +11,8 @@ import { distinctMatchSeed } from '../game/core/match-variation'
 import { AI_PASS_MIN_INTERVAL_TICKS, evaluateOnBallPlan } from '../game/ai/possession'
 import { findPlayerAt, projectPitch } from '../game/viewer/geometry'
 import { renderMatchFrame } from '../game/viewer/renderer'
-import { calculateFrameAdvance, formatDiagnosticTime } from '../game/viewer/pacing'
+import { calculateFrameAdvance } from '../game/viewer/pacing'
+import { formatMatchTime, formatMatchEventTime } from '../game/match/periods'
 import type { PlaybackSpeed } from '../game/viewer/pacing'
 import './App.css'
 
@@ -174,6 +175,8 @@ export default function App() {
       // Goal history is a scoreboard, never a reason to end playback.
       const restart = active.state.restart
       const blocked =
+        active.state.period === 'halfTime' ||
+        active.state.period === 'fullTime' ||
         (restart && !['throwIn','goalKick','corner'].includes(restart.kind)) ||
         (active.state.ball.outsidePitch && restart?.kind !== 'throwIn')
       if (blocked) {
@@ -190,8 +193,10 @@ export default function App() {
     observer?.observe(canvas)
     window.addEventListener('resize', resize)
     resize()
-    if (playing && (!active.state.ball.outsidePitch ||
-      active.state.restart?.kind === 'throwIn')) {
+    if (playing && active.state.period !== 'halfTime' &&
+      active.state.period !== 'fullTime' &&
+      (!active.state.ball.outsidePitch ||
+        active.state.restart?.kind === 'throwIn')) {
       frame = window.requestAnimationFrame(loop)
     }
 
@@ -260,8 +265,22 @@ export default function App() {
       p.clubId === club.id && p.abilities.goalkeeping !== null))
   const keeperComparison = session.preset === 'keeper-comparison'
 
+  const startSecondHalf = () => {
+    try {
+      const ready = sessionRef.current!.startSecondHalf()
+      setHud(ready)
+      setPlaying(false)
+      setRenderRevision(value => value + 1)
+      setPanel('none')
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message :
+        'Could not start the second half.')
+    }
+  }
+
   const stepOne = () => {
-    if (playing || failure ||
+    if (playing || failure || hud.period === 'halfTime' ||
+        hud.period === 'fullTime' ||
         (hud.ball.outsidePitch && hud.restart?.kind !== 'throwIn') ||
         (hud.restart && !['throwIn', 'goalKick', 'corner'].includes(hud.restart.kind))) return
     try {
@@ -308,7 +327,10 @@ export default function App() {
   const recentlyScored = !!goal && hud.clock.tick - goal.tick <= 26
   const kickoffClub = session.setup.clubs.find(c =>
     c.id === hud.postGoalKickoff?.teamId)
-  const blocked = (out && !throwIn) ||
+  const halfTime = hud.period === 'halfTime'
+  const fullTime = hud.period === 'fullTime'
+  const secondHalfKickoff = hud.periodKickoff !== null
+  const blocked = halfTime || fullTime || (out && !throwIn) ||
     (hud.restart !== null && !throwIn && !goalKick && !corner)
   const awarded = session.setup.clubs.find(c =>
     c.id === hud.restart?.awardedTeamId)
@@ -316,6 +338,9 @@ export default function App() {
   const successContacts = hud.contactEvents.filter(e =>
     ['controlled', 'miscontrolled', 'kicked', 'thrownIn', 'goalKicked', 'cornerKicked'].includes(e.outcome)).length
   const statuses = failure ? 'ENGINE ERROR' :
+    fullTime ? 'FULL-TIME · FINAL RESULT' :
+    halfTime ? 'HALF-TIME · CHANGE ENDS' :
+    secondHalfKickoff ? 'SECOND-HALF KICK-OFF' :
     postGoal ? 'CENTRE KICK-OFF · ' + (kickoffClub?.shortName ?? 'RESTART') :
     recentlyScored ? 'GOAL · ' + (scoringClub?.shortName ?? 'MATCH') :
     throwIn ? 'THROW-IN · ' + (awarded?.shortName ?? 'RESTART') :
@@ -350,7 +375,7 @@ export default function App() {
           </div>
           <div className="match-centre">
             <strong>{hud.teams[0].score} <span>:</span> {hud.teams[1].score}</strong>
-            <small>EXHIBITION · CONTINUOUS GOALS</small>
+            <small>2 × 45 MIN · ADDED TIME</small>
           </div>
           <div className="team-side away-side">
             <span className="team-names"><strong>VAL</strong><small>VALE ROVERS</small></span>
@@ -360,7 +385,7 @@ export default function App() {
 
         <div className="right-nav">
           <span className="sim-clock" aria-label="Elapsed diagnostic simulation time">
-            {formatDiagnosticTime(hud.clock.tick)}
+            {formatMatchTime(hud)}
           </span>
           <button
             type="button"
@@ -536,7 +561,7 @@ export default function App() {
                 <div className="drawer-event" key={event.key}>
                   <span className="event-symbol">{event.kind === 'goal' ? '★' : event.kind === 'kick' ? '↗' : '●'}</span>
                   <div><strong>{event.title}</strong><small>{event.detail}</small></div>
-                  <time>{formatDiagnosticTime(event.tick)}</time>
+                  <time>{formatMatchEventTime(hud, event.tick)}</time>
                 </div>
               )) : <p className="drawer-muted">No physical contact has happened yet. Press Play to watch the simulation.</p>}
             </div>
@@ -546,10 +571,24 @@ export default function App() {
 
       {(blocked || failure) && (
         <section className="stoppage-overlay" role="status" aria-live="polite">
-          <span className="stoppage-kicker">{failure ? 'SIMULATION ERROR' : 'BALL OUT OF PLAY'}</span>
-          <strong>{failure ? 'The engine stopped' : 'Awaiting football restarts'}</strong>
-          <p>{failure ?? 'The ball left play without an actionable restart award.'}</p>
+          <span className="stoppage-kicker">{failure ? 'SIMULATION ERROR' :
+            fullTime ? 'REFEREE · FULL-TIME' :
+              halfTime ? 'REFEREE · HALF-TIME' : 'BALL OUT OF PLAY'}</span>
+          <strong>{failure ? 'The engine stopped' :
+            fullTime ? 'FULL-TIME · ' +
+              hud.teams[0].score + ' : ' + hud.teams[1].score :
+            halfTime ? 'Half-time · Change ends' :
+              'Awaiting football restarts'}</strong>
+          <p>{failure ?? (halfTime
+            ? 'The first half and its added time have ended. The teams will change ends and the other team will take a physical second-half kick-off.'
+            : fullTime
+              ? 'The referee has ended the two 45-minute halves, including measured added time. This result is based on physically scored goals.'
+              : 'The ball left play without an actionable restart award.')}</p>
           <div className="stoppage-actions">
+            {halfTime && !failure && (
+              <button type="button" className="stoppage-new-match"
+                onClick={startSecondHalf}>▶ Start second half</button>
+            )}
             <button type="button" onClick={replaySameMatch}>↺ Replay same</button>
             <button type="button" className="stoppage-new-match"
               onClick={startNewMatch}>New match</button>
@@ -592,13 +631,16 @@ export default function App() {
             aria-label="Start a new match with a different simulation seed">NEW MATCH</button>
         </div>
         <div className="transport-tail">
-          <span>{postGoal ? 'CONCEDING TEAM KICKOFF' :
+          <span>{fullTime ? 'MATCH FINISHED' :
+            halfTime ? 'HALF-TIME INTERVAL' :
+            secondHalfKickoff ? 'SECOND HALF KICKOFF' :
+            postGoal ? 'CONCEDING TEAM KICKOFF' :
             recentlyScored ? 'GOAL CONFIRMED' :
             throwIn ? 'THROW-IN PREPARATION' :
             goalKick ? 'GOAL KICK PREPARATION' :
             corner ? 'CORNER PREPARATION' :
             out ? 'OUT OF PLAY' : '20 HZ PHYSICS'}</span>
-          <small>ALL BALL-OUT & GOAL RESTARTS LIVE · PERIODS PENDING</small>
+          <small>45 + ADDED · HALF-TIME · 45 + ADDED</small>
         </div>
       </footer>
 
