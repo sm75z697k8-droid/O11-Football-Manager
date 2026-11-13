@@ -77,6 +77,13 @@ export function createInitialMatchState(input: unknown): {
     seed: fixture.seed,
     clock: createSimulationClock(),
     period: 'notStarted',
+    periodTiming: {
+      firstHalfStartTick:null, secondHalfStartTick:null,
+      firstHalfLostTicks:0, secondHalfLostTicks:0,
+      firstHalfAddedTicks:null, secondHalfAddedTicks:null,
+      halfTimeTick:null, fullTimeTick:null,
+    },
+    periodKickoff:null,
     kickoff: openingKickoffState(fixture),
     postGoalKickoff: null,
     goalEvents: [],
