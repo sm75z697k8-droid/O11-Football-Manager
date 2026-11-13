@@ -4,6 +4,7 @@ import type { MatchState, PlayerMatchState, AgentDecision } from '../match/state
 import { activePassIntent, intendedReceiverTarget } from './pass-coordination'
 import { chooseDynamicSupport } from './support-space'
 import { planDefensiveResponsibilities } from './defensive-shape'
+import { planHeldGoalkeeperShape } from './goalkeeper-possession-shape'
 import { planGoalkeeperSave } from './goal-directed'
 import { assessLooseBallRace } from './loose-ball'
 import {
@@ -61,6 +62,19 @@ export function planTeamDecisions(
   for (const [teamIndex, team] of state.teams.entries()) {
     if (!state.ai.enabledTeams[teamIndex]) continue
     const teammates = state.players.filter(p => p.clubId === team.clubId)
+    // A real keeper's HAND catch is a third tactical phase, neither
+    // generic possession support nor an opponent pressing/chasing phase.
+    // Both teams need one coherent shape while the keeper surveys outlets.
+    // All 22 athletes still move through ordinary authoritative locomotion.
+    const heldShape = planHeldGoalkeeperShape(state, setup, team.clubId)
+    if (heldShape) {
+      for (const player of teammates) {
+        const assigned = heldShape.get(player.playerId)
+        if (!assigned) throw new Error('Incomplete held-keeper team shape')
+        decisions.push(assigned)
+      }
+      continue
+    }
     const owner = teammates.find(p => p.playerId === ball.controllerId)
     const ownsLooseBall = looseRace
       ? looseRace.favoredTeamId === team.clubId

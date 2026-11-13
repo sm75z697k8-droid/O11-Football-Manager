@@ -1,3 +1,9 @@
+## Phase 6.9K — Intelligent team positioning after a goalkeeper catches
+
+A physically confirmed goalkeeper **hand catch** now activates a separate team tactical phase instead of treating the keeper as an ordinary foot-level ball carrier. Centre-backs and full-backs spread into passing outlets, midfielders offer progressive positions, and forwards maintain useful attacking depth. The opposition regroups into a coherent block and may screen nearby receivers according to pressing intensity, without racing straight toward a ball securely held in the goalkeeper's hands.
+
+This is implemented for **both sides**, mirrored to each team's direction, using existing formation anchors, real player and opponent positions and bounded space/lane checks. The changes are movement intentions only; real player locomotion, caught-ball physics, existing held-ball delay, thrown-ball trajectory, interceptions and exact seeded match replay stay authoritative. Once the ball leaves the keeper's hands, ordinary AI resumes automatically. See [Phase 6.9K design notes](docs/design/phase-6-9k-goalkeeper-possession-shape.md).
+
 ## Phase 6.9J — Long-match command continuity and reproducible iPhone diagnostics
 
 The original match scheduler imposed a **256 total command** lifetime ceiling. Once that number was reached, the autonomous AI could no longer schedule any real passes, shots or goalkeeper distributions, while locomotion and automatic physical contacts continued. That is a confirmed independent source of a *silent action stall* in sufficiently long matches. Phase 6.9J increases the bounded match command capacity to **8192**, retaining exact ordered command logs and schema-v9 checkpoint validation; if that new safety limit is ever exceeded, AI now raises a visible simulation error instead of silently ceasing to kick.
