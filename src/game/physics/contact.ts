@@ -68,7 +68,7 @@ export function canReachBall(player: PlayerMatchState, ball: BallMatchState): bo
  */
 export const CLOSE_CONTROL_VERSION = 'directional-foot-carry-p69n-v1'
 export const CLOSE_CONTROL_STEP_SECONDS = .05
-export const CLOSE_CONTROL_MAX_OFFSET_M = .9
+export const CLOSE_CONTROL_MAX_OFFSET_M = .75
 const closeClamp = (n: number, lo: number, hi: number) =>
   Math.min(hi, Math.max(lo, n))
 
@@ -105,8 +105,8 @@ export function closeControlOffset(
   const dy = blendedY / Math.max(bearingLength, 1e-6)
   // Faster carries take a slightly longer touch; better ball control keeps
   // that touch closer. Never exceed the 1.05m legal foot-reach envelope.
-  const desiredRadius = .43 +
-    .38 * closeClamp(speed / 8.5, 0, 1) * (1.10 - .22 * skill)
+  const desiredRadius = .41 +
+    .30 * closeClamp(speed / 8.5, 0, 1) * (1.10 - .20 * skill)
   const desired = { xM: dx * desiredRadius, yM: dy * desiredRadius }
   const previous = ball.controlOffset
   const gapX = desired.xM - previous.xM
