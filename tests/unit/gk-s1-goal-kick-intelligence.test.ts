@@ -109,9 +109,11 @@ describe('GK-S1 realistic goal-kick approach and build-out',()=>{
         p.clubId!==s.defending.clubId&&p.formationSlot==='ST')!
       const target=goalKickOpponentTarget(screen,s.event,s.setup,'high')
       expect(insideRestartPenaltyArea(target,s.event,s.setup.pitch)).toBe(false)
-      const rivalHigh:MatchState={...s.state,teams:s.state.teams.map(t=>
-        t.clubId===s.defending.clubId?t:
-          {...t,pressingIntensity:'high'}) as MatchState['teams']}
+      const highPress=(index:0|1)=>s.state.teams[index].clubId===
+        s.defending.clubId?s.state.teams[index]:
+          {...s.state.teams[index],pressingIntensity:'high' as const}
+      const rivalHigh:MatchState={...s.state,
+        teams:[highPress(0),highPress(1)]}
       const withPress=stageGoalKick(rivalHigh,s.setup)
       const screened=withPress.players.find(p=>p.playerId===screen.playerId)!
       expect(screened.intention.kind).toBe('moveToPoint')
