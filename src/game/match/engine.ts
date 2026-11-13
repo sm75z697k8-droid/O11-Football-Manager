@@ -286,7 +286,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         !player || teamIdx < 0 || player.clubId !== d.clubId ||
         !state.ai.enabledTeams[teamIdx] ||
         !Number.isSafeInteger(d.tick) || d.tick !== state.ai.lastDecisionTick ||
-        !['shape','support','press','pursue','carry','receive','cover','mark','recover','shoot','save'].includes(d.action) ||
+        !['shape','support','press','pursue','carry','receive','cover','mark','recover','shoot','save','oneOnOne'].includes(d.action) ||
         typeof d.engage !== 'boolean' ||
         !object(d.target) || !insidePitch(d.target, setup.pitch) ||
         liveDecisions.has(d.playerId)) {
@@ -365,7 +365,10 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
           (ev.kind === 'interception' &&
             ['intercepted', 'deflected', 'caught', 'parried'].includes(ev.outcome)) ||
           (ev.kind === 'challenge' &&
-            ['wonChallenge', 'heldOff'].includes(ev.outcome))
+            (['wonChallenge', 'heldOff'].includes(ev.outcome) ||
+              (ev.outcome === 'caught' &&
+                setup.players.some(p => p.id === ev.playerId &&
+                  p.abilities.goalkeeping !== null))))
         ) ||
         Object.keys(ev).sort().join(',') !==
           'contactFraction,kind,outcome,playerId,tick') {
