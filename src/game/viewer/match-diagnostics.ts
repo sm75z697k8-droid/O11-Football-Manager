@@ -10,7 +10,8 @@ export const MATCH_DIAGNOSTICS_VERSION = 'o11-debug-report-v1'
 export function copyableMatchDiagnostics(state: MatchState): string {
   const lastKick = [...state.contactEvents].reverse().find(e =>
     e.outcome === 'kicked' || e.outcome === 'thrown' ||
-    e.outcome === 'thrownIn' || e.outcome === 'goalKicked')
+    e.outcome === 'thrownIn' || e.outcome === 'goalKicked' ||
+    e.outcome === 'cornerKicked')
   const player = state.players.find(p => p.playerId === state.ball.controllerId)
   const ball = state.ball
   return JSON.stringify({
@@ -22,6 +23,7 @@ export function copyableMatchDiagnostics(state: MatchState): string {
     terminal: state.goalEvents.length ? 'goal' :
       state.restart?.kind === 'throwIn' ? 'throw-in-staging' :
         state.restart?.kind === 'goalKick' ? 'goal-kick-staging' :
+        state.restart?.kind === 'corner' ? 'corner-staging' :
         ball.outsidePitch ? 'out-of-play' : 'playing',
     restart: state.restart,
     outOfPlayCounts: {
@@ -33,6 +35,10 @@ export function copyableMatchDiagnostics(state: MatchState): string {
         e => e.kind === 'goalKick').length,
       completedGoalKicks: state.contactEvents.filter(
         e => e.outcome === 'goalKicked').length,
+      corners: state.outOfPlayEvents.filter(
+        e => e.kind === 'corner').length,
+      completedCorners: state.contactEvents.filter(
+        e => e.outcome === 'cornerKicked').length,
     },
     aiTeams: state.ai.enabledTeams,
     commandsUsed: state.nextCommandSequence - 1,

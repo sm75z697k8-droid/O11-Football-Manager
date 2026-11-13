@@ -58,6 +58,16 @@ export interface AttemptGoalkeeperThrowRequest {
 /** Toggle physical contact intent; physics handles entry automatically thereafter. */
 /** Throw-in is a legal restart, never a ground kick or GK distribution. */
 /** A foot kick from a stationary ball in the defending goal area. */
+/** Foot kick from a stationary, lawfully located corner-area ball. */
+export interface AttemptCornerKickRequest {
+  readonly commandId: string
+  readonly teamId: string
+  readonly type: 'attemptCornerKick'
+  readonly playerId: string
+  readonly target: Point2
+  readonly power: number
+  readonly lift: number
+}
 export interface AttemptGoalKickRequest {
   readonly commandId: string
   readonly teamId: string
@@ -93,7 +103,7 @@ export type MatchCommandRequest =
   | SetPressingCommandRequest | SetMovementTargetRequest
   | DiagnosticBallLaunchRequest | AttemptFirstTouchRequest | AttemptKickRequest
   | AttemptGoalkeeperThrowRequest | AttemptThrowInRequest
-  | AttemptGoalKickRequest
+  | AttemptGoalKickRequest | AttemptCornerKickRequest
   | SetBallEngagementRequest | SetAutonomousTeamRequest
 export type ScheduledMatchCommand = MatchCommandRequest & {
   readonly requestedTick: number
@@ -114,6 +124,7 @@ const KICK_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target', 'power
 const THROW_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target', 'power']
 const THROW_IN_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target', 'power']
 const GOAL_KICK_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target', 'power', 'lift']
+const CORNER_KICK_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'target', 'power', 'lift']
 const ENGAGEMENT_FIELDS = ['commandId', 'teamId', 'type', 'playerId', 'enabled']
 const AUTONOMY_FIELDS = ['commandId', 'teamId', 'type', 'enabled']
 
@@ -233,6 +244,27 @@ export function parseMatchCommandRequest(
       power: value.power,
     } }
   }
+  if (value.type === 'attemptCornerKick') {
+    const point = value.target
+    if (Object.keys(value).some(k => !CORNER_KICK_FIELDS.includes(k)) ||
+        typeof value.playerId !== 'string' || !value.playerId.trim() ||
+        !point || typeof point !== 'object' || Array.isArray(point) ||
+        Object.keys(point).some(k => k !== 'xM' && k !== 'yM') ||
+        !insidePitch(point as Point2, pitch) ||
+        typeof value.power !== 'number' || !Number.isFinite(value.power) ||
+        value.power < .05 || value.power > 1 ||
+        typeof value.lift !== 'number' || !Number.isFinite(value.lift) ||
+        value.lift < 0 || value.lift > 1) {
+      return { reason: 'Invalid corner-kick request', commandId }
+    }
+    const p = point as Point2
+    return { request: {
+      commandId, teamId: value.teamId, type: 'attemptCornerKick',
+      playerId: value.playerId,
+      target: { xM: p.xM, yM: p.yM },
+      power: value.power, lift: value.lift,
+    } }
+  }
   if (value.type === 'attemptGoalKick') {
     const point = value.target
     if (Object.keys(value).some(k => !GOAL_KICK_FIELDS.includes(k)) ||
@@ -297,6 +329,7 @@ export function scheduleMatchCommand(
        req.type === 'attemptGoalkeeperThrow' ||
        req.type === 'attemptThrowIn' ||
        req.type === 'attemptGoalKick' ||
+       req.type === 'attemptCornerKick' ||
        req.type === 'setBallEngagement') &&
       !state.players.some((p) => p.playerId === req.playerId && p.clubId === req.teamId)) {
     return reject('Player does not belong to the specified team')
@@ -307,6 +340,18 @@ export function scheduleMatchCommand(
   if (restart && ['attemptKick', 'attemptFirstTouch',
     'attemptGoalkeeperThrow', 'diagnosticBallLaunch'].includes(req.type)) {
     return reject('Ball is dead until the awarded restart is taken')
+  }
+  if (req.type === 'attemptCornerKick') {
+    if (restart?.kind !== 'corner' ||
+        restart.awardedTeamId !== req.teamId ||
+        !state.players.some(p => p.playerId === req.playerId &&
+          p.clubId === req.teamId && p.formationSlot !== 'GK')) {
+      return reject('Corner kick not authorized for this team and taker')
+    }
+    if (Math.hypot(req.target.xM - state.ball.position.xM,
+      req.target.yM - state.ball.position.yM) < 4) {
+      return reject('Corner kick target is not a meaningful field delivery')
+    }
   }
   if (req.type === 'attemptGoalKick') {
     if (restart?.kind !== 'goalKick' ||
