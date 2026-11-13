@@ -1,3 +1,11 @@
+## Phase 6.9M — Recognize and take credible shooting chances
+
+After a player receives a genuine pass, the AI can now take an immediate **physical shot** once their first touch is controlled and settled—without waiting for the previous universal 18-tick (0.9-second) team passing cooldown. Passing still obeys that existing cooldown, preventing the old rapid meaningless-passing loop. The shot-release minimum is 4 ticks (0.2 seconds) after the last pass, subject to actual ball ownership and first-touch readiness. Nothing awards a shot or goal without a real physical kick.
+
+The shot-intent planner also examines three on-goal aiming points using a bounded preview of **the actual 50ms ball physics and attribute-dependent angular error**, compares their accuracy margin and approximate goalkeeper coverage, and discourages an unnecessary backward pass **only when** it sacrifices an unobstructed, relatively unpressured immediate shot. A genuinely blocked chance or better receiver may still justify a pass. These are simulation estimates, not xG probabilities or predetermined scoring results.
+
+In 40 constructed shot-ready fixtures, both 6.9L and 6.9M already *wanted* to shoot, but at six ticks after a preceding team pass, old 6.9L authorized **0** shot releases and 6.9M authorized **40**. That is the directly verified defect fix; it is **not** evidence of 40 real goals. Actual nine-seed exhibitions recorded **14 shots and 1 goal** here versus **15 shots and 1 goal** previously, so more real-world shot frequency is **not** established by this small sample. See [Phase 6.9M design and verification](docs/design/phase-6-9m-intelligent-shots-and-release.md).
+
 ## Phase 6.9L — Realistic goalkeeper throw choices
 
 Following the 6.9K goalkeeper positioning improvement, a goalkeeper who has **physically caught** the ball now examines whether a real hand-throw trajectory could reach a moving teammate. A bounded rehearsal uses the match engine's own 50ms ball-flight, turning and first-touch collision equations, while estimated opposition interception timing, passing lanes, touchline margins and individual goalkeeper Vision, Decisions, Composure, Technique and Throwing Distribution influence selection. Actual seeded physics still controls the released ball: no pass, interception or reception is awarded by the forecast.

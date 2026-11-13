@@ -20,6 +20,10 @@ import type { ActionAssessment } from './short-horizon'
 export const POSSESSION_PLANNER_VERSION = 'receivable-passes-p69b-v1'
 export const AI_SAFE_EDGE_MARGIN_M = 3.1
 export const AI_PASS_MIN_INTERVAL_TICKS = 18
+/** A teammate may shoot a real chance promptly after receiving a pass,
+ * without reopening the old unrealistic rapid-passing loop. The existing
+ * actual first-touch settling test still runs independently below. */
+export const AI_SHOT_MIN_INTERVAL_TICKS = 4
 
 const min = Math.min
 const max = Math.max
@@ -34,8 +38,14 @@ const distance = (a: Point2, b: Point2) =>
  */
 export function canReleaseControlledBall(
   state: MatchState, setup: MatchSetup,
+  purpose: 'standard' | 'shot' = 'standard',
 ): boolean {
-  if (state.clock.tick - state.ai.lastPassTick < AI_PASS_MIN_INTERVAL_TICKS)
+  // Pass circulation keeps its 0.9s rate limit, while a genuine physical
+  // first-touch shot may be ready after 0.2s. Shots still require a real
+  // controller and the ordinary new-possession settling checks below.
+  const interval = purpose === 'shot'
+    ? AI_SHOT_MIN_INTERVAL_TICKS : AI_PASS_MIN_INTERVAL_TICKS
+  if (state.clock.tick - state.ai.lastPassTick < interval)
     return false
   const owner = state.players.find(p => p.playerId === state.ball.controllerId)
   if (!owner || state.ball.heightM === GOALKEEPER_HAND_HEIGHT_M) return false
@@ -342,7 +352,9 @@ export function evaluateOnBallPlan(
     choice: options[0] ?? null, assessments: [],
     selectedReason: 'Highest immediate spatial utility',
   }
-  const review = reviewOnBallActions(state, setup, options)
+  // One physical on-frame preview is sufficient for both the shot and
+  // every pass alternative; avoid redundant rollouts on iPhone Safari.
+  const review = reviewOnBallActions(state, setup, options, shot)
   const mental = definition.abilities.mental
   // Only already-scored forecast candidates may vary; never add two
   // unrelated randomness rolls or ignore an obvious shot opportunity.

@@ -194,12 +194,19 @@ export function choosePossessionRelease(
   evaluatedChoice?: PossessionChoice | null,
 ): { kind: 'pass' | 'shoot'; teamId: string; playerId: string; receiverId?: string; target: Point2; power: number; lift: number } | null {
   const owner = state.players.find(p => p.playerId === state.ball.controllerId)
-  if (!owner || state.ball.outsidePitch || state.ball.heightM > .45 ||
-      !canReleaseControlledBall(state, setup)) return null
+  if (!owner || state.ball.outsidePitch || state.ball.heightM > .45)
+    return null
   const index = state.teams.findIndex(t => t.clubId === owner.clubId)
   if (index < 0 || !state.ai.enabledTeams[index]) return null
+  const canPass = canReleaseControlledBall(state, setup)
+  const canShoot = canReleaseControlledBall(state, setup, 'shot')
+  if (!canPass && !canShoot) return null
   const choice = evaluatedChoice !== undefined
-    ? evaluatedChoice : evaluateOnBallChoice(state, setup, true, true)
+    ? evaluatedChoice : evaluateOnBallChoice(state, setup, canPass, true)
+  // The quicker controlled-shot window must never bypass the existing
+  // spacing rule for repeated passes, or the physical first-touch gate.
+  if ((choice?.kind === 'pass' && !canPass) ||
+      (choice?.kind === 'shoot' && !canShoot)) return null
   return choice?.kind === 'pass' || choice?.kind === 'shoot'
     ? {
       kind: choice.kind,
