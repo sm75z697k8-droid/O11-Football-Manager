@@ -211,10 +211,26 @@ export function stageOffsideRestart(state:MatchState,setup:MatchSetup):MatchStat
             .3,setup.pitch.widthM-.3),
         }
         if(mustLeaveArea){
-          const boundary=state.teams[teamIndex].attackingDirection===1
-            ? setup.pitch.penaltyAreaDepthM+1
-            : setup.pitch.lengthM-setup.pitch.penaltyAreaDepthM-1
-          target={...target,xM:boundary}
+          // Choose a point BOTH outside the penalty area AND ten yards
+          // from the spot; stopping exactly at the area line can leave
+          // an opponent illegally close and freeze the indirect free kick.
+          const forwardClearance=FREE_KICK_CLEARANCE_M+1.3
+          const x=direction===1
+            ? Math.max(setup.pitch.penaltyAreaDepthM+1,
+                ev.spot.xM+forwardClearance)
+            : Math.min(setup.pitch.lengthM-setup.pitch.penaltyAreaDepthM-1,
+                ev.spot.xM-forwardClearance)
+          target={...target,xM:clamp(x,.3,setup.pitch.lengthM-.3)}
+        }
+        if(dist(target,ev.spot)<FREE_KICK_CLEARANCE_M+.05){
+          // A touchline or goal line can clamp a radial retreat too close
+          // to the ball. Always offer a reachable infield alternative.
+          const towardCentre=ev.spot.xM<=setup.pitch.lengthM/2?1:-1
+          target={
+            xM:clamp(ev.spot.xM+towardCentre*
+              (FREE_KICK_CLEARANCE_M+1.4),.3,setup.pitch.lengthM-.3),
+            yM:ev.spot.yM,
+          }
         }
       }
     }else{
