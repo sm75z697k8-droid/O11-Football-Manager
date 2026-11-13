@@ -7,6 +7,7 @@ import { planDefensiveResponsibilities } from './defensive-shape'
 import { planHeldGoalkeeperShape } from './goalkeeper-possession-shape'
 import { planGoalkeeperSave } from './goal-directed'
 import { planGoalkeeperPosition } from './goalkeeper-positioning'
+import { planGoalkeeperOneOnOne } from './goalkeeper-one-on-one'
 import { assessLooseBallRace } from './loose-ball'
 import {
   canReleaseControlledBall, evaluateOnBallChoice,
@@ -140,13 +141,20 @@ export function planTeamDecisions(
       // including a loose-ball race that briefly favours our own team.
       const keeperSave = player.formationSlot === 'GK'
         ? planGoalkeeperSave(state, setup, player, team) : null
-      const keeperPosition = player.formationSlot === 'GK' &&
+      const keeperOneOnOne = !keeperSave && player.formationSlot === 'GK'
+        ? planGoalkeeperOneOnOne(state, setup, player, team) : null
+      const keeperPosition = !keeperSave && !keeperOneOnOne &&
+        player.formationSlot === 'GK' &&
         player.playerId !== owner?.playerId
         ? planGoalkeeperPosition(state, setup, player, team) : null
       if (keeperSave) {
         action = 'save'
         engage = keeperSave.engage
         target = keeperSave.target
+      } else if (keeperOneOnOne) {
+        action = 'oneOnOne'
+        engage = keeperOneOnOne.engage
+        target = keeperOneOnOne.target
       } else if (keeperPosition) {
         action = 'shape'
         engage = false
