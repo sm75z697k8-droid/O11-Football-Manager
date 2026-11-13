@@ -4,6 +4,7 @@ import { MAX_COMMANDS_PER_MATCH, scheduleMatchCommand } from '../match/commands'
 import { maintainPassReception } from './pass-coordination'
 import { followMovingLooseBall } from './loose-ball'
 import { trackGoalkeeperSaves } from './goal-directed'
+import { trackGoalkeeperOneOnOnes } from './goalkeeper-one-on-one'
 import { chooseGoalkeeperThrow } from './goalkeeper-distribution'
 import { activeGoalkeeperCatch } from '../physics/goalkeeper-handling'
 import { canReleaseControlledBall, evaluateOnBallChoice } from './possession'
@@ -21,8 +22,9 @@ export function runAutonomousDecisions(
   // Law 8: no autonomous chase or movement until the real opening kick
   // has clearly moved the stationary centre ball.
   if (state.kickoff?.phase === 'awaitingKick') return state
-  const current = trackGoalkeeperSaves(maintainPassReception(
-    followMovingLooseBall(state, setup), setup), setup)
+  const current = trackGoalkeeperSaves(
+    trackGoalkeeperOneOnOnes(maintainPassReception(
+      followMovingLooseBall(state, setup), setup), setup), setup)
   if (!current.ai.enabledTeams.some(Boolean)) return current
   // A real kick, interception, deflection or challenge invalidates the
   // prior tactical phase immediately. Do not wait 0.6s for another decision.

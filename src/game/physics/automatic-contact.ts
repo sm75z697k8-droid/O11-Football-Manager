@@ -7,6 +7,7 @@ import type { Point2 } from '../model/pitch'
 import { activePhysicalShot } from '../ai/goal-directed'
 import { GOALKEEPER_HAND_HEIGHT_M } from './goalkeeper-handling'
 import { goalkeeperCatchStretchPenalty, goalkeeperSaveWindow } from './goalkeeper-saves'
+import { planGoalkeeperOneOnOne } from '../ai/goalkeeper-one-on-one'
 
 /**
  * Phase 4 — physical detection when an agent has declared intent to contest.
@@ -113,10 +114,12 @@ function withinOwnPenaltyArea(
   const home = player.clubId === setup.clubs[0].id
   const away = player.clubId === setup.clubs[1].id
   if (!home && !away) return false
-  const {lengthM,widthM} = setup.pitch
-  return (home ? player.position.xM <= 16.5
-    : player.position.xM >= lengthM - 16.5) &&
-    Math.abs(player.position.yM - widthM / 2) <= 20.16
+  const {lengthM,widthM,penaltyAreaDepthM,penaltyAreaWidthM} = setup.pitch
+  return (home ? player.position.xM >= 0 &&
+    player.position.xM <= penaltyAreaDepthM
+    : player.position.xM <= lengthM &&
+      player.position.xM >= lengthM - penaltyAreaDepthM) &&
+    Math.abs(player.position.yM - widthM / 2) <= penaltyAreaWidthM / 2
 }
 
 /** A real hand reception from a physically swept collision. */
@@ -222,8 +225,15 @@ function candidate(
       : null
     // A point-blank shot can hit the keeper's body immediately. Extended
     // hands and dives become reachable only after the reflex delay.
+    // A genuine one-on-one smother uses a short ground-level hand reach.
+    // It cannot invent a catch: the ball must actually sweep through this
+    // contact envelope while a specific keeper is engaging the dribbler.
+    const team = after.teams.find(t => t.clubId === p.clubId)
+    const smother = p.formationSlot === 'GK' && owner && team &&
+      withinOwnPenaltyArea(p, setup) &&
+      planGoalkeeperOneOnOne(after, setup, p, team)?.engage === true
     const result = sweptFootContact(old, p, before.ball, after.ball,
-      saveWindow?.reachM ?? FOOT_REACH_M,
+      saveWindow?.reachM ?? (smother ? 1.05 : FOOT_REACH_M),
       saveWindow?.maximumHeightM ?? FOOT_CONTACT_MAX_HEIGHT_M)
     if (!result) continue
     if (owner && alreadyHeldOffWithoutReapproach(
@@ -286,7 +296,34 @@ export function resolveAutomaticBallContact(
       0.15 * ownerDef.abilities.mental.composure
     const approach = Math.hypot(player.velocity.xMps - owner.velocity.xMps,
       player.velocity.yMps - owner.velocity.yMps)
-    if (challenge + Math.min(7, approach * 0.85) >= protection + 1.5) {
+    const team = after.teams.find(t => t.clubId === player.clubId)
+    const abilities = definition.abilities
+    const smother = player.formationSlot === 'GK' && !!team &&
+      abilities.goalkeeping !== null &&
+      withinOwnPenaltyArea(player, setup) &&
+      after.ball.heightM <= .45 &&
+      planGoalkeeperOneOnOne(after, setup, player, team)?.engage === true
+    if (smother && abilities.goalkeeping) {
+      const keeper = abilities.goalkeeping
+      const smotherControl =
+        .40 * keeper.oneOnOnes + .25 * keeper.rushingOut +
+        .20 * keeper.handling + .15 * abilities.mental.anticipation
+      const carrierControl =
+        .38 * ownerDef.abilities.technical.dribbling +
+        .22 * ownerDef.abilities.technical.firstTouch +
+        .22 * ownerDef.abilities.mental.composure +
+        .18 * ownerDef.abilities.physical.balance
+      // A sprinting collision is hard to secure. Actual swept ball contact
+      // is mandatory regardless of ratings; no RNG awards a smother.
+      const difficulty = sample.distanceM * 5 +
+        Math.max(0, approach - 6) * 1.5
+      if (smotherControl >= carrierControl + difficulty + 1.5) {
+        ball = attachToHands(ball, player, setup.pitch)
+        outcome = 'caught'
+      } else {
+        outcome = 'heldOff'
+      }
+    } else if (challenge + Math.min(7, approach * 0.85) >= protection + 1.5) {
       ball = attachTo(ball, player, sample.impact, setup.pitch)
       outcome = 'wonChallenge'
     } else {

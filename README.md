@@ -1,3 +1,11 @@
+## Phase 6.9S — Goalkeeper one-on-one decisions and physical smothers
+
+A goalkeeper now recognizes an **isolated opponent dribbling towards their goal**. The AI first checks the carrier's distance, angle, actual movement and whether a defender is already goal-side and close enough to cover the threat. It can **hold its position**, **close the shooting angle**, or **engage a close-range smother** inside its own penalty area. Keeper positioning, decisions, one-on-ones and rushing-out ratings influence its movement. Both teams use the same mirrored geometry; all movement still occurs through the existing physical locomotion.
+
+A smother is **not an awarded animation or automatic save**: the goalkeeper must actually reach the dribbled ball via swept collision, and a handling/one-on-ones/rushing-out judgement is opposed by the carrier's real ball-control attributes. A real successful contact produces a goalkeeper hand catch and enables the established held-ball/throw system; an unsuccessful attempt leaves the attacker in possession. Incoming shots retain full priority under the existing reflex/dive/physical save engine. This is a carefully bounded emergency behaviour—not a sweeper-keeper overhaul or proof of fully realistic one-on-one success rates.
+
+**Testing:** `tests/unit/phase-6-9s-goalkeeper-one-on-one.test.ts` covers both pitch directions, defensive cover, wide/distant threats, physical catches and failed challenges, shot priority and deterministic replay. Gameplay parameters are estimated fictional simulation calibrations. Existing outfield pressing, GK comparison presets and passing logic are intentionally unchanged.
+
 ## Phase 6.9R — Controlled goalkeeper profiles for two fictional teams
 
 The landscape match viewer now starts in **GK comparison** mode. Harbor Athletic's fictional goalkeeper is a **reflex specialist** (Reflexes 94, Diving 90, Handling 45), while Vale Rovers' goalkeeper is a **secure handler** (Reflexes 55, Diving 59, Handling 92, Parrying 93). These are deliberately contrasting, **estimated simulation values**, not real player data or save percentages. Both teams still start in 4-3-3 with standard pressing, and every **outfield player's attributes remain unchanged**; this phase tests goalkeeper differences only, not an entire tactical identity or calibrated comparative ability.
