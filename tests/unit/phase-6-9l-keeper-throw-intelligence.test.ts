@@ -175,6 +175,28 @@ describe('Phase 6.9L — physical, ability-aware goalkeeper distribution', () =>
     expect(threatened.ball.controllerId).toBe(keeperId)
   })
 
+  it('eventually releases a genuine risky throw if no teammate comes within supported range',()=>{
+    const {setup,held,keeperId,keeperClub}=physicallyCaughtBy(0)
+    const far:MatchState={...held,
+      clock:{...held.clock,tick:24+121},
+      players:held.players.map(p=>p.clubId===keeperClub&&
+        p.playerId!==keeperId
+          ? {...p,position:{xM:85,yM:p.position.yM}} : p),
+    }
+    expect(assessGoalkeeperThrowOptions(far,setup)).toHaveLength(0)
+    const choice=chooseGoalkeeperThrow(far,setup)
+    expect(choice?.kind).toBe('throw')
+    expect(choice?.playerId).toBe(keeperId)
+    expect(choice?.receiverId).not.toBe(keeperId)
+    expect(choice!.power).toBeLessThanOrEqual(1)
+    expect(choice!.target.xM).toBeLessThan(30)
+    expect(choice!.target.yM).toBeGreaterThan(2)
+    const tooSoon:MatchState={...far,
+      clock:{...far.clock,tick:24+72},
+    }
+    expect(chooseGoalkeeperThrow(tooSoon,setup)).toBeNull()
+  })
+
   it('preserves a real held goalkeeper throw and exact checkpoint replay',()=>{
     const session=new MatchViewerSession(42)
     for(let i=0;i<1200 && !session.state.ball.outsidePitch &&
