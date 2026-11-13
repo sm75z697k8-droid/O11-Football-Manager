@@ -713,7 +713,12 @@ export class FoundationMatchEngine {
       // directional close-control updates. When settling to pass or shoot,
       // preserve the existing physically caught foot-contact point. This
       // avoids shifting kick origins and altering unrelated match outcomes.
-      const carrying = !!controller &&
+      const noNearbyChallenge = !!controller &&
+        agents.players.every(p => p.clubId === controller.clubId ||
+          Math.hypot(
+            p.position.xM - controller.position.xM,
+            p.position.yM - controller.position.yM) >= 7)
+      const carrying = noNearbyChallenge && !!controller &&
         controller.intention.kind === 'moveToPoint' &&
         Math.hypot(
           controller.intention.target.xM - controller.position.xM,
