@@ -254,9 +254,19 @@ export function resolveContactAttempts(
       const error = (contactRng.nextFloat() - .5) * 2 * spread
       const nominalAngle = Math.atan2(dy, dx)
       const bearing = nominalAngle + error
-      const planarSpeed = 8 + command.power * (10 +
-        a.physical.strength * .048)
       const launchHeight = 1.85
+      const verticalSpeed = 2.9 + command.power * 2.2
+      // Aim the physical flight at a plausible receiving distance, not
+      // at a fixed 20m launch that flies past a short 8–12m outlet.
+      // Exact flight is still simulated by ball physics after release.
+      const flightTime = (verticalSpeed + Math.sqrt(
+        verticalSpeed * verticalSpeed +
+          2 * 9.81 * (launchHeight - BALL_RADIUS_M))) / 9.81
+      const idealPlanar = (Math.exp(.008 * distance) - 1) /
+        (.008 * flightTime)
+      const planarSpeed = Math.min(25, idealPlanar *
+        (.80 + .34 * command.power) *
+        (.97 + a.physical.strength * .0006))
       const position = { ...restart.spot }
       ball = {
         ...ball, position,
@@ -264,7 +274,7 @@ export function resolveContactAttempts(
         velocity: {
           xMps: Math.cos(bearing) * planarSpeed,
           yMps: Math.sin(bearing) * planarSpeed,
-          zMps: 4.0 + command.power * 3.2,
+          zMps: verticalSpeed,
         },
         controllerId: null, controlOffset: null,
         lastTouchPlayerId: player.playerId, outsidePitch: false,
