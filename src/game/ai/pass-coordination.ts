@@ -33,7 +33,7 @@ export function shouldYieldPassReception(
       state.clock.tick % PASS_RECOVERY_REVIEW_INTERVAL_TICKS !== 0 ||
       !state.contactEvents.some(e =>
         e.commandId === intent.commandId &&
-    (e.outcome === 'kicked' || e.outcome === 'thrown'))) return false
+    (e.outcome === 'kicked' || e.outcome === 'thrown' || e.outcome === 'thrownIn'))) return false
 
   const original = state.players.find(p => p.playerId === intent.receiverId)
   if (!original) return false
@@ -49,11 +49,14 @@ export function shouldYieldPassReception(
     if (p.clubId !== intent.teamId || p.formationSlot === 'GK' ||
         p.playerId === intent.receiverId || p.playerId === intent.passerId)
       return false
-    // Opening taker must not be assigned the second touch before anybody
-    // else contacts the ball (Law 8).
+    // Opening taker and touchline thrower cannot play twice until another
+    // real footballer has touched the ball.
     if (state.kickoff?.phase === 'inPlay' &&
         p.playerId === state.kickoff.kickerId &&
         state.ball.lastTouchPlayerId === p.playerId) return false
+    if (p.playerId === intent.passerId &&
+        state.contactEvents.some(e => e.commandId === intent.commandId &&
+          e.outcome === 'thrownIn')) return false
     return estimatedRecoverySeconds(p, state, setup) + PASS_RECOVERY_HANDOFF_MARGIN_S < originalTime
   })
 }
@@ -66,7 +69,7 @@ export function activePassIntent(state: MatchState): CoordinatedPassIntent | nul
       state.clock.tick > intent.requestedTick + PASS_INTENT_MAX_AGE_TICKS ||
       state.ball.outsidePitch) return null
   const contact = state.contactEvents.find(e => e.commandId === intent.commandId)
-  if (contact && contact.outcome !== 'kicked' && contact.outcome !== 'thrown') return null
+  if (contact && contact.outcome !== 'kicked' && contact.outcome !== 'thrown' && contact.outcome !== 'thrownIn') return null
   // A different player touching the ball, or a new controller, ends this
   // particular pass. Subsequent decisions can generate a different one.
   if (state.ball.controllerId !== null &&
@@ -88,7 +91,7 @@ export function intendedReceiverTarget(
   if (!receiver || !definition) throw new Error('Missing physically intended pass receiver')
   const hasKicked = state.contactEvents.some(e =>
     e.commandId === intent.commandId &&
-    (e.outcome === 'kicked' || e.outcome === 'thrown'))
+    (e.outcome === 'kicked' || e.outcome === 'thrown' || e.outcome === 'thrownIn'))
   if (!hasKicked || state.ball.controllerId !== null) {
     return boundedTarget(intent.target, setup.pitch)
   }
