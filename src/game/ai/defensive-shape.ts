@@ -332,10 +332,22 @@ export function planDefensiveResponsibilities(
       target = pressingApproachTarget(player, ballPoint, team, setup)
     } else if (cover?.playerId === player.playerId) {
       action = 'cover'
-      target = boundedTarget({
+      // Goal-side containment should SCREEN the carrier, not drag a
+      // second non-engaging defender 25 metres out of the formation.
+      // The prescribed tactical displacement is bounded from this
+      // footballer's own defensive recovery point.
+      const ideal = boundedTarget({
         xM: ballPoint.xM - team.attackingDirection * 7,
         yM: ballPoint.yM +
           (player.position.yM <= ballPoint.yM ? -3.5 : 3.5),
+      }, setup.pitch)
+      const gap = separationM(block, ideal)
+      const maximumShift = team.pressingIntensity === 'low' ? 7 :
+        team.pressingIntensity === 'standard' ? 10 : 13
+      const ratio = gap > maximumShift ? maximumShift / gap : 1
+      target = boundedTarget({
+        xM: block.xM + (ideal.xM - block.xM) * ratio,
+        yM: block.yM + (ideal.yM - block.yM) * ratio,
       }, setup.pitch)
     } else if (midfielder(player) || defender(player) ||
       player.formationSlot === 'RW' || player.formationSlot === 'LW') {
