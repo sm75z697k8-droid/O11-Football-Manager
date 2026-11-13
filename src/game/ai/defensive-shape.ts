@@ -175,25 +175,26 @@ export function shouldPressCarrier(
   if (player.formationSlot === 'GK') return false
   const distance = separationM(player.position, ballPoint)
   const emergency = context.goalDistanceM <= 26
-  // We never use the old 16/30/38 metre unconditional chase radius.
-  const radius = team.pressingIntensity === 'low'
-    ? emergency ? 12 : 6
+  const immediateContact = distance <= 4.5
+  // Pressing is a deliberate event, not a permanent radius around the ball.
+  // Normal nearby ownership is primarily CONTAINED by goal-side cover and
+  // zonal recovery. A close player challenges when he can tackle NOW.
+  const triggered = team.pressingIntensity === 'low'
+    ? (emergency && distance <= 12) || distance <= 3.2
     : team.pressingIntensity === 'standard'
-      ? emergency ? 17 : 11
-      : emergency ? 22 : 18
-  const triggerBonus = (context.trappedWide ||
-      context.drivingAtGoal || context.settledReception) &&
-    team.pressingIntensity !== 'low' ? 3 : 0
-  if (distance > radius + triggerBonus) return false
-  // Protect centre-backs from sprinting into midfield unless they can
-  // genuinely challenge at close range or protect a dangerous goal lane.
-  if (centreBack(player) && !emergency && distance > 4.5) return false
-  // In an opponent's harmless build-up, standard pressing stays zonal
-  // unless somebody can press immediately or the carrier is isolated.
-  if (team.pressingIntensity === 'standard' &&
-    context.goalDistanceM > 56 &&
-    !(context.trappedWide || context.drivingAtGoal ||
-      context.settledReception) && distance > 7) return false
+      ? immediateContact ||
+        (emergency && distance <= 16) ||
+        (context.goalDistanceM <= 44 && distance <= 9.5) ||
+        (context.trappedWide && distance <= 10) ||
+        (context.drivingAtGoal && distance <= 11) ||
+        (context.settledReception && distance <= 14)
+      : distance <= (emergency ? 22 : 18) +
+        ((context.trappedWide || context.drivingAtGoal ||
+          context.settledReception) ? 3 : 0)
+  if (!triggered) return false
+  // A centre-back must protect the last line unless a real near-foot
+  // challenge or an immediate goal threat justifies breaking that line.
+  if (centreBack(player) && !emergency && !immediateContact) return false
   return true
 }
 
