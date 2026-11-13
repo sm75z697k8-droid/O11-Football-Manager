@@ -157,6 +157,39 @@ export function recordOutOfPlay(
   }
 }
 
+/** Law 15: the taker cannot play the ball a second time until someone
+ * else has touched it. Reconstruct the LATEST successful touch only from
+ * real manual/automatic histories, so a later ordinary touch by the same
+ * footballer is not incorrectly treated as the original throw.
+ */
+export function forbiddenThrowInSecondTouch(
+  state: MatchState, playerId: string,
+): boolean {
+  if (state.ball.lastTouchPlayerId !== playerId ||
+      state.ball.controllerId !== null) return false
+  let lastTick = -1
+  let thrower = false
+  for (let i = state.contactEvents.length - 1; i >= 0; i--) {
+    const event = state.contactEvents[i]
+    if (!['controlled', 'miscontrolled', 'kicked', 'thrown', 'thrownIn']
+      .includes(event.outcome)) continue
+    lastTick = event.tick
+    thrower = event.outcome === 'thrownIn' &&
+      event.playerId === playerId
+    break
+  }
+  if (!thrower) return false
+  for (let i = state.automaticContactEvents.length - 1; i >= 0; i--) {
+    const event = state.automaticContactEvents[i]
+    if (!['intercepted', 'deflected', 'wonChallenge',
+      'caught', 'parried', 'punched'].includes(event.outcome)) continue
+    // Automatic contacts occur after manual contacts within one tick.
+    if (event.tick >= lastTick) return false
+    break
+  }
+  return true
+}
+
 export function throwInTakerTarget(event: OutOfPlayEvent, setup: MatchSetup): Point2 {
   return {
     xM: clamp(event.spot.xM, .35, setup.pitch.lengthM - .35),
