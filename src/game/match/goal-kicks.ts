@@ -172,9 +172,14 @@ export function stageGoalKick(
     // This is a limited choice between safer short build-up and a midfield
     // release when both centre-backs are marked; no assumed completion.
     const underPressure = short.space < 5.8
+    const goalX = event.side === 'left' ? 0 : setup.pitch.lengthM
     const fallback = state.players.filter(p =>
       p.clubId === awardedTeamId &&
-      ['DM', 'RCM', 'LCM'].includes(p.formationSlot))
+      ['DM', 'RCM', 'LCM'].includes(p.formationSlot) &&
+      // A midfielder can be goal-side of the keeper after a defensive
+      // scramble. Never propose that player as an illegal outward kick.
+      (p.position.xM - goalX) * dir > setup.pitch.goalAreaDepthM + 4 &&
+      distance(ballSpot, p.position) >= 9)
       .sort((a, b) =>
         nearestOpponentM(state.players, awardedTeamId, b.position) -
           nearestOpponentM(state.players, awardedTeamId, a.position) ||
