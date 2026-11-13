@@ -6,6 +6,7 @@ import {
   attackingOpportunityAt, evaluateShootingOpportunity,
   shootingCorridorObstruction,
 } from './goal-directed'
+import type { ShootingOpportunity } from './goal-directed'
 import { deriveMotionLimits } from '../physics/locomotion'
 import { evaluateReceiverContinuation } from './receiver-continuation'
 
@@ -117,6 +118,7 @@ function assessedPass(
   choice: Extract<PossessionChoice, {kind:'pass'}>,
   owner: PlayerMatchState, state: MatchState, setup: MatchSetup,
   opponents: readonly PlayerMatchState[],
+  immediateShot: ShootingOpportunity | null,
 ): ActionAssessment {
   const receiver = state.players.find(p => p.playerId === choice.receiverId)
   if (!receiver) throw new Error('Missing real pass receiver')
@@ -186,13 +188,9 @@ function assessedPass(
     // The second-action forecast is only an *incremental* reason to pass.
     // An attacker with a clear, credible immediate shot must not become
     // an endless passer just because a teammate might carry afterward.
-    const carrierDefinition = setup.players.find(p =>
-      p.id === owner.playerId)
-    if (!carrierDefinition) throw new Error('Missing carrier definition')
-    const immediateShot = evaluateShootingOpportunity(
-      owner, carrierDefinition, opponents, team, setup)
     const clearImmediateShot = immediateShot &&
       immediateShot.chanceQuality > .23 &&
+      immediateShot.onFrameShare >= .55 &&
       shootingCorridorObstruction(
         owner.position, immediateShot.target, opponents) < 1.8
     if (clearImmediateShot && continuationAdjustment > 0) {
@@ -205,9 +203,33 @@ function assessedPass(
         continuationAdjustment > 0)
       continuationAdjustment *= .2
   }
+  // A carrier with a real, clear shooting window pays an opportunity
+  // cost for retreating into a less dangerous position. This is a
+  // relative evaluation—not a "shoot whenever close" switch. Retreats
+  // remain sensible when the lane is blocked, the carrier is pressured,
+  // or the intended receiver genuinely improves the scoring position.
+  const progress = (choice.target.xM - owner.position.xM) *
+    team.attackingDirection
+  const remainingToGoal = team.attackingDirection === 1
+    ? setup.pitch.lengthM - owner.position.xM
+    : owner.position.xM
+  const immediateLane = immediateShot &&
+    immediateShot.onFrameShare >= .6 &&
+    immediateShot.chanceQuality >= .24 &&
+    shootingCorridorObstruction(
+      owner.position, immediateShot.target, opponents) < 1.8
+  const unpressured = clip(
+    (nearby(owner.position, opponents, setup, .15) - 2) / 2.5, 0, 1)
+  const backwardsWaste = progress < -2.5 &&
+    futureChance <= oldChance + 2 &&
+    remainingToGoal <= 22 && remainingToGoal >= 2
+  const shotOpportunityCost = immediateLane && backwardsWaste
+    ? clip(3.5 + immediateShot.chanceQuality * 14 +
+      (20 - remainingToGoal) * .25, 0, 13) * unpressured
+    : 0
   const penalty = laneRisk * 1.15 + pressureRisk + receivingRisk
   const utility = choice.utility - .6 - penalty + futureGain +
-    continuationAdjustment
+    continuationAdjustment - shotOpportunityCost
   const reasons = [
     laneRisk > 2.2 ? 'Defender can contest the passing lane' :
       laneRisk > 0 ? 'Defender approaching the passing lane' :
@@ -220,6 +242,9 @@ function assessedPass(
       futureGain < -1.0 ? 'Pass loses attacking opportunity' :
         'Maintains a viable possession option',
     ...(continuationReason ? [continuationReason] : []),
+    ...(shotOpportunityCost > 2
+      ? ['Backward pass wastes a credible immediate shooting window']
+      : []),
   ]
   return { choice, utility, horizonSeconds: flight,
     reasons, laneRisk, receivingRisk: pressureRisk + receivingRisk }
@@ -316,9 +341,19 @@ export function reviewOnBallActions(
     throw new RangeError('Too many options for bounded on-ball review')
   }
   const opponents = state.players.filter(p => p.clubId !== owner.clubId)
+  // Reuse the actual current shooting window for ALL pass alternatives.
+  // A single physical preview per decision cycle is important on iPhone.
+  const shooterDefinition = setup.players.find(p => p.id === owner.playerId)
+  if (!shooterDefinition) throw new Error('Missing on-ball footballer definition')
+  const immediateShot = options.some(choice => choice.kind === 'pass') &&
+      options.some(choice => choice.kind === 'shoot')
+    ? evaluateShootingOpportunity(
+      owner, shooterDefinition, opponents,
+      state.teams.find(t => t.clubId === owner.clubId)!, setup)
+    : null
   const assessments = options.map(choice =>
     choice.kind === 'pass'
-      ? assessedPass(choice, owner, state, setup, opponents)
+      ? assessedPass(choice, owner, state, setup, opponents, immediateShot)
       : choice.kind === 'carry'
         ? assessedCarry(choice, owner, state, setup, opponents)
         : assessedShot(choice, owner, state, setup, opponents))
