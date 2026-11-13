@@ -142,24 +142,29 @@ describe('Phase 6.9O — trigger-based pressing and defensive restraint',()=>{
       expect(low.pressers()).toHaveLength(1)
       expect(normal.pressers()).toHaveLength(1)
       expect(high.pressers()).toHaveLength(2)
+      // A defender already within immediate tackling reach goes to the
+      // real ball, not an artificial point behind it.
       expect((low.pressers()[0].target.xM-dangerX)*low.team.attackingDirection)
-        .toBeLessThan(0)
+        .toBeLessThanOrEqual(0)
     })
 
     it(`approaches goal side rather than blindly charging the carrier on side ${side}`,()=>{
       const a=stage(side,{y:7,leadM:8,secondM:19,type:'standard'})
       const press=a.pressers()
       expect(press).toHaveLength(1)
-      const approach=pressingApproachTarget(a.primary,a.ballPoint,a.team,a.setup)
+      const activePresser=a.state.players.find(
+        p=>p.playerId===press[0].playerId)!
+      const approach=pressingApproachTarget(
+        activePresser,a.ballPoint,a.team,a.setup)
       expect(press[0].target).toEqual(approach)
       expect((approach.xM-a.ballPoint.xM)*a.team.attackingDirection)
         .toBeLessThan(-1)
-      const definition=a.setup.players.find(p=>p.id===a.primary.playerId)!
+      const definition=a.setup.players.find(p=>p.id===activePresser.playerId)!
       const moving=projectPlayerToward(
-        a.primary,definition,approach,a.setup.pitch,121)
+        activePresser,definition,approach,a.setup.pitch,121)
       expect(Math.hypot(
-        moving.position.xM-a.primary.position.xM,
-        moving.position.yM-a.primary.position.yM)).toBeLessThan(.25)
+        moving.position.xM-activePresser.position.xM,
+        moving.position.yM-activePresser.position.yM)).toBeLessThan(.25)
       expect(a.state.contactEvents).toHaveLength(0)
       expect(a.state.automaticContactEvents).toHaveLength(0)
     })
