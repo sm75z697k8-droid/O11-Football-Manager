@@ -1,3 +1,13 @@
+## S1.1 — Real touchline restarts (incremental continuity)
+
+The match engine now classifies a **whole-ball exit** by the first crossed pitch line and the physical last-touch player. Touchline exits award the other club a **throw-in**; goal-line exits are correctly classified as a **corner** or **goal kick**. The corner and goal-kick restart mechanisms remain future S1 increments; these are explicit stoppages, not fake throw-ins.
+
+When a legal throw-in is awarded, the ball remains outside play while a selected outfield teammate approaches the correct touchline position and two receiving teammates make real, accelerating runs to consistent supporting targets. With the taker and an outlet ready, AI schedules a **real attemptThrowIn command**. On execution, physical reach/placement are checked, and the taker's long-throws, technique and composure ratings affect an actual lofted 3D ball launch using seeded accuracy variation. The existing physics, interceptions, passing and tactical planning resume on the following physical tick. A restart never grants a completed pass, score or possession by decree.
+
+The 2D match viewer now stays active during throw-in staging and indicates the awarded side and club. The physical events panel and debug report expose these events and actual `thrownIn` contact releases. Corners, goal kicks, post-goal kickoffs, offside, fouls and full-period/timekeeping are **not implemented yet**. Goal-line stoppages and scored goals still end the current exhibition instead of pretending full-game continuity exists.
+
+All claims are fictional simulation decisions; this milestone is about rule-compatible restart fundamentals, not professional calibrated match statistics. Because the match-state schema and contact command log have changed, **old serialized checkpoints are intentionally incompatible**. Same-seed replay inside the new engine remains deterministic. Tests cover both touchlines, both clubs, goal-line award classification, diagonal corner boundary geometry and actual release physics.
+
 ## Phase 6.9T — Goalkeeper aerial decisions: claims and punches
 
 Goalkeepers now recognize **actual physically kicked, lofted wide deliveries** targeting their own penalty area. The planner checks the latest real contact/command, the source/target geometry, physical ball flight, keeper movement limits and nearby opponents. A goalkeeper can **remain on the line** when the ball is too far or contested, or **move towards a reachable aerial intercept**. It works symmetrically for both fictional teams and uses `crossClaiming`, `commandOfArea`, `positioning` and decision-making attributes. Existing real-shot reflex saves and one-on-one decisions retain priority.
