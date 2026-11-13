@@ -6,6 +6,7 @@ import type {
 } from '../match/state'
 import { boundedTarget, predictBallAt, separationM } from './coordination'
 import { evaluatePhysicalShotWindows } from './shot-window'
+import { goalkeeperSaveWindow } from '../physics/goalkeeper-saves'
 
 /**
  * Phase 6.7 — objective-driven attacking options.
@@ -166,6 +167,8 @@ export function planGoalkeeperSave(
   const shot = activePhysicalShot(state)
   const shooter = shot && state.players.find(p => p.playerId === shot.shooterId)
   if (!shooter || shooter.clubId === team.clubId) return null
+  const definition = setup.players.find(p => p.id === keeper.playerId)
+  if (!definition?.abilities.goalkeeping) return null
   const ownGoal = team.attackingDirection === 1 ? 0 : setup.pitch.lengthM
   const towardsOwnGoal = ownGoal === 0 ? -1 : 1
   const speedTowards = state.ball.velocity.xMps * towardsOwnGoal
@@ -185,7 +188,16 @@ export function planGoalkeeperSave(
       setup.pitch.widthM / 2 - halfMouth - 1.2,
       setup.pitch.widthM / 2 + halfMouth + 1.2),
   }, setup.pitch)
-  return { target, engage: true }
+  // The keeper still protects the body-level shooting corridor during
+  // the reflex delay. Actual movement toward the predicted save location
+  // begins only after this individual keeper has recognized the shot.
+  // The normal locomotion engine executes the movement; no teleport or
+  // pre-awarded save is created here.
+  const window = goalkeeperSaveWindow(definition, state.clock.tick, shot.tick)
+  return {
+    target: window.reacted ? target : { ...keeper.position },
+    engage: true,
+  }
 }
 
 /** A save pursuit needs faster corrections than the twelve-tick tactical
