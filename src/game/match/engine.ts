@@ -243,9 +243,12 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       e.outcome==='kicked' && e.playerId===ev.takerId &&
       e.commandId.startsWith(foulKickPrefix(ev)))
     const active=state.foulRestart?.tick===ev.tick
+    // An awarded restart may be cancelled by the period whistle before
+    // its taker can physically strike the ball; never fabricate a kick.
     const interrupted=!active && releases.length===0 &&
       state.periodTiming.halfTimeTick!==null &&
-      ev.tick===state.periodTiming.halfTimeTick &&
+      ev.tick<=state.periodTiming.halfTimeTick &&
+      ev.tick>=state.periodTiming.halfTimeTick-TICKS_PER_MINUTE &&
       (state.period==='secondHalf' || state.period==='fullTime')
     if(releases.length>1 || (!active && !interrupted &&
         releases.length!==1) || (active && releases.length!==0))
