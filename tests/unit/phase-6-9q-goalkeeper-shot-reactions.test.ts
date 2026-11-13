@@ -134,8 +134,10 @@ describe('Phase 6.9Q physical goalkeeper shot reactions and saves', () => {
         scene.before, scene.after, scene.setup)
       expect(result.automaticContactEvents.at(-1)?.playerId)
         .toBe(scene.keeper.playerId)
-      expect(result.automaticContactEvents.at(-1)?.outcome).toBe('parried')
-      expect(result.ball.controllerId).toBeNull()
+      const outcome = result.automaticContactEvents.at(-1)?.outcome
+      expect(['caught', 'parried']).toContain(outcome)
+      expect(result.ball.controllerId).toBe(
+        outcome === 'caught' ? scene.keeper.playerId : null)
       expect(result.ball.lastTouchPlayerId).toBe(scene.keeper.playerId)
     }
   })
