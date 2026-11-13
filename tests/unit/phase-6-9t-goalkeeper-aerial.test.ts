@@ -277,6 +277,46 @@ describe('Phase 6.9T goalkeeper aerial deliveries', () => {
     }
   })
 
+  it('never lets a glove catch or punch occur beyond the penalty-area line', () => {
+    for (const side of [0, 1] as const) {
+      const scene = scenario({ side, crossClaiming: 99, handling: 99 })
+      const players = scene.state.players.map(p =>
+        p.playerId === scene.keeper.playerId ? {
+          ...p,
+          position: {
+            xM: scene.goalX + scene.direction * 16.2,
+            yM: 33,
+          },
+        } : p)
+      const before: MatchState = {
+        ...scene.state, players,
+        ball: {
+          ...scene.state.ball,
+          position: {
+            xM: scene.goalX + scene.direction * 16.85,
+            yM: 33.2,
+          },
+          heightM: 1.5,
+        },
+      }
+      const after: MatchState = {
+        ...before,
+        clock: { ...before.clock, tick: 102 },
+        ball: {
+          ...before.ball,
+          position: {
+            xM: scene.goalX + scene.direction * 16.65,
+            yM: 33.2,
+          },
+          heightM: 1.45,
+        },
+      }
+      const result = resolveAutomaticBallContact(before, after, scene.setup)
+      expect(result.automaticContactEvents).toHaveLength(0)
+      expect(result.ball.controllerId).toBeNull()
+    }
+  })
+
   it('does not award a catch/punch when the incoming cross misses the GK envelope', () => {
     const scene = scenario()
     const before = {
