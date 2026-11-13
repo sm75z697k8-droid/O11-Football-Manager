@@ -6,7 +6,7 @@ import { planHeldGoalkeeperShape } from '../../src/game/ai/goalkeeper-possession
 import { chooseGoalkeeperThrow } from '../../src/game/ai/goalkeeper-distribution'
 import { activeGoalkeeperCatch } from '../../src/game/physics/goalkeeper-handling'
 import { resolveAutomaticBallContact } from '../../src/game/physics/automatic-contact'
-import { MatchViewerSession } from '../../src/game/viewer/session'
+import { matchWithLiveGoalkeeperCatch } from '../fixtures/live-goalkeeper-catch'
 import type { MatchState } from '../../src/game/match/state'
 
 const separation = (a: {xM:number;yM:number}, b:{xM:number;yM:number}) =>
@@ -148,11 +148,7 @@ describe('Phase 6.9K — real goalkeeper hand-possession shape',()=>{
   }
 
   it('updates both autonomous teams on the next real tick after a live catch',()=>{
-    const session=new MatchViewerSession(42)
-    for(let i=0;i<1100 && !session.state.ball.outsidePitch &&
-        !session.state.automaticContactEvents.some(e=>e.outcome==='caught');i++) {
-      session.advance(1)
-    }
+    const session=matchWithLiveGoalkeeperCatch()
     const state=session.state
     const actualCatch=state.automaticContactEvents.find(e=>e.outcome==='caught')
     expect(actualCatch).toBeDefined()
