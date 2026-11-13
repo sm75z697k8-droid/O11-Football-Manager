@@ -27,7 +27,7 @@ const KEEPER_COMPARISON_METRICS = [
 type FeedItem = {
   readonly key: string
   readonly tick: number
-  readonly kind: 'challenge' | 'contact' | 'kick' | 'goal'
+  readonly kind: 'challenge' | 'contact' | 'kick' | 'goal' | 'restart'
   readonly title: string
   readonly detail: string
 }
@@ -63,7 +63,17 @@ function physicalEvents(state: MatchState): FeedItem[] {
     detail: goal.scoringTeamId.replaceAll('_', ' ') +
       ' · last touch ' + goal.lastTouchPlayerId.replaceAll('_', ' '),
   }))
-  return [...automatic, ...manual, ...goals].sort((a, b) =>
+  const restarts = state.outOfPlayEvents.slice(-12).map(exit => ({
+    key: 'out-' + exit.tick,
+    tick: exit.tick,
+    kind: 'restart' as const,
+    title: exit.kind === 'throwIn' ? 'THROW-IN AWARDED' :
+      exit.kind === 'corner' ? 'CORNER AWARDED' :
+        exit.kind === 'goalKick' ? 'GOAL KICK AWARDED' : 'BALL OUT',
+    detail: (exit.awardedTeamId ?? 'UNKNOWN TEAM').replaceAll('_', ' ') +
+      ' · ' + exit.side,
+  }))
+  return [...automatic, ...manual, ...goals, ...restarts].sort((a, b) =>
     b.tick - a.tick || a.key.localeCompare(b.key)).slice(0, 14)
 }
 
@@ -160,9 +170,12 @@ export default function App() {
         setHud(active.state)
         hudTime = now
       }
-      // Out-of-play is not a goal, throw-in or other restart yet. Stop the
-      // viewer deliberately to avoid burning CPU on an unplayable dead end.
-      if (active.state.ball.outsidePitch || active.state.goalEvents.length > 0) {
+      // Touchline exits continue through a physically staged throw-in.
+      // Goal-line exits and goals still stop until their own laws exist.
+      const restart = active.state.restart
+      const blocked = active.state.goalEvents.length > 0 ||
+        (active.state.ball.outsidePitch && restart?.kind !== 'throwIn')
+      if (blocked) {
         setHud(active.state)
         setPlaying(false)
         draw(1)
@@ -176,7 +189,8 @@ export default function App() {
     observer?.observe(canvas)
     window.addEventListener('resize', resize)
     resize()
-    if (playing && !active.state.ball.outsidePitch) {
+    if (playing && (!active.state.ball.outsidePitch ||
+      active.state.restart?.kind === 'throwIn')) {
       frame = window.requestAnimationFrame(loop)
     }
 
@@ -246,7 +260,8 @@ export default function App() {
   const keeperComparison = session.preset === 'keeper-comparison'
 
   const stepOne = () => {
-    if (playing || failure || hud.ball.outsidePitch) return
+    if (playing || failure ||
+        (hud.ball.outsidePitch && hud.restart?.kind !== 'throwIn')) return
     try {
       const next = sessionRef.current?.advance(1)
       if (next) setHud(next)
@@ -285,12 +300,19 @@ export default function App() {
   const scoringClub = session.setup.clubs.find(c => c.id === goal?.scoringTeamId)
   const goalScorer = hud.players.find(p => p.playerId === goal?.lastTouchPlayerId)
   const out = hud.ball.outsidePitch
+  const throwIn = hud.restart?.kind === 'throwIn'
+  const blocked = out && !throwIn
+  const awarded = session.setup.clubs.find(c =>
+    c.id === hud.restart?.awardedTeamId)
   const activeTeam = hud.ai.enabledTeams.filter(Boolean).length
   const successContacts = hud.contactEvents.filter(e =>
     ['controlled', 'miscontrolled', 'kicked'].includes(e.outcome)).length
   const statuses = failure ? 'ENGINE ERROR' :
     goal ? 'GOAL · ' + (scoringClub?.shortName ?? 'MATCH') :
-    out ? 'OUT OF PLAY' :
+    throwIn ? 'THROW-IN · ' + (awarded?.shortName ?? 'RESTART') :
+    out ? (hud.restart?.kind === 'corner' ? 'CORNER · ' :
+      hud.restart?.kind === 'goalKick' ? 'GOAL KICK · ' :
+        'OUT OF PLAY · ') + (awarded?.shortName ?? 'MATCH') :
     hud.kickoff?.phase === 'awaitingKick' ? 'KICK-OFF · HARBOR' :
     playing ? 'LIVE SIMULATION' : 'PAUSED'
 
@@ -319,7 +341,7 @@ export default function App() {
           </div>
           <div className="match-centre">
             <strong>{hud.teams[0].score} <span>:</span> {hud.teams[1].score}</strong>
-            <small>EXHIBITION · NO RESTARTS</small>
+            <small>EXHIBITION · TOUCHLINE RESTARTS</small>
           </div>
           <div className="team-side away-side">
             <span className="team-names"><strong>VAL</strong><small>VALE ROVERS</small></span>
@@ -448,7 +470,7 @@ export default function App() {
                 {diagnosticCopied ? '✓ Debug report copied' : 'Copy match debug report'}
               </button>
               <div className="drawer-stat"><span>BALL CONTROLLER</span><strong>{owner ? ownerClub?.shortName + ' #' + owner.shirtNumber : 'NONE'}</strong></div>
-              <p className="drawer-legal">Goals are recorded only when the physical ball crosses the goalmouth. This is an exhibition without a full match clock, referee or restarts.</p>
+              <p className="drawer-legal">Goals are recorded only when the physical ball crosses the goalmouth. This is an exhibition with live throw-ins. Corners, goal kicks, goal restarts and full match periods are not implemented yet.</p>
             </div>
           ) : panel === 'keepers' ? (
             <div className="drawer-content keeper-lab">
@@ -513,7 +535,7 @@ export default function App() {
         </aside>
       )}
 
-      {(out || failure) && (
+      {(blocked || failure) && (
         <section className="stoppage-overlay" role="status" aria-live="polite">
           <span className="stoppage-kicker">{failure ? 'SIMULATION ERROR' : goal ? 'PHYSICAL GOAL CONFIRMED' : 'BALL OUT OF PLAY'}</span>
           <strong>{failure ? 'The engine stopped' : goal ? 'GOAL · ' + (scoringClub?.name ?? 'Team') : 'Awaiting football restarts'}</strong>
@@ -521,7 +543,11 @@ export default function App() {
             ? (goal.ownGoal ? 'Own goal' : 'Last touch') +
               (goalScorer ? ' · #' + goalScorer.shirtNumber : '') +
               ' · The full ball crossed between the posts and under the bar. Restart rules are not implemented yet.'
-            : 'The ball left the playing field. Throw-ins, corners and goal kicks are not implemented yet.')}</p>
+            : hud.restart?.kind === 'corner'
+              ? 'A corner was awarded from the physical goal-line exit. Corner-kick mechanics are not implemented yet.'
+              : hud.restart?.kind === 'goalKick'
+                ? 'A goal kick was awarded from the physical goal-line exit. Goal-kick mechanics are not implemented yet.'
+                : 'The ball left play without an actionable restart award.')}</p>
           <div className="stoppage-actions">
             <button type="button" onClick={replaySameMatch}>↺ Replay same</button>
             <button type="button" className="stoppage-new-match"
@@ -538,12 +564,12 @@ export default function App() {
         <div className="transport-controls" aria-label="Simulation playback">
           <button type="button" className={playing ? 'transport-primary playing' : 'transport-primary'}
             onClick={() => setPlaying(value => !value)}
-            disabled={Boolean(failure) || out}
+            disabled={Boolean(failure) || blocked}
             aria-label={playing ? 'Pause simulation' : 'Start simulation'}>
             <span aria-hidden="true">{playing ? 'Ⅱ' : '▶'}</span><strong>{playing ? 'PAUSE' : 'PLAY'}</strong>
           </button>
           <button type="button" className="transport-secondary"
-            onClick={stepOne} disabled={playing || Boolean(failure) || out}
+            onClick={stepOne} disabled={playing || Boolean(failure) || blocked}
             aria-label="Advance one simulation step">STEP</button>
           <div className="transport-divider" aria-hidden="true" />
           <div className="transport-speeds" aria-label="Simulation speed">
@@ -565,8 +591,9 @@ export default function App() {
             aria-label="Start a new match with a different simulation seed">NEW MATCH</button>
         </div>
         <div className="transport-tail">
-          <span>{goal ? 'PHYSICAL GOAL' : hud.ball.outsidePitch ? 'OUT OF PLAY' : '20 HZ PHYSICS'}</span>
-          <small>REAL SHOTS / NO RESTARTS YET</small>
+          <span>{goal ? 'PHYSICAL GOAL' : throwIn ? 'THROW-IN PREPARATION' :
+            out ? 'OUT OF PLAY' : '20 HZ PHYSICS'}</span>
+          <small>PHYSICAL THROW-INS / OTHER RESTARTS PENDING</small>
         </div>
       </footer>
 
