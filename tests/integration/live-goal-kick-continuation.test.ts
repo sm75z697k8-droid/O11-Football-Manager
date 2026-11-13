@@ -11,7 +11,7 @@ describe('S1.2 live seeded match goal kicks', () => {
   it('executes a real goalkeeper kick and continues the deterministic match', () => {
     const observations = []
     let completed = false
-    for (const seed of [42, 90, 117, 205, 832, 4100, 9999,
+    for (const seed of [832, 42, 90, 117, 205, 4100, 9999,
       7654321, 123456789, 23017, 101, 57]) {
       const session = new MatchViewerSession(seed)
       for (let i = 0; i < 4200; i += 8) {
