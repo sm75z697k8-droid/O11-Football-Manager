@@ -49,8 +49,11 @@ function ready(side: 'left'|'right', pressured = false) {
   const players = stopped.players.map(p => {
     if (p.playerId === keeper.playerId) return {
       ...p,
-      position: { xM: spot.xM + scene.direction * .43, yM: spot.yM },
+      // The keeper approaches from BEHIND the stationary goal-area ball,
+      // already oriented in the direction of the intended distribution.
+      position: { xM: spot.xM - scene.direction * .56, yM: spot.yM },
       velocity: { xMps: 0, yMps: 0 },
+      orientationRad:scene.direction===1?0:Math.PI,
     }
     if (p.clubId === scene.defending.clubId &&
         (p.formationSlot === 'RCB' || p.formationSlot === 'LCB')) {
@@ -218,12 +221,17 @@ describe('S1.2 real Law 16 goal-kick continuations', () => {
     }
   })
 
-  it('can select a lofted midfield distribution when both short outlets are crowded', () => {
+  it('uses a lofted midfield outlet when both centre-back and full-back passing lanes are screened', () => {
     const scene = ready('left', true)
-    const target = stageGoalKick(scene.state, scene.setup).pendingCommands
-      .find(c => c.type === 'attemptGoalKick')
+    const staged=stageGoalKick(scene.state,scene.setup)
+    const target=staged.pendingCommands.find(c => c.type === 'attemptGoalKick')
     expect(target?.type).toBe('attemptGoalKick')
     expect(target?.lift).toBeGreaterThan(0)
+    expect(staged.ai.passIntent?.receiverId).not.toBe(scene.keeper.playerId)
+    const recipient=scene.state.players.find(p=>
+      p.playerId===staged.ai.passIntent?.receiverId)
+    expect(['DM','RCM','LCM','RW','LW','ST'])
+      .toContain(recipient?.formationSlot)
     expect(scene.state.players.some(p => p.clubId !== scene.defending.clubId &&
       insideRestartPenaltyArea(p.position, scene.event, scene.setup.pitch)))
       .toBe(false)
