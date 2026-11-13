@@ -352,7 +352,9 @@ export function evaluateOnBallPlan(
     choice: options[0] ?? null, assessments: [],
     selectedReason: 'Highest immediate spatial utility',
   }
-  const review = reviewOnBallActions(state, setup, options)
+  // One physical on-frame preview is sufficient for both the shot and
+  // every pass alternative; avoid redundant rollouts on iPhone Safari.
+  const review = reviewOnBallActions(state, setup, options, shot)
   const mental = definition.abilities.mental
   // Only already-scored forecast candidates may vary; never add two
   // unrelated randomness rolls or ignore an obvious shot opportunity.
