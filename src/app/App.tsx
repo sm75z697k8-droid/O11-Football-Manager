@@ -170,10 +170,10 @@ export default function App() {
         setHud(active.state)
         hudTime = now
       }
-      // Physical touchlines, goal kicks and corners resume automatically.
-      // Post-goal kickoffs remain a separate incremental S1 change.
+      // Every real goal now stages a physical conceding-team kickoff.
+      // Goal history is a scoreboard, never a reason to end playback.
       const restart = active.state.restart
-      const blocked = active.state.goalEvents.length > 0 ||
+      const blocked =
         (restart && !['throwIn','goalKick','corner'].includes(restart.kind)) ||
         (active.state.ball.outsidePitch && restart?.kind !== 'throwIn')
       if (blocked) {
@@ -300,11 +300,14 @@ export default function App() {
   const events = physicalEvents(hud)
   const goal = hud.goalEvents.at(-1)
   const scoringClub = session.setup.clubs.find(c => c.id === goal?.scoringTeamId)
-  const goalScorer = hud.players.find(p => p.playerId === goal?.lastTouchPlayerId)
   const out = hud.ball.outsidePitch
   const throwIn = hud.restart?.kind === 'throwIn'
   const goalKick = hud.restart?.kind === 'goalKick'
   const corner = hud.restart?.kind === 'corner'
+  const postGoal = hud.postGoalKickoff !== null
+  const recentlyScored = !!goal && hud.clock.tick - goal.tick <= 26
+  const kickoffClub = session.setup.clubs.find(c =>
+    c.id === hud.postGoalKickoff?.teamId)
   const blocked = (out && !throwIn) ||
     (hud.restart !== null && !throwIn && !goalKick && !corner)
   const awarded = session.setup.clubs.find(c =>
@@ -313,7 +316,8 @@ export default function App() {
   const successContacts = hud.contactEvents.filter(e =>
     ['controlled', 'miscontrolled', 'kicked', 'thrownIn', 'goalKicked', 'cornerKicked'].includes(e.outcome)).length
   const statuses = failure ? 'ENGINE ERROR' :
-    goal ? 'GOAL · ' + (scoringClub?.shortName ?? 'MATCH') :
+    postGoal ? 'CENTRE KICK-OFF · ' + (kickoffClub?.shortName ?? 'RESTART') :
+    recentlyScored ? 'GOAL · ' + (scoringClub?.shortName ?? 'MATCH') :
     throwIn ? 'THROW-IN · ' + (awarded?.shortName ?? 'RESTART') :
     goalKick ? 'GOAL KICK · ' + (awarded?.shortName ?? 'RESTART') :
     corner ? 'CORNER · ' + (awarded?.shortName ?? 'RESTART') :
@@ -346,7 +350,7 @@ export default function App() {
           </div>
           <div className="match-centre">
             <strong>{hud.teams[0].score} <span>:</span> {hud.teams[1].score}</strong>
-            <small>EXHIBITION · PHYSICAL RESTARTS</small>
+            <small>EXHIBITION · CONTINUOUS GOALS</small>
           </div>
           <div className="team-side away-side">
             <span className="team-names"><strong>VAL</strong><small>VALE ROVERS</small></span>
@@ -542,13 +546,9 @@ export default function App() {
 
       {(blocked || failure) && (
         <section className="stoppage-overlay" role="status" aria-live="polite">
-          <span className="stoppage-kicker">{failure ? 'SIMULATION ERROR' : goal ? 'PHYSICAL GOAL CONFIRMED' : 'BALL OUT OF PLAY'}</span>
-          <strong>{failure ? 'The engine stopped' : goal ? 'GOAL · ' + (scoringClub?.name ?? 'Team') : 'Awaiting football restarts'}</strong>
-          <p>{failure ?? (goal
-            ? (goal.ownGoal ? 'Own goal' : 'Last touch') +
-              (goalScorer ? ' · #' + goalScorer.shirtNumber : '') +
-              ' · The full ball crossed between the posts and under the bar. Restart rules are not implemented yet.'
-            : 'The ball left play without an actionable restart award.')}</p>
+          <span className="stoppage-kicker">{failure ? 'SIMULATION ERROR' : 'BALL OUT OF PLAY'}</span>
+          <strong>{failure ? 'The engine stopped' : 'Awaiting football restarts'}</strong>
+          <p>{failure ?? 'The ball left play without an actionable restart award.'}</p>
           <div className="stoppage-actions">
             <button type="button" onClick={replaySameMatch}>↺ Replay same</button>
             <button type="button" className="stoppage-new-match"
@@ -592,11 +592,13 @@ export default function App() {
             aria-label="Start a new match with a different simulation seed">NEW MATCH</button>
         </div>
         <div className="transport-tail">
-          <span>{goal ? 'PHYSICAL GOAL' : throwIn ? 'THROW-IN PREPARATION' :
+          <span>{postGoal ? 'CONCEDING TEAM KICKOFF' :
+            recentlyScored ? 'GOAL CONFIRMED' :
+            throwIn ? 'THROW-IN PREPARATION' :
             goalKick ? 'GOAL KICK PREPARATION' :
             corner ? 'CORNER PREPARATION' :
             out ? 'OUT OF PLAY' : '20 HZ PHYSICS'}</span>
-          <small>PHYSICAL RESTARTS / POST-GOAL KICKOFFS PENDING</small>
+          <small>ALL BALL-OUT & GOAL RESTARTS LIVE · PERIODS PENDING</small>
         </div>
       </footer>
 
