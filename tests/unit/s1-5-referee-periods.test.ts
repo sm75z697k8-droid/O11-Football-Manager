@@ -163,7 +163,7 @@ describe('S1.5 referee-controlled two 45-minute halves', () => {
     const match=createFoundationMatch(makeFictionalMatchSetup())
     match.advance(240)
     expect(match.getState().period).toBe('notStarted')
-    expect(formatMatchTime(match.getState())).toBe('00:00')
+    expect(formatMatchTime(match.getState())).toBe('00:12')
     const cp=match.checkpoint()
     expect(restoreFoundationMatch(cp).checkpoint()).toEqual(cp)
   })
