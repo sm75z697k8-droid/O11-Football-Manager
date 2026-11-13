@@ -1,3 +1,13 @@
+## S1.2 — Physical goal-kick restarts
+
+A legally awarded **goal kick** is no longer a terminal match state. After an actual whole-ball goal-line exit with an attacking last touch, the referee places the **stationary dead ball within the defending team's goal area**, never outside the pitch or in the goalkeeper's hands. The goalkeeper physically travels to the ball while both centre-backs offer inside-area build-up options and opposition players retreat beyond the penalty area through existing 20Hz locomotion.
+
+Once the keeper is near the ball, opponents are clear and a receiving option is ready, AI schedules a validated **`attemptGoalKick`**. The ball only returns to normal play when the *physical foot-contact resolver* succeeds; the shot/pass RNG and the goalkeeper's `kickingDistribution`, passing and composure inform the actual kick trajectory. The keeper assesses short outlets and can kick long into midfield if both centre-backs are pressed. The chosen receiver follows the existing physical reception AI—no completion or possession is awarded in advance. The kicker is barred from a second touch before someone else touches the ball, per IFAB Law 16.
+
+New tests exercise both ends, goal-area and opponent clearance, rejection of unauthorized kicks, attributes/trajectory, short and pressured deliveries. `tests/unit/s1-2-goal-kicks.test.ts` is the narrow rule suite. The iPhone match viewer now continues through both throw-ins and goal kicks.
+
+**Still outside S1.2:** corners, kickoffs following goals, complete timekeeping, fouls, offsides, referee enforcement of persistent restart delays and match finishing. These are separate improvements, not silently synthesized restart events. The ball's legal repositioning only occurs **while play is stopped**; outfield and goalkeeper movement remain physical. Previous serialized checkpoints intentionally require migration because the replay schema/engine versions advance. The game uses fictional attributes and estimated calibration values.
+
 ## S1.1 — Real touchline restarts (incremental continuity)
 
 The match engine now classifies a **whole-ball exit** by the first crossed pitch line and the physical last-touch player. Touchline exits award the other club a **throw-in**; goal-line exits are correctly classified as a **corner** or **goal kick**. The corner and goal-kick restart mechanisms remain future S1 increments; these are explicit stoppages, not fake throw-ins.
