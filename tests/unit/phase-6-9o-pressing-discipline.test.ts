@@ -190,7 +190,7 @@ describe('Phase 6.9O — trigger-based pressing and defensive restraint',()=>{
   }
 
   it('keeps the previous suitable presser when a colleague is only slightly closer',()=>{
-    const a=stage(0,{x:55,leadM:6,secondM:4,
+    const a=stage(0,{x:36,leadM:6,secondM:4,
       type:'standard',previousPress:'RCM'})
     expect(a.pressers()).toHaveLength(1)
     expect(a.pressers()[0].playerId).toBe(a.primary.playerId)
@@ -199,7 +199,7 @@ describe('Phase 6.9O — trigger-based pressing and defensive restraint',()=>{
   })
 
   it('switches responsibility when the prior presser is no longer eligible',()=>{
-    const a=stage(0,{x:55,leadM:18,secondM:5,
+    const a=stage(0,{x:36,leadM:18,secondM:5,
       type:'standard',previousPress:'RCM'})
     expect(a.pressers()).toHaveLength(1)
     expect(a.pressers()[0].playerId).toBe(a.secondary.playerId)
