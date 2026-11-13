@@ -4,6 +4,7 @@ import type { BallMatchState, PlayerMatchState } from '../match/state'
 import { advanceBallPhysics } from '../physics/ball'
 import { sweptFootContact } from '../physics/automatic-contact'
 import { FOOT_REACH_M } from '../physics/contact'
+import { goalkeeperThrowVelocity } from '../physics/goalkeeper-handling'
 import { projectPlayerToward } from '../physics/locomotion'
 import { boundedTarget, estimateInterception, predictBallAt } from './coordination'
 
@@ -14,18 +15,6 @@ import { boundedTarget, estimateInterception, predictBallAt } from './coordinati
  */
 export const GK_THROW_REHEARSAL_MAX_TICKS = 72
 const GK_THROW_TICK_SECONDS = .05
-
-export function goalkeeperThrowVelocity(
-  from: Point2, to: Point2, power: number,
-): BallMatchState['velocity'] {
-  const heading = Math.atan2(to.yM - from.yM, to.xM - from.xM)
-  const speed = 4.8 + power * 9.3
-  return {
-    xMps: Math.cos(heading) * speed,
-    yMps: Math.sin(heading) * speed,
-    zMps: .4 + power * 1.2,
-  }
-}
 
 export interface GoalkeeperThrowPreview {
   /** A possible first-foot-control, not a guaranteed actual reception. */
