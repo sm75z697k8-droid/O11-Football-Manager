@@ -1,7 +1,7 @@
 /** O11 project metadata. Real-time landscape Canvas now visualizes the authoritative headless engine; no official match rules or results yet. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = '6.9M' as const
-export const ENGINE_STATUS = 'intelligent-shot-opportunity-selection' as const
+export const PROJECT_PHASE = '6.9N' as const
+export const ENGINE_STATUS = 'directional-close-control' as const
 
 export const FOUNDATION_STAGES = [
   { id: '0A', title: 'Project foundation', summary: 'App, TypeScript, tests and deployment' },
@@ -34,4 +34,5 @@ export const FOUNDATION_STAGES = [
   { id: '6.9K', title: 'Goalkeeper distribution shape', summary: 'Real caught ball creates spaced build-out outlets while opponents regroup and screen passes' },
   { id: '6.9L', title: 'Goalkeeper distribution choices', summary: 'Physically preview hand throws and compare reachable outlets by real pressure and keeper attributes' },
   { id: '6.9M', title: 'Intelligent shot selection', summary: 'Physical goalmouth accuracy sampling, goalkeeper-aware aiming and meaningful shoot-versus-backpass decisions' },
+  { id: '6.9N', title: 'Directional close control', summary: 'Foot-carried ball follows movement and turning smoothly within physical reach, respecting real touch origin and player attributes' },
 ] as const
