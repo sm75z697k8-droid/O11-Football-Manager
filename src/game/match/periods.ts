@@ -301,6 +301,31 @@ export function advanceSecondHalfKickoff(
   }
 }
 
+/** Historical event timestamps remain correct after switching ends and
+ * after added time; never reinterpret old first-half contacts as second-half.
+ */
+export function formatMatchEventTime(
+  state: MatchState, tick: number,
+): string {
+  const boundary = state.periodTiming.halfTimeTick
+  const afterBreak = boundary !== null && tick > boundary
+  const started = afterBreak
+    ? state.periodTiming.secondHalfStartTick
+    : state.periodTiming.firstHalfStartTick
+  const reference = started ?? (afterBreak ? boundary : 0)
+  const elapsed = Math.max(0, tick-reference)
+  const minute = Math.floor(elapsed/TICKS_PER_MINUTE)
+  const second = Math.floor((elapsed%TICKS_PER_MINUTE) *
+    FIXED_STEP_MILLISECONDS/1000)
+  if (minute >= HALF_MINUTES) {
+    return String(afterBreak ? 90 : 45) + '+' +
+      String(minute-HALF_MINUTES+1) + ':' +
+      String(second).padStart(2,'0')
+  }
+  return String((afterBreak?45:0)+minute).padStart(2,'0')+':' +
+    String(second).padStart(2,'0')
+}
+
 /** Game-clock display, independent of the world/physics tick count. */
 export function formatMatchTime(state: MatchState): string {
   if (state.period === 'notStarted') return '00:00'
