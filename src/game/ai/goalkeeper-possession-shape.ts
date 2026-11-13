@@ -78,7 +78,7 @@ function outletTarget(
   team: TeamMatchState, setup: MatchSetup,
   opponents: readonly PlayerMatchState[], reserved: readonly Point2[],
 ): Point2 {
-  const { lengthM, widthM } = setup.pitch
+  const { widthM } = setup.pitch
   const centreY = widthM / 2
   const direction = team.attackingDirection
   const [minimum, maximum] = outletDepth[player.formationSlot]
@@ -135,7 +135,7 @@ function outletTarget(
  * physically chase a keeper who has secured a hand catch.
  */
 function oppositionBlock(
-  player: PlayerMatchState, anchor: Point2, keeper: PlayerMatchState,
+  anchor: Point2, keeper: PlayerMatchState,
   team: TeamMatchState, setup: MatchSetup,
 ): Point2 {
   const widthCentre = setup.pitch.widthM / 2
@@ -199,7 +199,7 @@ function defendDistribution(
       playerId: player.playerId, clubId: team.clubId,
       tick: state.clock.tick,
       action: player.formationSlot === 'GK' ? 'shape' : 'recover',
-      target: oppositionBlock(player, anchor, keeper, team, setup),
+      target: oppositionBlock(anchor, keeper, team, setup),
       engage: false,
     })
   }
