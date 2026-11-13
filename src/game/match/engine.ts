@@ -7,6 +7,9 @@ import { adjudicatePhysicalGoal } from './goals'
 import { advanceThrowInStoppage, recordOutOfPlay } from './restarts'
 import { advanceGoalKickStoppage, goalKickSpot } from './goal-kicks'
 import {
+  advanceCornerStoppage, cornerBallSpot, selectCornerTaker,
+} from './corners'
+import {
   AUTO_CONTACT_COOLDOWN_TICKS, resolveAutomaticBallContact,
 } from '../physics/automatic-contact'
 import {
@@ -35,7 +38,7 @@ import {
 } from './state'
 import type { MatchState, PressingIntensity } from './state'
 
-export const MATCH_CHECKPOINT_VERSION = 11 as const
+export const MATCH_CHECKPOINT_VERSION = 12 as const
 export const MAX_ADVANCE_STEPS_PER_CALL = 10_000 as const
 
 export interface FoundationMatchCheckpoint {
@@ -203,14 +206,17 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   if (state.restart !== null) {
     const goalKick = lastExit?.kind === 'goalKick' &&
       state.restart?.kind === 'goalKick'
-    const placement = goalKick ? goalKickSpot(lastExit, setup.pitch) : null
+    const corner = lastExit?.kind === 'corner' &&
+      state.restart?.kind === 'corner'
+    const placement = goalKick ? goalKickSpot(lastExit, setup.pitch) :
+      corner ? cornerBallSpot(lastExit, setup.pitch) : null
     if (!lastExit || JSON.stringify(state.restart) !== JSON.stringify(lastExit) ||
         state.goalEvents.length > 0 ||
         state.ball.controllerId !== null ||
         state.ball.velocity.xMps !== 0 ||
         state.ball.velocity.yMps !== 0 ||
         state.ball.velocity.zMps !== 0 ||
-        (goalKick ? state.ball.outsidePitch ||
+        (goalKick || corner ? state.ball.outsidePitch ||
           state.ball.heightM !== BALL_RADIUS_M ||
           JSON.stringify(state.ball.position) !== JSON.stringify(placement) :
           !state.ball.outsidePitch)) {
@@ -242,6 +248,27 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       !state.contactEvents.some(e => e.kind === 'goalKick' &&
         e.outcome === 'goalKicked' && e.tick > lastExit.tick)) {
     throw new Error('Goal kick finished without a real goal-area foot contact')
+  }
+  if (lastExit?.kind === 'corner' && state.restart === null &&
+      !state.contactEvents.some(e => e.kind === 'cornerKick' &&
+        e.outcome === 'cornerKicked' && e.tick > lastExit.tick)) {
+    throw new Error('Corner finished without real physical foot contact')
+  }
+  for (const command of state.appliedCommands) {
+    if (command.type !== 'attemptCornerKick') continue
+    const award = state.outOfPlayEvents.find(exit =>
+      exit.kind === 'corner' && exit.awardedTeamId === command.teamId &&
+      exit.tick <= command.requestedTick &&
+      (state.outOfPlayEvents.find(next =>
+        next.tick > exit.tick)?.tick ?? Infinity) > command.appliedTick)
+    const taker = award ? selectCornerTaker(state, award, setup) : null
+    const event = state.contactEvents.find(e => e.commandId === command.commandId)
+    if (!award || taker?.playerId !== command.playerId ||
+        command.appliedTick <= award.tick ||
+        (event?.outcome === 'cornerKicked' &&
+          command.appliedTick < award.tick + 14)) {
+      throw new Error('Corner command not authorized by a chronological award')
+    }
   }
   for (const command of state.appliedCommands) {
     if (command.type !== 'attemptGoalKick') continue
@@ -300,6 +327,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
           command.type === 'attemptGoalkeeperThrow' ||
           command.type === 'attemptThrowIn' ||
           command.type === 'attemptGoalKick' ||
+          command.type === 'attemptCornerKick' ||
           command.type === 'setBallEngagement') && !setup.players.some(
           (p) => p.id === command.playerId && p.clubId === command.teamId)) ||
         seen.has(command.commandId)) {
@@ -361,7 +389,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   }
   const generated = commands.filter(c =>
     (c.type === 'attemptKick' || c.type === 'attemptGoalkeeperThrow' ||
-      c.type === 'attemptThrowIn' || c.type === 'attemptGoalKick') &&
+      c.type === 'attemptThrowIn' || c.type === 'attemptGoalKick' ||
+      c.type === 'attemptCornerKick') &&
     (c.commandId.startsWith('ai-pass-') || c.commandId.startsWith('ai-shot-')))
   const expectedLastPass = generated.length
     ? Math.max(...generated.map(c => c.requestedTick)) : -1000
@@ -384,7 +413,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     if (!candidate || (candidate.type !== 'attemptKick' &&
         candidate.type !== 'attemptGoalkeeperThrow' &&
         candidate.type !== 'attemptThrowIn' &&
-        candidate.type !== 'attemptGoalKick') ||
+        candidate.type !== 'attemptGoalKick' &&
+        candidate.type !== 'attemptCornerKick') ||
         !candidate.commandId.startsWith('ai-pass-') ||
         candidate.teamId !== intent.teamId ||
         candidate.playerId !== intent.passerId ||
@@ -438,7 +468,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     command.type === 'attemptFirstTouch' || command.type === 'attemptKick' ||
     command.type === 'attemptGoalkeeperThrow' ||
     command.type === 'attemptThrowIn' ||
-    command.type === 'attemptGoalKick')
+    command.type === 'attemptGoalKick' ||
+    command.type === 'attemptCornerKick')
   if (state.contactEvents.length !== attempts.length) {
     throw new Error('Missing or extra player-ball contact events')
   }
@@ -454,7 +485,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         recorded.kind !== (command.type === 'attemptKick' ? 'kick' :
           command.type === 'attemptGoalkeeperThrow' ? 'throw' :
             command.type === 'attemptThrowIn' ? 'throwIn' :
-              command.type === 'attemptGoalKick' ? 'goalKick' : 'control') ||
+              command.type === 'attemptGoalKick' ? 'goalKick' :
+                command.type === 'attemptCornerKick' ? 'cornerKick' : 'control') ||
         ![0, 1].includes(recorded.drawUsed) ||
         !(
           command.type === 'attemptKick'
@@ -465,9 +497,11 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
                 ? ['thrownIn', 'notReady', 'invalidDirection'].includes(recorded.outcome)
                 : command.type === 'attemptGoalKick'
                   ? ['goalKicked', 'notReady', 'invalidDirection'].includes(recorded.outcome)
-                  : ['controlled', 'miscontrolled', 'outOfReach', 'occupied', 'alreadyControlled', 'secondTouch'].includes(recorded.outcome)
+                  : command.type === 'attemptCornerKick'
+                    ? ['cornerKicked', 'notReady', 'invalidDirection'].includes(recorded.outcome)
+                    : ['controlled', 'miscontrolled', 'outOfReach', 'occupied', 'alreadyControlled', 'secondTouch'].includes(recorded.outcome)
         ) ||
-        recorded.drawUsed !== (['kicked', 'controlled', 'miscontrolled', 'thrown', 'thrownIn', 'goalKicked'].includes(recorded.outcome) ? 1 : 0) ||
+        recorded.drawUsed !== (['kicked', 'controlled', 'miscontrolled', 'thrown', 'thrownIn', 'goalKicked', 'cornerKicked'].includes(recorded.outcome) ? 1 : 0) ||
         Object.keys(recorded).sort().join(',') !==
           'commandId,drawUsed,kind,outcome,playerId,tick') {
       throw new Error('Invalid player-ball contact event history')
@@ -558,7 +592,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       if (command.type !== 'attemptFirstTouch' && command.type !== 'attemptKick' &&
           command.type !== 'attemptGoalkeeperThrow' &&
           command.type !== 'attemptThrowIn' &&
-          command.type !== 'attemptGoalKick') continue
+          command.type !== 'attemptGoalKick' &&
+          command.type !== 'attemptCornerKick') continue
       const recorded = eventById.get(command.commandId)
       if (!recorded) throw new Error('Missing applied contact outcome')
       if (recorded.outcome === 'controlled') {
@@ -569,7 +604,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
                  recorded.outcome === 'kicked' ||
                  recorded.outcome === 'thrown' ||
                  recorded.outcome === 'thrownIn' ||
-                 recorded.outcome === 'goalKicked') {
+                 recorded.outcome === 'goalKicked' ||
+                 recorded.outcome === 'cornerKicked') {
         if (recorded.outcome === 'thrown' && (
           expectedController !== command.playerId ||
           expectedCatchTick === null ||
@@ -590,7 +626,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
       const wrongKind = owner ? ev.kind !== 'challenge' ||
         contender?.clubId === owner.clubId : ev.kind !== 'interception'
       const manualContact = state.contactEvents.some(e => e.tick === tick &&
-        ['controlled', 'miscontrolled', 'kicked', 'thrownIn', 'goalKicked'].includes(e.outcome))
+        ['controlled', 'miscontrolled', 'kicked', 'thrownIn', 'goalKicked', 'cornerKicked'].includes(e.outcome))
       const allowed = engagementAtTick.get(ev.playerId) ||
         autonomousAtTick.get(contender?.clubId ?? '')
       if (!allowed || wrongKind || manualContact ||
@@ -616,7 +652,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
   const launches = orderedApplied.filter((command) => command.type === 'diagnosticBallLaunch')
   if (!launches.length && state.automaticContactEvents.length === 0 &&
       !state.contactEvents.some((ev) =>
-        ['kicked', 'miscontrolled', 'controlled', 'thrown', 'thrownIn', 'goalKicked'].includes(ev.outcome))) {
+        ['kicked', 'miscontrolled', 'controlled', 'thrown', 'thrownIn', 'goalKicked', 'cornerKicked'].includes(ev.outcome))) {
     if (JSON.stringify(state.ball) !== JSON.stringify(baseline.ball)) {
       throw new Error('Ball moved without an applied diagnostic launch')
     }
@@ -835,7 +871,7 @@ export class FoundationMatchEngine {
     }
     for (let i = 0; i < steps; i += 1) {
       if (this.state.goalEvents.length ||
-          (this.state.restart && !['throwIn', 'goalKick']
+          (this.state.restart && !['throwIn', 'goalKick', 'corner']
             .includes(this.state.restart.kind))) break
       const clock = advanceSimulationClock(this.state.clock)
       const applied = applyDueMatchCommands({ ...this.state, clock })
@@ -846,6 +882,11 @@ export class FoundationMatchEngine {
       }
       if (applied.restart?.kind === 'goalKick') {
         this.state = advanceGoalKickStoppage(
+          applied, this.setup, resolveContactAttempts)
+        continue
+      }
+      if (applied.restart?.kind === 'corner') {
+        this.state = advanceCornerStoppage(
           applied, this.setup, resolveContactAttempts)
         continue
       }
