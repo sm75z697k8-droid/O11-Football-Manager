@@ -3,7 +3,7 @@ import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
 import { createFoundationMatch } from '../../src/game/match/engine'
 import { applyDueMatchCommands, scheduleMatchCommand } from '../../src/game/match/commands'
 import { resolveContactAttempts } from '../../src/game/physics/contact'
-import { advanceBallPhysics, BALL_RADIUS_M } from '../../src/game/physics/ball'
+import { advanceBallPhysics } from '../../src/game/physics/ball'
 import { classifyOutOfPlay, recordOutOfPlay, forbiddenRestartSecondTouch } from '../../src/game/match/restarts'
 import {
   goalKickSpot, goalKickTaker, goalKickReceiverTargets,
