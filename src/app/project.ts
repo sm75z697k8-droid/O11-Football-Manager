@@ -1,7 +1,7 @@
 /** O11 project metadata. Real-time landscape Canvas now visualizes the authoritative headless engine; no official match rules or results yet. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = 'S1.4' as const
-export const ENGINE_STATUS = 'post-goal-physical-kickoffs' as const
+export const PROJECT_PHASE = 'S1.5' as const
+export const ENGINE_STATUS = 'two-half-referee-timekeeping' as const
 
 export const FOUNDATION_STAGES = [
   { id: '0A', title: 'Project foundation', summary: 'App, TypeScript, tests and deployment' },
@@ -45,4 +45,5 @@ export const FOUNDATION_STAGES = [
   { id: 'S1.2', title: 'Physical goal kicks', summary: 'Stationary legal goal-area placement, keeper build-up movement, penalty-area opponent clearance and skill-driven physical kicks' },
   { id: 'S1.3', title: 'Physical corners', summary: 'Real corner-area ball placement, marked-area runs, arc-clear defending and seeded attribute-driven corner delivery' },
   { id: 'S1.4', title: 'After-goal physical kickoffs', summary: 'Retain scored goals and match history while the conceding team physically returns to legal centre-kickoff positions and restarts play' },
+  { id: 'S1.5', title: 'Two halves and referee timing', summary: 'Real 45-minute halves, estimated lost-time allowance, halftime interval, changed ends, physical second-half kickoff and final whistle' },
 ] as const
