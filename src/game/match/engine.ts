@@ -718,7 +718,17 @@ export class FoundationMatchEngine {
           Math.hypot(
             p.position.xM - controller.position.xM,
             p.position.yM - controller.position.yM) >= 7)
-      const carrying = noNearbyChallenge && !!controller &&
+      // A normal settled ball offset is already within foot reach and
+      // should not be changed merely because an attacker happens to run.
+      // Repair only an actual wrongly aligned position: behind the feet
+      // after a turn, or far across the carrier's body.
+      const oldOffset = agents.ball.controlOffset
+      const needsAlignment = !!controller && !!oldOffset &&
+        (Math.cos(controller.orientationRad) * oldOffset.xM +
+          Math.sin(controller.orientationRad) * oldOffset.yM < .32 ||
+        Math.abs(-Math.sin(controller.orientationRad) * oldOffset.xM +
+          Math.cos(controller.orientationRad) * oldOffset.yM) > .58)
+      const carrying = noNearbyChallenge && needsAlignment && !!controller &&
         controller.intention.kind === 'moveToPoint' &&
         Math.hypot(
           controller.intention.target.xM - controller.position.xM,
