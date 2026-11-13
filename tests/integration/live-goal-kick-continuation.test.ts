@@ -11,7 +11,11 @@ describe('S1.2 live seeded match goal kicks', () => {
   it('executes a real goalkeeper kick and continues the deterministic match', () => {
     const observations = []
     let completed = false
-    for (const seed of [832, 42, 90, 117, 205, 4100, 9999,
+    // Regression-verified seed 4100 produces a genuine goal kick at
+    // tick ~3736. Try it first: the old order simulated >17,000 extra
+    // ticks before reaching this real event and sometimes breached CI's
+    // default 5s budget under shared runner contention.
+    for (const seed of [4100, 832, 42, 90, 117, 205, 9999,
       7654321, 123456789, 23017, 101, 57]) {
       const session = new MatchViewerSession(seed)
       for (let i = 0; i < 4200; i += 8) {
@@ -47,5 +51,5 @@ describe('S1.2 live seeded match goal kicks', () => {
     }
     console.info('[O11 S1.2 REAL GOAL KICKS]', JSON.stringify(observations))
     expect(completed).toBe(true)
-  })
+  }, 12_000)
 })
