@@ -376,6 +376,24 @@ export function scheduleMatchCommand(
        req.playerId !== postGoal.kickerId ||
        req.power !== .19 || req.lift !== 0))
   )) return reject('Only the awarded physical centre kick is allowed after a goal')
+  const foul=state.foulRestart
+  const foulPrefix=foul?(foul.kind==='penalty'
+    ? 'ai-shot-penalty-'+foul.tick+'-'
+    : 'ai-pass-foul-'+foul.tick+'-'):null
+  if(req.type==='attemptKick' &&
+    (req.commandId.startsWith('ai-pass-foul-') ||
+      req.commandId.startsWith('ai-shot-penalty-')) &&
+    (!foulPrefix || !req.commandId.startsWith(foulPrefix)))
+    return reject('No referee foul award authorizes this restart')
+  if(foul && (
+    ['attemptFirstTouch','attemptGoalkeeperThrow','diagnosticBallLaunch',
+      'attemptThrowIn','attemptGoalKick','attemptCornerKick'].includes(req.type) ||
+    (req.type==='attemptKick' &&
+      (!foulPrefix || !req.commandId.startsWith(foulPrefix) ||
+       req.teamId!==foul.awardedTeamId || req.playerId!==foul.takerId ||
+       req.power!==(foul.kind==='penalty'?.57:.38) ||
+       req.lift!==(foul.kind==='penalty'?.075:0)))
+  ))return reject('Only the awarded physical foul restart may play the ball')
   const offside=state.offsideRestart
   const offsidePrefix=offside ? 'ai-pass-offside-'+offside.tick+'-' : null
   if (req.type==='attemptKick' &&

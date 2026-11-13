@@ -29,6 +29,8 @@ export function copyableMatchDiagnostics(state: MatchState): string {
       state.postGoalKickoff
       ? 'post-goal-' + state.postGoalKickoff.phase :
       state.offsideRestart ? 'offside-indirect-free-kick' :
+      state.foulRestart ? state.foulRestart.kind==='penalty'
+        ? 'penalty-kick' : 'direct-free-kick' :
       state.restart?.kind === 'throwIn' ? 'throw-in-staging' :
         state.restart?.kind === 'goalKick' ? 'goal-kick-staging' :
         state.restart?.kind === 'corner' ? 'corner-staging' :
@@ -39,6 +41,10 @@ export function copyableMatchDiagnostics(state: MatchState): string {
     lastOffside: state.offsideEvents.at(-1) ?? null,
     offsides: state.offsideEvents.length,
     indirectFreeKick: state.indirectFreeKick,
+    foulRestart: state.foulRestart,
+    fouls: state.foulEvents.length,
+    penalties: state.foulEvents.filter(f=>f.kind==='penalty').length,
+    lastFoul: state.foulEvents.at(-1)??null,
     postGoalKickoff: state.postGoalKickoff,
     lastGoal: state.goalEvents.at(-1) ?? null,
     scoreboard: state.teams.map(t => ({
