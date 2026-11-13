@@ -273,7 +273,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     const placement = goalKick ? goalKickSpot(lastExit, setup.pitch) :
       corner ? cornerBallSpot(lastExit, setup.pitch) : null
     if (!lastExit || JSON.stringify(state.restart) !== JSON.stringify(lastExit) ||
-        state.goalEvents.length > 0 ||
+        state.postGoalKickoff !== null || state.periodKickoff !== null ||
         state.ball.controllerId !== null ||
         state.ball.velocity.xMps !== 0 ||
         state.ball.velocity.yMps !== 0 ||
