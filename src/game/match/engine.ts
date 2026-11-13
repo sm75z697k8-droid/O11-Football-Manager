@@ -163,7 +163,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         e.playerId===offence.offenderId && e.outcome!=='heldOff')
     if (!Number.isSafeInteger(offence.tick) ||
         !Number.isSafeInteger(offence.playedTick) ||
-        offence.tick<=offence.playedTick || offence.tick>state.clock.tick ||
+        offence.tick<offence.playedTick || offence.tick>state.clock.tick ||
         (index>0 && state.offsideEvents[index-1].tick>=offence.tick) ||
         !player || !passer || !taker || player.clubId!==passer.clubId ||
         taker.clubId!==offence.awardedTeamId ||
