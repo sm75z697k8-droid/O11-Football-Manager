@@ -1,3 +1,13 @@
+## S1.3 — Physical corner kicks (Law 17)
+
+O11 now distinguishes a **corner** from an ordinary goal-line or touchline exit and places the stationary ball inside the **nearest 1m corner area**. The corner taker is selected reproducibly from real players' initial tactical positions and set-piece ratings; all participants move using the existing 20Hz locomotion. Attackers offer near-post, far-post and short options. Defenders protect these areas while their team must remain **at least 9.15m from the corner arc until the kick**. No one teleports, and the dead ball cannot be controlled or launched by regular open-play commands.
+
+AI can choose a low short delivery or a lofted cross according to corner technique, opponent congestion and a physically prepared teammate. A new validated `attemptCornerKick` command triggers a genuine skill-affected **foot collision** and seeded angular error. There is no fabricated goal, header or awarded possession. The real ball flight may be intercepted, claimed by the goalkeeper, cleared or go out again; lofted corner kicks feed into the existing GK aerial-decision engine. **Headers and detailed aerial duels are not yet finished**, so short corners and actual outfield response will be refined in a future S3 improvement.
+
+The kicker may not touch their own corner kick again until someone else touches it, matching the existing legal second-touch protection for throw-ins and goal kicks. Checkpoint replay version advances to S1.3 and logs awarded/released corners. The iPhone match viewer stays live during corners.
+
+The full exhibition **still ends after a goal**: post-goal kickoffs, match periods, refereeing offences and full 90-minute match duration are not yet implemented. All physics thresholds and tactical scoring parameters are estimated simulation constants, not measured professional statistics.
+
 ## S1.2 — Physical goal-kick restarts
 
 A legally awarded **goal kick** is no longer a terminal match state. After an actual whole-ball goal-line exit with an attacking last touch, the referee places the **stationary dead ball within the defending team's goal area**, never outside the pitch or in the goalkeeper's hands. The goalkeeper physically travels to the ball while both centre-backs offer inside-area build-up options and opposition players retreat beyond the penalty area through existing 20Hz locomotion.
