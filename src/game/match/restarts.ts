@@ -5,6 +5,7 @@ import { BALL_RADIUS_M } from '../physics/ball'
 import { advancePlayerLocomotion } from '../physics/locomotion'
 import { scheduleMatchCommand } from './commands'
 import { goalKickSpot } from './goal-kicks'
+import { cornerBallSpot } from './corners'
 
 /**
  * S1.1: genuine touchline awards and deliberate legal throw-in releases.
@@ -151,8 +152,11 @@ export function recordOutOfPlay(
     // A dead goal kick is placed inside the GOAL AREA, not left outside
     // or automatically handed to the keeper. Restarts block ordinary AI.
     position: event.kind === 'goalKick'
-      ? goalKickSpot(event, setup.pitch) : after.ball.position,
-    outsidePitch: event.kind === 'goalKick' ? false : after.ball.outsidePitch,
+      ? goalKickSpot(event, setup.pitch) :
+        event.kind === 'corner'
+          ? cornerBallSpot(event, setup.pitch) : after.ball.position,
+    outsidePitch: event.kind === 'goalKick' || event.kind === 'corner'
+      ? false : after.ball.outsidePitch,
     controllerId: null, controlOffset: null,
     heightM: BALL_RADIUS_M,
     velocity: { xMps: 0, yMps: 0, zMps: 0 },
@@ -178,11 +182,12 @@ export function forbiddenRestartSecondTouch(
   let thrower = false
   for (let i = state.contactEvents.length - 1; i >= 0; i--) {
     const event = state.contactEvents[i]
-    if (!['controlled', 'miscontrolled', 'kicked', 'thrown', 'thrownIn', 'goalKicked']
+    if (!['controlled', 'miscontrolled', 'kicked', 'thrown', 'thrownIn', 'goalKicked', 'cornerKicked']
       .includes(event.outcome)) continue
     lastTick = event.tick
     thrower = (event.outcome === 'thrownIn' ||
-      event.outcome === 'goalKicked') && event.playerId === playerId
+      event.outcome === 'goalKicked' ||
+      event.outcome === 'cornerKicked') && event.playerId === playerId
     break
   }
   if (!thrower) return false
