@@ -5,7 +5,11 @@ import type { BallVelocity } from '../physics/ball'
 import { insidePitch } from '../physics/locomotion'
 import type { MatchState, PressingIntensity } from './state'
 
-export const MAX_COMMANDS_PER_MATCH = 256
+/** Safety ceiling, not a ten-minute football match limit. At observed
+ * ~20-30 physical action commands per simulated minute, 8192 safely
+ * accommodates a full match. A future compacted journal can replace it.
+ */
+export const MAX_COMMANDS_PER_MATCH = 8192
 export interface SetPressingCommandRequest {
   readonly commandId: string
   readonly teamId: string

@@ -1,3 +1,13 @@
+## Phase 6.9J — Long-match command continuity and reproducible iPhone diagnostics
+
+The original match scheduler imposed a **256 total command** lifetime ceiling. Once that number was reached, the autonomous AI could no longer schedule any real passes, shots or goalkeeper distributions, while locomotion and automatic physical contacts continued. That is a confirmed independent source of a *silent action stall* in sufficiently long matches. Phase 6.9J increases the bounded match command capacity to **8192**, retaining exact ordered command logs and schema-v9 checkpoint validation; if that new safety limit is ever exceeded, AI now raises a visible simulation error instead of silently ceasing to kick.
+
+The viewer displays the actual **BUILD 6.9J** next to the seed. In the Player Inspector it shows the used command count and provides **Copy match debug report**, containing the deterministic seed, algorithm version, tick/time, ball/controller, recent physical contacts and last genuine release. The report is generated locally and never sent automatically.
+
+**Reported seed 8BE673A4:** Replaying the exact unsigned seed on both Phase 6.9H and Phase 6.9I reaches normal **out-of-play at 04:58** (tick 5968), after 137 commands. It does **not** reproduce the user's approximate 09:42 stall on those builds. This work fixes the confirmed command-cap risk, **not a verified specific cause of that 09:42 observation**. Compare the newly displayed build number and copy a debug report if the issue recurs.
+
+See [Phase 6.9J investigation and verification](docs/design/phase-6-9j-command-capacity-and-seed-replay.md).
+
 ## Phase 6.9I — Stable challenges and iPhone event handling
 
 A real unsuccessful physical tackle (`heldOff`) now has to be **re-armed by a new approach** before the same defender can challenge the same ball controller again. Previously a defender who remained continuously inside foot reach could register the identical failed challenge every six 50ms ticks, driving up the PHYSICAL CONTACTS count while the ball carrier barely moved. The new logic retains the first attempted tackle, allows another defender to challenge, permits a fresh re-entry after separation, and does not invent touches, turnovers or goals.

@@ -6,7 +6,7 @@ import type { Formation433Slot, PlayerDuty, PlayerRole } from '../model/team'
 import type { ScheduledMatchCommand, AppliedMatchCommand } from './commands'
 
 export const MATCH_STATE_SCHEMA_VERSION = 9 as const
-export const FOUNDATION_ENGINE_VERSION = 'o11-contact-reentry-and-hud-performance-p69i-v1' as const
+export const FOUNDATION_ENGINE_VERSION = 'o11-long-match-command-capacity-p69j-v1' as const
 export const MATCH_RANDOM_STREAM_IDS = [
   'team/home/decisions', 'team/away/decisions',
   'ball/contact', 'match/referee', 'match/injuries',
