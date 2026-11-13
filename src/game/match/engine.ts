@@ -703,8 +703,15 @@ export class FoundationMatchEngine {
       if (agents.ball.controllerId && !controller) {
         throw new Error('Ball controller is missing')
       }
+      const controllingDefinition = controller
+        ? this.setup.players.find(p => p.id === controller.playerId)
+        : undefined
+      if (controller && !controllingDefinition) {
+        throw new Error('Controlled-ball movement requires a player definition')
+      }
       const ball = controller
-        ? advanceControlledBall(agents.ball, controller, this.setup.pitch)
+        ? advanceControlledBall(
+          agents.ball, controller, this.setup.pitch, controllingDefinition)
         : advanceBallPhysics(agents.ball, this.setup.pitch)
       const moved = ball === agents.ball ? agents : { ...agents, ball }
       const contacted = resolveContactAttempts(moved, this.setup)
