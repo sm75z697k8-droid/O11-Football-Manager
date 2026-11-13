@@ -79,6 +79,8 @@ export function createInitialMatchState(input: unknown): {
     period: 'notStarted',
     kickoff: openingKickoffState(fixture),
     goalEvents: [],
+    outOfPlayEvents: [],
+    restart: null,
     teams,
     players,
     ball: {
