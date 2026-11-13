@@ -203,6 +203,17 @@ button:focus-visible,select:focus-visible,canvas:focus-visible{outline:2px solid
 .drawer-stat{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;font-size:9px;border-bottom:1px solid #ffffff0b;}
 .drawer-stat span{color:#94b09f;letter-spacing:.04em;}
 .drawer-stat strong{font-size:11px;white-space:nowrap;}
+.drawer-debug-copy{
+  width:100%;min-height:36px;margin-top:12px;
+  border:1px solid #5f947c;border-radius:8px;
+  background:#244c3c;color:#e5fbe9;
+  font-size:10px;font-weight:850;letter-spacing:.02em;
+  cursor:pointer;
+}
+.drawer-debug-copy:focus-visible{
+  outline:2px solid #cff3d6;outline-offset:2px;
+}
+
 .drawer-muted,.drawer-legal{color:#94aca1;font-size:10px;line-height:1.6;}
 .drawer-legal{margin:15px 0 0;color:#708d82;}
 .event-feed{padding-top:4px;}
