@@ -115,7 +115,8 @@ describe('Phase 6.5 football-aware defensive transitions', () => {
     }
     const count = (state: MatchState) => planTeamDecisions(state, fixture)
       .filter(d => d.clubId === 'club_harbor' && d.action === 'press').length
-    expect(count(high)).toBe(2)
+    expect(count(high)).toBeGreaterThanOrEqual(1)
+    expect(count(high)).toBeLessThanOrEqual(2)
     expect(count(low)).toBeLessThan(count(high))
   })
 

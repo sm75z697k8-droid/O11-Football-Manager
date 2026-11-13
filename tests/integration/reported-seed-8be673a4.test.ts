@@ -58,6 +58,20 @@ describe('Reported seed 8BE673A4 reproduction diagnostics', () => {
       if (s.ball.outsidePitch || s.goalEvents.length > 0) break
     }
     const s = session.state
+    // A changed physical/tactical engine may end this exhibition before
+    // the first scheduled 1,600-tick sample. Record its ACTUAL final state
+    // instead of falsely treating an authentic early out/goal as a test
+    // failure. The stoppage and command-liveness assertions below remain.
+    if (!samples.length) samples.push({
+      tick: s.clock.tick,
+      commands: s.appliedCommands.length,
+      contacts: s.contactEvents.length,
+      automatic: s.automaticContactEvents.length,
+      controller: s.ball.controllerId,
+      lastKickTick,
+      out: s.ball.outsidePitch,
+      goals: s.goalEvents.length,
+    })
     console.info('[O11 USER SEED 8BE673A4 09:42]', JSON.stringify({
       seed: REPORTED_SEED,
       reportedTick: REPORTED_TIME_TICKS,
@@ -70,9 +84,8 @@ describe('Reported seed 8BE673A4 reproduction diagnostics', () => {
       goals: s.goalEvents.length,
       samples,
     }))
-    // The current (and historical 6.9H) build both leave the pitch
-    // at 04:58 in this seed. That legitimate match stop must NOT be
-    // presented as a reproduction of the user's 09:42 freeze.
+    // A physical out-of-play or confirmed goal can legitimately end an
+    // exhibition before 09:42; that cannot reproduce a later UI freeze.
     if (s.clock.tick < REPORTED_TIME_TICKS) {
       expect(s.ball.outsidePitch || s.goalEvents.length > 0).toBe(true)
     } else if (!s.ball.outsidePitch && !s.goalEvents.length) {
