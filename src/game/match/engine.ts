@@ -548,6 +548,38 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
     consumedDraws += recorded.drawUsed
     eventById.set(recorded.commandId, recorded)
   }
+  // Every completed goal must lead to exactly one authorized, physically
+  // successful centre kick by the CONCEDING team. In-progress staging is
+  // deliberately allowed to have no kick yet.
+  for (const goal of state.goalEvents) {
+    const expected = postGoalKickoffAward(state, setup, goal)
+    const prefix = postGoalKickoffCommandPrefix(goal.tick)
+    const goalKicks = state.contactEvents.filter(e =>
+      e.commandId.startsWith(prefix) && e.outcome === 'kicked')
+    const active = state.postGoalKickoff?.goalTick === goal.tick
+    const awaiting = active &&
+      state.postGoalKickoff?.phase === 'awaitingMovement'
+    if (goalKicks.length > 1 ||
+        (!active && goalKicks.length !== 1) ||
+        (active && goalKicks.length !== (awaiting ? 1 : 0))) {
+      throw new Error('Physical goal lacks exactly one genuine completed kickoff')
+    }
+    for (const kicked of goalKicks) {
+      const command = orderedApplied.find(c =>
+        c.commandId === kicked.commandId)
+      if (!command || command.type !== 'attemptKick' ||
+          command.teamId !== expected.teamId ||
+          command.playerId !== expected.kickerId ||
+          command.power !== .19 || command.lift !== 0 ||
+          command.requestedTick <= goal.tick ||
+          kicked.tick <= goal.tick ||
+          (state.goalEvents.find(next => next.tick > goal.tick)?.tick ??
+            Infinity) <= kicked.tick) {
+        throw new Error('Centre kick is not supported by a physical goal award')
+      }
+    }
+  }
+
   if (JSON.stringify(state.randomStreams['ball/contact']) !==
       JSON.stringify(expectedContactStream(setup.seed, consumedDraws))) {
     throw new Error('Contact RNG stream does not match the recorded draw history')
