@@ -72,12 +72,14 @@ export function assessGoalkeeperThrowOptions(
   const opponents = state.players.filter(p => p.clubId !== keeper.clubId)
   const team = state.teams[teamIndex]
   const abilities = keeperDefinition.abilities
+  const keeperSkills = abilities.goalkeeping
+  if (!keeperSkills) return []
   const awareness = (
     .46 * abilities.mental.vision +
     .38 * abilities.mental.decisions +
     .16 * abilities.mental.composure) / 100
   const accuracy = (
-    .60 * abilities.goalkeeping.throwingDistribution +
+    .60 * keeperSkills.throwingDistribution +
     .25 * abilities.technical.technique +
     .15 * abilities.mental.composure) / 100
   const angleSpread = .015 + (1 - accuracy) * .12
