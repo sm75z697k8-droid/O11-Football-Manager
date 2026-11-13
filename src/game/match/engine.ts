@@ -41,6 +41,7 @@ import type {
   CommandReceipt, ScheduledMatchCommand, AppliedMatchCommand,
 } from './commands'
 import { createInitialMatchState } from './setup'
+import { openingKickoffState } from './kickoff'
 import {
   advanceOpeningKickoff, openingKickoffPass, OPENING_KICKOFF_COMMAND_ID,
 } from './kickoff'
@@ -868,6 +869,157 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
           !state.appliedCommands.some(c => c.commandId === OPENING_KICKOFF_COMMAND_ID)) {
         throw new Error('Kick-off cannot start without a real physical pass')
       }
+    }
+  }
+
+  // Law 7 and half-time are protected by checkpoint history, not UI time.
+  const timing = state.periodTiming
+  const timingKeys = [
+    'firstHalfAddedTicks','firstHalfLostTicks','firstHalfStartTick',
+    'fullTimeTick','halfTimeTick','secondHalfAddedTicks',
+    'secondHalfLostTicks','secondHalfStartTick',
+  ]
+  if (!object(timing) ||
+      Object.keys(timing).sort().join(',') !== timingKeys.join(',') ||
+      !Number.isSafeInteger(timing.firstHalfLostTicks) ||
+      timing.firstHalfLostTicks < 0 ||
+      !Number.isSafeInteger(timing.secondHalfLostTicks) ||
+      timing.secondHalfLostTicks < 0) {
+    throw new Error('Malformed referee period and added-time state')
+  }
+  const optionalTick = (v: number | null) =>
+    v === null || (Number.isSafeInteger(v) && v >= 0 &&
+      v <= state.clock.tick)
+  const optionalMinutes = (v: number | null) =>
+    v === null || (Number.isSafeInteger(v) && v >= 0 &&
+      v % TICKS_PER_MINUTE === 0)
+  if (!optionalTick(timing.firstHalfStartTick) ||
+      !optionalTick(timing.secondHalfStartTick) ||
+      !optionalTick(timing.halfTimeTick) ||
+      !optionalTick(timing.fullTimeTick) ||
+      !optionalMinutes(timing.firstHalfAddedTicks) ||
+      !optionalMinutes(timing.secondHalfAddedTicks)) {
+    throw new Error('Referee period has an invalid chronological counter')
+  }
+  const baselinePeriod = baseline.periodTiming
+  if (state.period === 'notStarted') {
+    if (state.periodKickoff !== null ||
+        JSON.stringify(timing) !== JSON.stringify(baselinePeriod)) {
+      throw new Error('An unstarted match has invented period time')
+    }
+  } else {
+    if (!state.kickoff || state.kickoff.phase !== 'inPlay' ||
+        timing.firstHalfStartTick !== state.kickoff.takenTick ||
+        timing.firstHalfStartTick === null ||
+        timing.firstHalfLostTicks >
+          state.clock.tick - timing.firstHalfStartTick) {
+      throw new Error('First half cannot begin before a real opening kick')
+    }
+    const halfEnded = state.period === 'halfTime' ||
+      state.period === 'secondHalf' || state.period === 'fullTime'
+    if (halfEnded !== (timing.halfTimeTick !== null) ||
+        (timing.halfTimeTick !== null &&
+          (timing.firstHalfAddedTicks === null ||
+            timing.halfTimeTick !==
+              timing.firstHalfStartTick + HALF_TICKS +
+                timing.firstHalfAddedTicks))) {
+      throw new Error('Halftime whistle lacks regulation and added time')
+    }
+    if (timing.firstHalfAddedTicks !== null &&
+        timing.firstHalfAddedTicks >
+          Math.ceil(timing.firstHalfLostTicks/TICKS_PER_MINUTE) *
+          TICKS_PER_MINUTE) {
+      throw new Error('First half announced more loss than physically observed')
+    }
+    if (state.period === 'firstHalf' &&
+        (timing.secondHalfStartTick !== null ||
+          timing.secondHalfLostTicks !== 0 ||
+          timing.secondHalfAddedTicks !== null ||
+          timing.fullTimeTick !== null || state.periodKickoff !== null ||
+          (state.clock.tick - timing.firstHalfStartTick >= HALF_TICKS &&
+            timing.firstHalfAddedTicks === null))) {
+      throw new Error('First-half clock moved beyond its lawful phase')
+    }
+    if (state.period === 'halfTime' &&
+        (timing.halfTimeTick !== state.clock.tick ||
+          timing.secondHalfStartTick !== null ||
+          timing.fullTimeTick !== null || state.periodKickoff !== null)) {
+      throw new Error('Half-time must remain a stationary referee interval')
+    }
+    const later = state.period === 'secondHalf' ||
+      state.period === 'fullTime'
+    if (later) {
+      if (timing.halfTimeTick === null ||
+          timing.halfTimeTick > state.clock.tick ||
+          (timing.secondHalfStartTick === null) !==
+            (state.periodKickoff !== null) ||
+          (timing.secondHalfStartTick !== null &&
+            timing.secondHalfStartTick <= timing.halfTimeTick)) {
+        throw new Error('Second half has an invalid kickoff chronology')
+      }
+      const original = setup.kickoff?.teamId
+      const taking = state.teams.find(t => t.clubId !== original)
+      const restart = state.periodKickoff
+      if (restart) {
+        const expected = openingKickoffState({
+          ...setup, kickoff: {teamId: taking?.clubId ?? ''},
+        })
+        if (!expected || !object(restart) ||
+            Object.keys(restart).sort().join(',') !==
+              'kickedTick,kickerId,phase,receiverId,startTick,teamId' ||
+            restart.teamId !== expected.teamId ||
+            restart.kickerId !== expected.kickerId ||
+            restart.receiverId !== expected.receiverId ||
+            restart.startTick !== timing.halfTimeTick ||
+            !['staging','awaitingMovement'].includes(restart.phase) ||
+            (restart.phase === 'staging' &&
+              (restart.kickedTick !== null ||
+                !secondHalfKickoffBallStationary(state, setup))) ||
+            (restart.phase === 'awaitingMovement' &&
+              (restart.kickedTick !== state.clock.tick ||
+                !Number.isSafeInteger(restart.kickedTick) ||
+                state.ball.controllerId !== null ||
+                !state.contactEvents.some(e =>
+                  e.tick === restart.kickedTick &&
+                  e.playerId === restart.kickerId &&
+                  e.outcome === 'kicked' &&
+                  e.commandId.startsWith(
+                    periodKickoffPrefix(restart.startTick))))) ||
+            !secondHalfKickoffLegal(state, setup)) {
+          throw new Error('Second-half kickoff lacks legal formation or contact')
+        }
+      }
+      const centreKicks = state.contactEvents.filter(e =>
+        e.commandId.startsWith(periodKickoffPrefix(timing.halfTimeTick)) &&
+        e.outcome === 'kicked')
+      if (centreKicks.length !== (restart?.phase === 'staging' ? 0 : 1) ||
+          (timing.secondHalfStartTick !== null &&
+            (centreKicks[0]?.tick !== timing.secondHalfStartTick - 1 ||
+              restart !== null))) {
+        throw new Error('Second half did not begin with one physical kickoff')
+      }
+      if (timing.secondHalfStartTick !== null &&
+          timing.secondHalfLostTicks >
+            state.clock.tick - timing.secondHalfStartTick) {
+        throw new Error('Second-half lost-time count exceeds real ticks')
+      }
+    }
+    if (state.period === 'fullTime') {
+      if (timing.fullTimeTick !== state.clock.tick ||
+          timing.secondHalfStartTick === null ||
+          timing.secondHalfAddedTicks === null ||
+          timing.fullTimeTick !== timing.secondHalfStartTick +
+            HALF_TICKS + timing.secondHalfAddedTicks) {
+        throw new Error('Full-time whistle is not backed by 90+ stoppage minutes')
+      }
+    } else if (timing.fullTimeTick !== null) {
+      throw new Error('Full-time recorded before referee ends match')
+    }
+    if (timing.secondHalfAddedTicks !== null &&
+        timing.secondHalfAddedTicks >
+          Math.ceil(timing.secondHalfLostTicks/TICKS_PER_MINUTE) *
+            TICKS_PER_MINUTE) {
+      throw new Error('Second half added time exceeds observed delays')
     }
   }
 
