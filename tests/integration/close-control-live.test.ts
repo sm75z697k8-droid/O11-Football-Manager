@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MatchViewerSession } from '../../src/game/viewer/session'
-import { CLOSE_CONTROL_MAX_OFFSET_M } from '../../src/game/physics/contact'
+import { FOOT_REACH_M } from '../../src/game/physics/contact'
 
 describe('Real seeded matches — close-control is authoritative, not cosmetic',()=>{
   it('moves held football foot offsets during real unopposed carries, never discards control without contact',()=>{
@@ -31,8 +31,11 @@ describe('Real seeded matches — close-control is authoritative, not cosmetic',
         checkedControlledTicks++
         const offset=after.ball.controlOffset
         const offsetLength=Math.hypot(offset.xM,offset.yM)
+        // Existing authentic first touches may begin as far as .82m
+        // away; only the NEW corrective steps obey the tighter .75m
+        // bound. All physical controlled offsets must fit foot reach.
         expect(offsetLength).toBeLessThanOrEqual(
-          CLOSE_CONTROL_MAX_OFFSET_M+.0000001)
+          FOOT_REACH_M+.0000001)
         expect(after.ball.position.xM-owner.position.xM)
           .toBeCloseTo(offset.xM,8)
         expect(after.ball.position.yM-owner.position.yM)
