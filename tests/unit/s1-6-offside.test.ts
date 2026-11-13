@@ -204,4 +204,30 @@ describe('S1.6 Law 11 real-touch offside',()=>{
     expect(offsideSnapshot(s.after,s.setup,s.passer.playerId)).toEqual(
       offsideSnapshot(s.after,s.setup,s.passer.playerId))
   })
+  it('finds a legal retreat target even at goal and touchline edges',()=>{
+    const s=withOffside()
+    const called=applyOffsideLaw(s.played,s.contacted,s.setup)
+    for(const spot of [{xM:100,yM:34},{xM:104,yM:66}]){
+      const original=called.offsideRestart!
+      const edge={...original,spot}
+      const dead:MatchState={
+        ...called,offsideRestart:edge,
+        ball:{...called.ball,position:spot},
+        ai:{...called.ai,enabledTeams:[true,true]},
+        players:called.players.map(p=>p.clubId===edge.awardedTeamId
+          ? p:{...p,position:{xM:103,yM:spot.yM},
+            velocity:{xMps:0,yMps:0}}),
+      }
+      const staging=stageOffsideRestart(dead,s.setup)
+      const opponents=staging.players.filter(p=>p.clubId!==edge.awardedTeamId)
+      expect(opponents.every(p=>p.intention.kind==='moveToPoint' &&
+        Math.hypot(p.intention.target.xM-spot.xM,
+          p.intention.target.yM-spot.yM)>=9.15)).toBe(true)
+      const moved:MatchState={...staging,players:staging.players.map(p=>
+        p.intention.kind==='moveToPoint' && p.clubId!==edge.awardedTeamId
+          ? {...p,position:{...p.intention.target}}:p)}
+      expect(offsideOpponentsClear(moved,s.setup)).toBe(true)
+    }
+  })
+
 })
