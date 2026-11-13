@@ -69,16 +69,23 @@ type RealTouch = {playerId:string; outcome:string; type:'manual'|'automatic'; ki
  */
 function touchesAtTick(state: MatchState): RealTouch[] {
   const tick=state.clock.tick
-  const manual=state.contactEvents.filter(e=>e.tick===tick &&
-    ['controlled','miscontrolled','kicked','thrown','thrownIn',
-      'goalKicked','cornerKicked'].includes(e.outcome))
-    .map(e=>({playerId:e.playerId,outcome:e.outcome,
-      type:'manual' as const,kind:e.kind}))
-  const automatic=state.automaticContactEvents.filter(e=>e.tick===tick &&
-    e.outcome!=='heldOff')
-    .map(e=>({playerId:e.playerId,outcome:e.outcome,
-      type:'automatic' as const}))
-  return [...manual,...automatic]
+  // Match histories grow over ninety minutes. Only inspect the TAIL, not
+  // thousands of previous touches on every 50ms Safari physics tick.
+  const current: RealTouch[]=[]
+  for(let i=state.contactEvents.length-1;i>=0;i--){
+    const e=state.contactEvents[i]
+    if(e.tick<tick) break
+    if(e.tick!==tick || !['controlled','miscontrolled','kicked','thrown',
+      'thrownIn','goalKicked','cornerKicked'].includes(e.outcome)) continue
+    current.push({playerId:e.playerId,outcome:e.outcome,
+      type:'manual',kind:e.kind})
+  }
+  current.reverse() // Manual commands resolve in their actual application order.
+  const latest=state.automaticContactEvents.at(-1)
+  if(latest?.tick===tick && latest.outcome!=='heldOff')
+    current.push({playerId:latest.playerId,outcome:latest.outcome,
+      type:'automatic'})
+  return current
 }
 
 export function applyOffsideLaw(
@@ -87,9 +94,12 @@ export function applyOffsideLaw(
   if (before.ball.outsidePitch || before.offsideRestart ||
       before.restart || before.postGoalKickoff || before.periodKickoff ||
       before.kickoff?.phase==='awaitingKick') return after
+  const touches=touchesAtTick(after)
+  if(!touches.length) return after.ball.outsidePitch && after.offsidePhase
+    ? {...after,offsidePhase:null} : after
   let phase=before.offsidePhase
   let indirect=before.indirectFreeKick
-  for (const touch of touchesAtTick(after)) {
+  for (const touch of touches) {
     const player=after.players.find(p=>p.playerId===touch.playerId)
     if (!player) continue
     // The free kick becomes direct after any genuine touch by ANOTHER player.
