@@ -6,7 +6,7 @@ import { resolveContactAttempts } from '../../src/game/physics/contact'
 import { adjudicatePhysicalGoal } from '../../src/game/match/goals'
 import { BALL_RADIUS_M } from '../../src/game/physics/ball'
 import {
-  postGoalKickoffAward, postGoalKickoffTarget,
+  postGoalKickoffTarget,
   postGoalKickoffPlayersLegal, postGoalKickoffBallStationary,
   stagePostGoalKickoff, advancePostGoalKickoff,
   postGoalKickoffCommandPrefix,
@@ -176,6 +176,7 @@ describe('S1.4 Law 8 physical post-goal kickoffs', () => {
         c.type==='attemptKick' && c.commandId.startsWith(
           postGoalKickoffCommandPrefix(scene.restart.goalTick)))!
       expect(command).toBeDefined()
+      if (command.type !== 'attemptKick') throw new Error('Not a real physical kickoff command')
       expect(command.teamId).toBe(scene.restart.teamId)
       expect(command.playerId).toBe(scene.restart.kickerId)
       expect(command.power).toBe(.19)
