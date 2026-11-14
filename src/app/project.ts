@@ -1,7 +1,7 @@
 /** O11 project metadata. Real-time landscape Canvas now visualizes the authoritative headless engine; no official match rules or results yet. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = 'DEF-F1' as const
-export const ENGINE_STATUS = 'individual-threat-aware-defence-def-f1' as const
+export const PROJECT_PHASE = 'THR-F2' as const
+export const ENGINE_STATUS = 'lawful-throw-in-stall-resilience-thr-f2' as const
 
 export const FOUNDATION_STAGES = [
   { id: '0A', title: 'Project foundation', summary: 'App, TypeScript, tests and deployment' },
@@ -56,5 +56,6 @@ export const FOUNDATION_STAGES = [
   { id: 'COR-S1', title: 'Physical outfield aerial duels and headers', summary: 'Shared cross and corner header planning for both teams, real swept head-height interception, ability-affected attacking headers and defensive clearances, goalkeeper reaction and offside continuity' },
   { id: 'BOX-F1', title: 'Physical post-kick contact separation', summary: 'Prevent a still-engaged kicker from immediately deflecting their own outgoing shot or pass until genuine foot separation, while defenders and valid rebounds remain physical' },
   { id: 'THR-F1', title: 'Pressure-aware physical throw-ins', summary: 'Legal two-metre opposition clearance, realistic forward/backward/inside receiving movement, physically forecast contested throw choice and correct second-half attack direction' },
-  { id: 'DEF-F1', title: 'Individual defensive threat recognition', summary: 'Role- and attribute-sensitive defensive screening, global one-marker-per-threat assignment, anticipated runner movement and distinctive centre-back/full-back/midfield/forward shape decisions' }
+  { id: 'DEF-F1', title: 'Individual defensive threat recognition', summary: 'Role- and attribute-sensitive defensive screening, global one-marker-per-threat assignment, anticipated runner movement and distinctive centre-back/full-back/midfield/forward shape decisions' },
+  { id: 'THR-F2', title: 'Throw-in staging deadlock prevention', summary: 'Legal stance before inward turning, no conflicting locomotion near chalk, safe real receiver alternatives, and exact restart readiness diagnostics' }
 ] as const

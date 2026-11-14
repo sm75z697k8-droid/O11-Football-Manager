@@ -13,7 +13,7 @@ import { cornerBallSpot } from './corners'
  * This is an incremental restart foundation; corners and goal kicks are
  * classified but left as explicit stoppages until their own restart rules.
  */
-export const OUT_OF_PLAY_VERSION = 'pressured-receiving-throw-in-thr-f1-v1'
+export const OUT_OF_PLAY_VERSION = 'legal-throw-in-staging-deadlock-thr-f2-v1'
 const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x))
 
 type Edge = OutOfPlayEvent['side']
@@ -426,9 +426,23 @@ export function stageThrowIn(
     const side=state.teams.findIndex(t=>t.clubId===p.clubId)
     if(side<0||!state.ai.enabledTeams[side])return p
     const nominated=assignments.get(p.playerId)??p.position
-    const target=p.clubId===event.awardedTeamId?nominated:
+    // THR-F2: at the line, the foot-placement target is already reached
+    // WELL within the legal stance envelope. Continuing to steer toward
+    // its exact mathematical centre can undo the next tick's inward turn,
+    // leaving the taker trapped between opposite headings indefinitely.
+    // Brake at the *real current position* first, then let the existing
+    // physically rate-limited facing code rotate the standing player.
+    const stanceLegal=event.side==='top'
+      ? p.position.yM<=.47
+      : p.position.yM>=setup.pitch.widthM-.47
+    const nearLine=p.playerId===event.takerId && stanceLegal &&
+      Math.hypot(p.position.xM-takerTarget.xM,
+        p.position.yM-takerTarget.yM)<.60 &&
+      Math.hypot(p.velocity.xMps,p.velocity.yMps)<1.05
+    const target=nearLine?p.position:
+      p.clubId===event.awardedTeamId?nominated:
       throwInDefenderRetreat(nominated,event,setup)
-    const same=p.intention.kind==='moveToPoint' &&
+    const same=!nearLine && p.intention.kind==='moveToPoint' &&
       Math.hypot(p.intention.target.xM-target.xM,
         p.intention.target.yM-target.yM)<.2
     return {...p,engagesBall:false,intention:same?p.intention:{
@@ -451,8 +465,15 @@ export function stageThrowIn(
       pending||actedThisTick||
       !throwInOpponentsClear(staged,event))return staged
   const choices=assessThrowInOptions(staged,setup,event,receivers,targets)
-  if(!choices.length)return staged
-  const selected=choices[0]
+  // THR-F2: predefined runs are PREFERRED, not a prerequisite to play.
+  // If nobody reached those precise coordinates, use any REAL teammate
+  // who is physically within the 2.5–27.5m legal engine throw corridor.
+  // The same pressure/landing simulation ranks those options; no one
+  // receives a fictitious pass or teleports into a destination.
+  const liveChoices=choices.length?choices:assessThrowInOptions(
+    staged,setup,event,available,available.map(p=>p.position))
+  if(!liveChoices.length)return staged
+  const selected=liveChoices[0]
   const commandId='ai-pass-throwin-'+event.tick+'-'+state.clock.tick
   const receipt=scheduleMatchCommand(staged,{
     commandId,type:'attemptThrowIn',
@@ -491,8 +512,17 @@ export function advanceThrowInStoppage(
     ? {...moved,players:moved.players.map(p=>{
         if(p.playerId!==event.takerId)return p
         const target=throwInTakerTarget(event,setup)
-        if(Math.hypot(p.position.xM-target.xM,
-            p.position.yM-target.yM)>.72 ||
+        // Crucial: only rotate after the player's physical centre has
+        // actually entered the LAW-15 stance band. Turning inward while
+        // still inside the pitch cancels normal locomotion's outward
+        // turn on every tick; with facing-based acceleration this can
+        // leave a taker motionless ~0.4m short indefinitely.
+        const legalStance=event.side==='top'
+          ?p.position.yM<=.47
+          :p.position.yM>=setup.pitch.widthM-.47
+        if(!legalStance||
+            Math.hypot(p.position.xM-target.xM,
+              p.position.yM-target.yM)>.72 ||
             Math.hypot(p.velocity.xMps,p.velocity.yMps)>.7)return p
         const definition=setup.players.find(d=>d.id===p.playerId)
         if(!definition)throw new Error('Thrower missing player definition')

@@ -260,7 +260,8 @@ export default function App() {
   }
 
   const copyMatchReport = () => {
-    const report = copyableMatchDiagnostics(sessionRef.current!.state) +
+    const report = copyableMatchDiagnostics(
+      sessionRef.current!.state, sessionRef.current!.setup) +
       '\nEXHIBITION PRESET: ' + sessionRef.current!.preset
     if (navigator.clipboard?.writeText) {
       void navigator.clipboard.writeText(report)

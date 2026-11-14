@@ -1,3 +1,20 @@
+## THR-F2 — Lawful throw-in deadlock prevention (EFAD5103 investigation)
+
+A user-reported seed **EFAD5103**, keeper-comparison preset, was still in `throw-in-staging` after **3,724 ticks (186.2 simulated seconds)**. A real Vale #11 bottom-touchline award at tick 38384 had not produced **any** scheduled `attemptThrowIn` command by tick 42108. The report lacked thrower geometry and the game-wide `engineVersion` stayed constant across several deployed gameplay stages, so the exact historical player coordinates cannot be independently reconstructed from this JSON alone. A fresh full-seed replay on current source takes a different legitimate trajectory, with no restart at that exact tick. **Do not claim the same long throw-in was directly reproduced from seed alone.**
+
+THR-F2 demonstrates two concrete, independent code defects with failing-before/fixed-after physics regression tests:
+
+1. **Conflicting physical turns before reaching the legal line.** The existing movement engine can aim an approaching thrower toward the touchline while the throw-in code prematurely rotates them INWARD whenever they are within .72m, including while still OUTSIDE the actual stance band. The equal/opposing rotational changes can cancel for hundreds of ticks; a frozen test left Vale #11 immobile about 0.409m from its target. The new logic allows the normal velocity/turning-limited approach until the player's centre truly reaches the legal touchline band. The taker then brakes physically in the allowed stance envelope, finishes a bounded real-body turn into the field, and makes a real release only after the existing contact-law checks pass. No teleport, facing snap, bypass or fictional throw.
+2. **Rigid receiver gate.** Previous selection required designated outfield players to be within 2.5m of three prescribed points, even with another physically reachable teammate available. Those positions remain preferred, but if nobody has settled into them the exact same pressure, skill, ball-flight and interception planning evaluates **actual teammates in legal throwing range**. The next command still aims at a real current position, and the receiver must actually reach the airborne ball or lose it to a defender; possession is never granted by planning.
+
+The strict two-metre opponent exclusion, thrower's touchline position and inward facing, bounded 2.5–28m engine throw range, successful physical hand-release, and no forbidden double touch remain enforced. Existing player physics, other restarts, attacking/defensive AI and GK handling are otherwise untouched.
+
+The Copy Debug Report now includes `throwInLogicVersion` and a `throwInStaging` diagnostic block when a throw-in is active: thrower's real position, distance, speed, facing-angle error and stance validity, three preferred receiver readiness gaps, closest opponents, alternative physical outlets, elapsed ticks, and **blockedBy** reasons. Future field reports therefore identify the actual failure condition instead of requiring guesswork from a list of ball contacts.
+
+Focused tests cover safe live receivers outside planned spots, legal opponent encroachment, multiple adverse starting orientations and 0.42m near-line positions, physical release, both-side integration, long-seed continuation and full existing replay/score/keeper regression. These are design-estimate thresholds in a 2D model, not a claim of realistic throw-arm joint animation.
+
+---
+
 ## DEF-F1 — Individualized defensive responsibilities, not cloned movement
 
 Previously, most non-pressing outfielders were given a recovery point whose X/Y coordinates shared the same ball-following shift. The old defensive planner also let the first defender encountered in roster iteration take a nearby runner, even if a more suitable teammate (e.g. the full-back against a wide run) could cover that opponent. This looked like players making a single decision mirrored at different formation offsets.
