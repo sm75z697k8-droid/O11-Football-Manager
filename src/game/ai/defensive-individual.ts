@@ -17,7 +17,7 @@ const clamp = (n: number, lo: number, hi: number) =>
   Math.min(hi, Math.max(lo, n))
 const dist = separationM
 
-type DefensiveRole = 'RCB'|'LCB'|'RB'|'LB'|'DM'|'RCM'|'LCM'|'RW'|'LW'|'ST'|'AM'
+type DefensiveRole = 'RCB'|'LCB'|'RB'|'LB'|'DM'|'RCM'|'LCM'|'RW'|'LW'|'ST'
 type OutfieldRole = DefensiveRole
 export interface IndividualDefensiveResponse {
   readonly action: 'mark' | 'recover'
@@ -85,7 +85,7 @@ function roleFit(
   const otherFlank=Math.sign(projected.yM-centre)
   if(slot==='ST')return -100
   if(centreBack(slot))return 5.6-offCentre*.28+
-    (targetSlot==='ST'||targetSlot==='AM'?5:
+    (targetSlot==='ST'?5:
       targetSlot==='RW'||targetSlot==='LW'?-2:0)
   if(fullBack(slot)){
     if(flank!==0&&otherFlank!==0&&flank!==otherFlank)
@@ -95,13 +95,13 @@ function roleFit(
       Math.abs(offCentre-16)*.13
   }
   if(slot==='DM')return 4.7-offCentre*.22+
-    (targetSlot==='AM'||targetSlot==='RCM'||
+    (targetSlot==='RCM'||
       targetSlot==='LCM'?3:0)
   if(slot==='RCM'||slot==='LCM'){
     const side=flank===0?1:flank
     return 3.5-offCentre*.16+
       (otherFlank===side?2:-1)+
-      (targetSlot==='AM'||targetSlot==='RCM'||
+      (targetSlot==='RCM'||
         targetSlot==='LCM'?2:0)
   }
   if(slot==='RW'||slot==='LW'){
@@ -207,7 +207,7 @@ export function individualDefensiveRecovery(
     // Remain between the ball and goal, screening rather than lunging.
     x+=team.attackingDirection*clamp(
       (ball.xM-block.xM)*team.attackingDirection*.12,0,2.3)*weight
-  } else if(slot==='RCM'||slot==='LCM'||slot==='AM'){
+  } else if(slot==='RCM'||slot==='LCM'){
     const rival=nearest(o=>
       Math.sign(o.position.yM-centre)===side&&
       dist(o.position,block)<20)
@@ -248,7 +248,6 @@ export function planIndividualDefensiveResponses(
   blocks:ReadonlyMap<string,Point2>,
 ):ReadonlyMap<string,IndividualDefensiveResponse>{
   const pairs:DefensiveThreatMatch[]=[]
-  const byId=new Map(participants.map(p=>[p.playerId,p]))
   for(const player of participants){
     const original=state.ai.formationPositions[player.playerId]
     const block=blocks.get(player.playerId)
