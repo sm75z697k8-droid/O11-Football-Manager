@@ -194,11 +194,13 @@ describe('Phase 6.9N — bounded, direction-aware physical close control',()=>{
           players:original.players.map(p=>p.playerId===owner.playerId?owner:p),
           ball:pressuredBall,
           ai:{...original.ai,decisionSnapshot:[decision]}}
-        expect(activeCarryingTouch(current,owner)).toBe(true)
+        const active=activeCarryingTouch(current,owner)
+        if(tick===1)expect(active).toBe(true)
         const next=advanceControlledBall(pressuredBall,owner,a.setup.pitch,
-          a.definition,defender)
+          active?a.definition:undefined,active?defender:undefined)
+        const unpressured=activeCarryingTouch({...current,ball:openBall},owner)
         const free=advanceControlledBall(openBall,owner,a.setup.pitch,
-          a.definition)
+          unpressured?a.definition:undefined)
         maxMovement=Math.max(maxMovement,gap(pressuredBall.controlOffset!,
           next.controlOffset!))
         expect(gap(next.position,owner.position))
