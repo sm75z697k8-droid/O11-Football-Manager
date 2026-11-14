@@ -7,7 +7,6 @@ import {
 import {
   individualDefensiveRecovery,planIndividualDefensiveResponses,
 } from '../../src/game/ai/defensive-individual'
-import { planTeamDecisions } from '../../src/game/ai/decisions'
 import type { MatchState, PlayerMatchState } from '../../src/game/match/state'
 
 function situation(side:0|1){
