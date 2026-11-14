@@ -50,6 +50,18 @@ During an actual opposition-controlled central possession, the planner:
    intercept if a truly executed opponent kick crosses the defended lane.
    A screen never directly awards possession or changes the ball trajectory.
 
+## Keeper-possession regression safeguard
+
+The full simulation regression suite exposed a rare stale tactical snapshot
+when a genuine goalkeeper catch occurs in the same decision tick as a
+preceding pressing decision. The existing held-keeper team shape is already
+the correct authority; the runner now forces a fresh decision **only when**
+a genuine held keeper has outfield pressure/pursuit/engagement left over in
+the old snapshot. This prevents the opposing team from continuing to chase
+a ball in the keeper's hands without accelerating ordinary decisions or
+altering keeper physics. The existing live-catch integration test validates
+the handoff on the next actual 50ms tick.
+
 ## Non-goals and model limitations
 
 - No clairvoyant pass prediction: projected outlets are currently visible
