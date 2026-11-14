@@ -221,10 +221,13 @@ describe('Phase 6.9N — bounded, direction-aware physical close control',()=>{
       expect(activeCarryingTouch(alignedState,owner)).toBe(false)
       expect(maxMovement).toBeGreaterThan(.001)
       expect(maxMovement).toBeLessThan(.3)
-      // Under real close pressure the ball stays closer to the carrier's
-      // foot compared with the same unchallenged sprint.
-      expect(gap(pressuredBall.position,owner.position))
-        .toBeLessThan(gap(openBall.position,owner.position))
+      // Shielding moves the touch to a safer FOOT SIDE. Its total
+      // offset may be longer than the unpressured forward-only offset;
+      // test actual defender separation, not a mistaken radius rule.
+      const threat={xM:owner.position.xM+direction*1.25,
+        yM:owner.position.yM+.4}
+      expect(gap(pressuredBall.position,threat))
+        .toBeGreaterThan(gap(openBall.position,threat))
     })
     it(`PHY-F1 retains authentic first-touch geometry until a moving carry on side ${side}`,()=>{
       const a=stage(side)
