@@ -1,6 +1,6 @@
 import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
-import type { MatchState, PlayerMatchState } from '../match/state'
+import type { MatchState } from '../match/state'
 import { advanceBallPhysics, BALL_RADIUS_M } from '../physics/ball'
 import { deriveMotionLimits } from '../physics/locomotion'
 import { outfieldHeaderReach } from '../physics/aerial-heading'
