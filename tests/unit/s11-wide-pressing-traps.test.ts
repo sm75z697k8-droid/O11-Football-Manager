@@ -5,6 +5,7 @@ import type { MatchState, PlayerMatchState } from '../../src/game/match/state'
 import { planTeamDecisions } from '../../src/game/ai/decisions'
 import { planDefensiveResponsibilities } from '../../src/game/ai/defensive-shape'
 import { projectPlayerToward } from '../../src/game/physics/locomotion'
+import { maintainWidePassFlightScreen } from '../../src/game/ai/pressing-traps'
 
 /**
  * Tactical scenes use synthetic POSITIONING only; they never claim a
@@ -81,7 +82,7 @@ describe('S1.1 — physical, outlet-aware wide pressing coordination', () => {
       expect(first.action).toBe('press')
       expect(first.engage).toBe(true)
       expect(plan.get(cover.playerId)?.action).toBe('cover')
-      expect(second.action).toBe('mark')
+      expect(second.action).toBe('screen')
       expect(second.engage).toBe(false)
       const inside = side === 0 ? 1 : -1
       expect((first.target.yM - ball.yM) * inside).toBeGreaterThan(1)
@@ -114,6 +115,57 @@ describe('S1.1 — physical, outlet-aware wide pressing coordination', () => {
       expect(assignment(state, screener)).toBeUndefined()
     })
 
+    it(`allows a genuine kicked pass to be physically intercepted on side ${side}`, () => {
+      const scene = wideScene(side)
+      const prepared = planTeamDecisions(scene.state, scene.setup)
+      const staged = prepared.find(d => d.playerId === scene.screener.playerId)!
+      expect(staged.action).toBe('screen')
+      expect(staged.engage).toBe(false) // no phantom tackle while owned
+
+      const velocity = side === 0
+        ? { xMps: -10, yMps: 9.33, zMps: 0 }
+        : { xMps: 10, yMps: -9.33, zMps: 0 }
+      const carrierId = scene.state.ball.controllerId!
+      const inFlight: MatchState = {
+        ...scene.state,
+        clock: { ...scene.state.clock, tick: 126 },
+        ball: {
+          ...scene.state.ball, controllerId: null, controlOffset: null,
+          position: scene.mirror(58, 7), velocity,
+        },
+        ai: { ...scene.state.ai, decisionSnapshot: prepared },
+        contactEvents: [{
+          commandId: 'synthetic-physical-kick-fixture',
+          playerId: carrierId, kind: 'kick', outcome: 'kicked',
+          tick: 125, drawUsed: 1,
+        }],
+      }
+      const retained = maintainWidePassFlightScreen(inFlight, scene.team)
+      expect(retained?.screenerId).toBe(scene.screener.playerId)
+      expect(retained?.screenTarget).toEqual(staged.target)
+      const defended = planDefensiveResponsibilities(
+        inFlight, scene.setup, scene.team, inFlight.ball.position)
+      expect(defended.get(scene.screener.playerId)?.action).toBe('screen')
+      expect(defended.get(scene.screener.playerId)?.engage).toBe(true)
+      // Even if the loose-ball predictor nominates this defender to
+      // recover, the team planner must retain genuine contact eligibility.
+      const decisions = planTeamDecisions(inFlight, scene.setup)
+      expect(decisions.find(d => d.playerId === scene.screener.playerId)
+        ?.engage).toBe(true)
+      expect(inFlight.automaticContactEvents).toHaveLength(0)
+
+      // A ball travelling AWAY from the previous lane cannot inherit
+      // a phantom interception opportunity.
+      const away: MatchState = {
+        ...inFlight, ball: {
+          ...inFlight.ball, velocity: {
+            xMps: -velocity.xMps, yMps: -velocity.yMps, zMps: 0,
+          },
+        },
+      }
+      expect(maintainWidePassFlightScreen(away, scene.team)).toBeNull()
+    })
+
     it(`does not fabricate a lane screen with no nearby inside outlet on side ${side}`, () => {
       const scene = wideScene(side)
       const state: MatchState = {
@@ -124,7 +176,7 @@ describe('S1.1 — physical, outlet-aware wide pressing coordination', () => {
       }
       const plan = planDefensiveResponsibilities(
         state, scene.setup, scene.team, scene.ball)
-      expect(plan.get(scene.screener.playerId)?.action).not.toBe('mark')
+      expect(plan.get(scene.screener.playerId)?.action).not.toBe('screen')
       expect(plan.get(scene.presser.playerId)?.action).toBe('press')
     })
 
@@ -138,7 +190,7 @@ describe('S1.1 — physical, outlet-aware wide pressing coordination', () => {
       }
       const plan = planDefensiveResponsibilities(
         state, scene.setup, scene.team, scene.ball)
-      expect(plan.get(scene.screener.playerId)?.action).not.toBe('mark')
+      expect(plan.get(scene.screener.playerId)?.action).not.toBe('screen')
       expect(plan.get(scene.cover.playerId)?.action).toBe('cover')
     })
 
@@ -156,7 +208,7 @@ describe('S1.1 — physical, outlet-aware wide pressing coordination', () => {
       const plan = planDefensiveResponsibilities(
         state, scene.setup, scene.team, moved)
       const first = plan.get(scene.presser.playerId)!
-      expect(first.action).not.toBe('mark')
+      expect(first.action).not.toBe('screen')
       expect(plan.get(scene.screener.playerId)?.target)
         .not.toEqual(plan.get(scene.presser.playerId)?.target)
     })

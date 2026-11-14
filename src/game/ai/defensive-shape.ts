@@ -5,7 +5,7 @@ import type {
 } from '../match/state'
 import { boundedTarget, separationM } from './coordination'
 import { planIndividualDefensiveResponses } from './defensive-individual'
-import { planWidePressingTrap } from './pressing-traps'
+import { maintainWidePassFlightScreen, planWidePressingTrap } from './pressing-traps'
 
 /**
  * Phase 6.5 — Team-first defensive responsibilities.
@@ -18,7 +18,7 @@ import { planWidePressingTrap } from './pressing-traps'
 const clamp = (n: number, low: number, high: number) =>
   Math.max(low, Math.min(high, n))
 
-type AssignedAction = 'press' | 'jockey' | 'cover' | 'mark' | 'recover' | 'shape'
+type AssignedAction = 'press' | 'jockey' | 'cover' | 'mark' | 'screen' | 'recover' | 'shape'
 export interface DefensiveAssignment {
   readonly action: AssignedAction
   readonly target: Point2
@@ -331,8 +331,10 @@ export function planDefensiveResponsibilities(
   const opponents = state.players.filter(p => p.clubId !== team.clubId)
   const pressing = primaryPressers(state, setup, teammates, ballPoint, team, preferredRecoveryId)
   const pressingIds = new Set(pressing.map(p => p.playerId))
+  const flightScreen = maintainWidePassFlightScreen(state,team)
   const cover = defensiveCover(
-    teammates, ballPoint, team, setup, pressingIds)
+    teammates.filter(p=>p.playerId!==flightScreen?.screenerId),
+    ballPoint, team, setup, pressingIds)
   const assignments = new Map<string, DefensiveAssignment>()
   // The shared physical snapshot still chooses at most the original
   // pressers and one cover player. Everyone else reasons individually
@@ -347,9 +349,10 @@ export function planDefensiveResponsibilities(
   // No invented interception: only a movement target for existing physics.
   const trap=planWidePressingTrap(
     state,setup,team,ballPoint,pressing,cover?.playerId??null,blocks)
+  const reservedScreenerId=trap?.screenerId??flightScreen?.screenerId
   const eligible=teammates.filter(p=>
     p.formationSlot!=='GK' && !pressingIds.has(p.playerId) &&
-    p.playerId!==cover?.playerId && p.playerId!==trap?.screenerId)
+    p.playerId!==cover?.playerId && p.playerId!==reservedScreenerId)
   const threats=opponents.filter(p=>
     isRelevantDefensiveThreat(p,ballPoint,team,setup))
   const individual=planIndividualDefensiveResponses(
@@ -401,9 +404,15 @@ export function planDefensiveResponsibilities(
     } else if (trap?.screenerId===player.playerId) {
       // The defender blocks a REAL carrier-to-outlet lane; the ball must
       // still physically reach this player to be intercepted.
-      action='mark'
+      action='screen'
       target=trap.screenTarget
+      // The opposition still owns the ball; merely block the lane.
       engage=false
+    } else if (flightScreen?.screenerId===player.playerId) {
+      action='screen'
+      target=flightScreen.screenTarget
+      // A REAL free kick in flight may now be intercepted by swept contact.
+      engage=true
     } else {
       const response=individual.get(player.playerId)
       if(response){

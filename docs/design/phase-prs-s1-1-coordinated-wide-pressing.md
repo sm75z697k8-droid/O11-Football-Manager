@@ -37,10 +37,14 @@ of O11:
 6. If no feasible combination exists, return `null` and retain the old
    pressing, cover and individual-defence fallback, without synthetic events.
 
-The action is represented with the existing `mark` / `press` assignment
-types to preserve checkpoint structure and contact integration. An AI target
-never grants an interception, tackle, foul or possession: only 50ms physical
-movement and existing swept contact can produce those events.
+A distinct `screen` tactical action is passive (`engage=false`) while an
+opposition carrier owns the ball; screeners cannot produce phantom tackles.
+If the carrier physically KICKS a pass whose flight still approaches the
+assigned screen, the screen remains active and becomes `engage=true` while
+the ball is free. This includes loose-ball frames when the recovery race
+otherwise favors the defending team. Only the ordinary 50ms swept contact
+solver may grant interception or possession; a target alone never does.
+The decision enum and engine identity are versioned for replay validation.
 
 ## Boundaries and limitations
 
@@ -66,6 +70,9 @@ Added `tests/unit/s11-wide-pressing-traps.test.ts` for:
 - Separate designated primary presser, defender screening the literal
   carrier-to-outlet segment, and retained cover role.
 - Decision integration and non-teleporting movement.
+- Passive screen while ball is controlled; active eligibility during a
+  physically kicked free-ball flight through the screen, and rejection when
+  the ball travels away from the lane.
 - No fabricated screen when there is no inside outlet.
 - No extreme recovery run if a would-be screener is unreachable.
 - Normal fallback when the carrier is central.

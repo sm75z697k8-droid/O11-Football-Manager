@@ -14,7 +14,7 @@ import { boundedTarget, separationM } from './coordination'
  * The ordinary 50ms locomotion, swept-ball contact and foul rules decide
  * whether any movement or challenge succeeds.
  */
-export const WIDE_PRESSING_TRAPS_VERSION = 'wide-lane-coordination-s11-v1'
+export const WIDE_PRESSING_TRAPS_VERSION = 'wide-lane-coordination-s11-v2'
 const clamp = (value: number, lo: number, hi: number): number =>
   Math.max(lo, Math.min(hi, value))
 
@@ -172,4 +172,60 @@ export function planWidePressingTrap(
     screenTarget: best.target,
     outletId: best.outlet.playerId,
   }
+}
+
+/**
+ * Keep an established screen for a genuine kicked ball that is now travelling
+ * through that lane. A stationary marker cannot touch an owned ball; once
+ * released, the same player may intercept ONLY through the normal swept
+ * 50ms contact solver. Previous 'screen' intent identifies the real lane.
+ */
+export function maintainWidePassFlightScreen(
+  state: MatchState, team: TeamMatchState,
+): { readonly screenerId: string; readonly screenTarget: Point2 } | null {
+  if (state.ball.controllerId !== null || state.ball.outsidePitch)
+    return null
+  const previous = state.ai.decisionSnapshot.find(d =>
+    d.clubId === team.clubId && d.action === 'screen')
+  if (!previous) return null
+  const screener = state.players.find(p =>
+    p.playerId === previous.playerId && p.clubId === team.clubId)
+  const lastKicker = state.players.find(p =>
+    p.playerId === state.ball.lastTouchPlayerId &&
+    p.clubId !== team.clubId)
+  if (!screener || !lastKicker) return null
+
+  // A real opponent foot kick is required. A loose ball or a turnover
+  // cannot inherit an obsolete tactical lane from an old carrier.
+  let kickTick = -1
+  for (let i = state.contactEvents.length - 1; i >= 0; i--) {
+    const event = state.contactEvents[i]
+    if (event.playerId === lastKicker.playerId &&
+        event.kind === 'kick' && event.outcome === 'kicked') {
+      kickTick = event.tick
+      break
+    }
+  }
+  const elapsed = state.clock.tick - kickTick
+  if (kickTick < 0 || elapsed < 0 || elapsed > 60) return null
+
+  const vx = state.ball.velocity.xMps
+  const vy = state.ball.velocity.yMps
+  const speedSq = vx * vx + vy * vy
+  if (speedSq < 1) return null
+  const dx = previous.target.xM - state.ball.position.xM
+  const dy = previous.target.yM - state.ball.position.yM
+  const secondsAhead = (dx * vx + dy * vy) / speedSq
+  const closest = {
+    xM: state.ball.position.xM + vx * secondsAhead,
+    yM: state.ball.position.yM + vy * secondsAhead,
+  }
+  // This must still be an approaching pass through the defended lane,
+  // not a free ball heading somewhere else.
+  if (secondsAhead < -.1 || secondsAhead > 1.8 ||
+      separationM(closest, previous.target) > 1.6 ||
+      (secondsAhead < .3 &&
+        separationM(screener.position, previous.target) > 4.5))
+    return null
+  return { screenerId: screener.playerId, screenTarget: previous.target }
 }
