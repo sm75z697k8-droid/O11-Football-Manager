@@ -199,8 +199,8 @@ export function activeCarryingTouch(
   // target introduced after the command was chosen.
   return !state.appliedCommands.some(c=>
     c.appliedTick===state.clock.tick &&
-    c.playerId===player.playerId &&
-    (c.type==='attemptKick' || c.type==='attemptFirstTouch'))
+    (c.type==='attemptKick' || c.type==='attemptFirstTouch') &&
+    c.playerId===player.playerId)
 }
 
 /** Advance the actual physical owner and its attached ball as one coherent
