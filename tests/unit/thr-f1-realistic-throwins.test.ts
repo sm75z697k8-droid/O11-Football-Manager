@@ -210,19 +210,25 @@ describe('THR-F1 — realistic, pressured legal throw-in plans',()=>{
     expect(turned).toBe(true)
   })
   it('replays a REAL seeded throw-in and following physical play exactly',()=>{
-    // The live match sample deliberately uses the same deterministic
-    // production fixture, not a hand-forced restart or invented goal.
+    // A previous seed 117 throw-in can cease to occur when defending
+    // players make new decisions. Search deterministic REAL live match
+    // trajectories; never fabricate a throw-in or a contact to pass.
     const { MatchViewerSession }=requireViewerSession()
-    const session=new MatchViewerSession(117)
-    let thrown=false
-    for(let i=0;i<280;i++){
-      session.advance(8)
-      if(session.state.contactEvents.some(e=>e.outcome==='thrownIn')){
-        thrown=true;break
+    let session:InstanceType<typeof MatchViewerSession>|null=null
+    for(const seed of [42,117,832,90]){
+      const candidate=new MatchViewerSession(seed)
+      for(let i=0;i<330;i++){
+        candidate.advance(8)
+        if(candidate.state.contactEvents.some(e=>e.outcome==='thrownIn')){
+          session=candidate
+          break
+        }
+        if(candidate.state.period==='halfTime')break
       }
-      if(session.state.period==='halfTime')break
+      if(session)break
     }
-    expect(thrown).toBe(true)
+    expect(session).not.toBeNull()
+    if(!session)throw new Error('No physically executed live throw-in')
     const restored=restoreFoundationMatch(session.checkpoint())
     for(let i=0;i<18;i++){
       session.advance(1)
