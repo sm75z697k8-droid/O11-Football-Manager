@@ -5,6 +5,7 @@ import type {
 } from '../match/state'
 import { boundedTarget, separationM } from './coordination'
 import { planIndividualDefensiveResponses } from './defensive-individual'
+import { planWidePressingTrap } from './pressing-traps'
 
 /**
  * Phase 6.5 — Team-first defensive responsibilities.
@@ -114,7 +115,7 @@ function keeperPenalty(player: PlayerMatchState) {
  * trained on professional tracking data. Real movement and tackles remain
  * in the 50ms physics engine.
  */
-export const DEFENSIVE_PLANNER_VERSION = 'role-specific-threat-defence-def-f1-v1'
+export const DEFENSIVE_PLANNER_VERSION = 'wide-trap-coordinated-defence-s11-v1'
 export const PRESSING_SWITCH_MARGIN_M = 3.5
 
 interface PressContext {
@@ -342,9 +343,13 @@ export function planDefensiveResponsibilities(
     return [p.playerId,defensiveRecoveryTarget(
       p,anchor,ballPoint,team,setup)]
   }))
+  // Wide traps add one lane screener without stealing cover or a direct presser.
+  // No invented interception: only a movement target for existing physics.
+  const trap=planWidePressingTrap(
+    state,setup,team,ballPoint,pressing,cover?.playerId??null,blocks)
   const eligible=teammates.filter(p=>
     p.formationSlot!=='GK' && !pressingIds.has(p.playerId) &&
-    p.playerId!==cover?.playerId)
+    p.playerId!==cover?.playerId && p.playerId!==trap?.screenerId)
   const threats=opponents.filter(p=>
     isRelevantDefensiveThreat(p,ballPoint,team,setup))
   const individual=planIndividualDefensiveResponses(
@@ -367,7 +372,9 @@ export function planDefensiveResponsibilities(
       // Current controller is the physical threat. The 50ms movement engine
       // approaches the actual ball, not a fake successful tackle.
       target = committed
-        ? pressingApproachTarget(player, ballPoint, team, setup)
+        ? trap?.presserId===player.playerId
+          ? trap.approachTarget
+          : pressingApproachTarget(player, ballPoint, team, setup)
         : boundedTarget({
           xM:ballPoint.xM-team.attackingDirection*1.3,
           yM:ballPoint.yM+(player.position.yM<ballPoint.yM?-1.1:1.1),
@@ -391,6 +398,12 @@ export function planDefensiveResponsibilities(
         xM: block.xM + (ideal.xM - block.xM) * ratio,
         yM: block.yM + (ideal.yM - block.yM) * ratio,
       }, setup.pitch)
+    } else if (trap?.screenerId===player.playerId) {
+      // The defender blocks a REAL carrier-to-outlet lane; the ball must
+      // still physically reach this player to be intercepted.
+      action='mark'
+      target=trap.screenTarget
+      engage=false
     } else {
       const response=individual.get(player.playerId)
       if(response){
