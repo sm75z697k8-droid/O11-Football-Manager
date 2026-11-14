@@ -104,6 +104,18 @@ describe('THR-F2 restart deadlock prevention',()=>{
             break
           }
         }
+        if(!released) {
+          const p=current.players.find(p=>p.playerId===x.taker.playerId)!
+          console.log('[THR-F2 near-line diagnostic]',JSON.stringify({
+            offset,facing,p,tick:current.clock.tick,
+            stanceGap:Math.hypot(p.position.xM-x.spot.xM,
+              p.position.yM-x.spot.yM),
+            legalY:p.position.yM>=x.setup.pitch.widthM-.47,
+            opponentClear:throwInOpponentsClear(current,x.restart),
+            pending:current.pendingCommands,
+            lastCommand:current.appliedCommands.at(-1),
+          }))
+        }
         expect(released).toBe(true)
         expect(current.restart).toBeNull()
         expect(current.ball.lastTouchPlayerId).toBe(x.taker.playerId)
