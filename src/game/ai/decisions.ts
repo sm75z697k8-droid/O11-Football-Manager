@@ -4,6 +4,7 @@ import type { MatchState, PlayerMatchState, AgentDecision } from '../match/state
 import { activePassIntent, intendedReceiverTarget } from './pass-coordination'
 import { chooseDynamicSupport } from './support-space'
 import { planDefensiveResponsibilities } from './defensive-shape'
+import { maintainWidePassFlightScreen } from './pressing-traps'
 import { planHeldGoalkeeperShape } from './goalkeeper-possession-shape'
 import { planGoalkeeperSave } from './goal-directed'
 import { planGoalkeeperPosition } from './goalkeeper-positioning'
@@ -99,6 +100,7 @@ export function planTeamDecisions(
       ? planDefensiveResponsibilities(state, setup, team, projectedBall,
         looseRace?.pursuerIds[team.clubId])
       : null
+    const flightScreen = maintainWidePassFlightScreen(state, team)
     const pressCount = !ballUsable || owner || isDefending ? 0 :
       team.pressingIntensity === 'high' ? 2 : 1
     // The passer commits to a particular teammate. Until contact or loss,
@@ -195,6 +197,14 @@ export function planTeamDecisions(
         action = 'receive'
         engage = true
         target = intendedReceiverTarget(state, setup, intent!)
+      } else if (flightScreen?.screenerId===player.playerId &&
+          player.playerId!==pursuit?.playerId &&
+          player.playerId!==committed?.playerId) {
+        // Hold a genuine passing-lane screen through the kicked-ball flight
+        // even if the recovery predictor temporarily favors our own team.
+        action = 'screen'
+        target = flightScreen.screenTarget
+        engage = true
       } else if (defensivePlan) {
         const assigned = defensivePlan.get(player.playerId)
         if (!assigned) throw new Error('Defensive player missing team responsibility')
