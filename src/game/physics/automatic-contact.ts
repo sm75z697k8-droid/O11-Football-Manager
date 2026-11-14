@@ -19,7 +19,7 @@ import { forbiddenRestartSecondTouch } from '../match/restarts'
  * No strategy/AI chooses whom to engage. All values below are estimated,
  * deterministic mechanics; there is no hidden outcome generator.
  */
-export const AUTOMATIC_CONTACT_VERSION = 'swept-engagement-v1' as const
+export const AUTOMATIC_CONTACT_VERSION = 'post-kick-separation-box-f1-v1' as const
 export const AUTO_CONTACT_COOLDOWN_TICKS = 6
 export const AUTO_BALL_FOOT_OFFSET_M = 0.82
 
@@ -208,6 +208,61 @@ function alreadyHeldOffWithoutReapproach(
   return false
 }
 
+/**
+ * BOX-F1: an executed FOOT KICK starts with the ball physically overlapping
+ * the kicker's contact envelope. This is the kick leaving the foot, NOT a
+ * second interception. Do not let the still-engaged kicker immediately
+ * deflect their own outgoing shot/pass/clearance while it separates.
+ *
+ * The earliest valid blocker, teammate or goalkeeper is UNRESTRICTED.
+ * Once the ball has actually separated beyond foot reach it can return and
+ * be contested normally (including a goalframe rebound). The brief initial
+ * grace also covers a ball that temporarily crosses the shooter's feet.
+ * No state fields, special ownership, ball teleport or artificial goal.
+ */
+export function outgoingKickStillSeparating(
+  before: MatchState, after: MatchState,
+  player: PlayerMatchState,
+): boolean {
+  if (after.ball.controllerId !== null ||
+      before.ball.controllerId !== null ||
+      after.ball.lastTouchPlayerId !== player.playerId) return false
+
+  // A current physical contact by another player replaces the kicked
+  // ball's provenance. Ignore failed contact attempts, which change none.
+  let latest: MatchState['contactEvents'][number] | undefined
+  for (let i = after.contactEvents.length - 1; i >= 0; i--) {
+    const event = after.contactEvents[i]
+    if (after.clock.tick - event.tick > 8) break
+    if (['controlled','miscontrolled','kicked','thrown','thrownIn',
+      'goalKicked','cornerKicked'].includes(event.outcome)) {
+      latest = event
+      break
+    }
+  }
+  if (!latest || latest.playerId !== player.playerId ||
+      !['kicked','goalKicked','cornerKicked'].includes(latest.outcome))
+    return false
+  const age = after.clock.tick - latest.tick
+  if (age < 1 || age > 8) return false
+  const beforePlayer = before.players.find(p =>
+    p.playerId === player.playerId)
+  if (!beforePlayer) return false
+  const previousGap = Math.hypot(
+    before.ball.position.xM - beforePlayer.position.xM,
+    before.ball.position.yM - beforePlayer.position.yM)
+  // An outgoing ball that has ALREADY exited the foot envelope is live
+  // to be played again upon genuine return. Don't block normal rebounds.
+  if (previousGap > FOOT_REACH_M + .02) return false
+  const nextGap = Math.hypot(
+    after.ball.position.xM - player.position.xM,
+    after.ball.position.yM - player.position.yM)
+  // The kick's first 100ms is the ongoing physical release, not a new
+  // touch. Thereafter only continued *outward separation* is protected,
+  // so an incoming real rebound is contestable.
+  return age <= 2 || nextGap > previousGap + .015
+}
+
 function candidate(
   before: MatchState, after: MatchState, owner: PlayerMatchState | undefined,
   setup: MatchSetup,
@@ -225,6 +280,7 @@ function candidate(
         p.playerId === after.kickoff.kickerId) continue
     if (!p.engagesBall || p.participation !== 'onField' ||
       forbiddenThrowInSecondTouch(after, p.playerId) ||
+      outgoingKickStillSeparating(before, after, p) ||
       p.playerId === owner?.playerId ||
       (owner && p.clubId === owner.clubId)) continue
     const old = pastPlayers.get(p.playerId)

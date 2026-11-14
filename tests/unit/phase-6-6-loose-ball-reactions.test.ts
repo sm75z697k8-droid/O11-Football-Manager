@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createFoundationMatch, restoreFoundationMatch } from '../../src/game/match/engine'
 import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
+import { expectPhysicalGoals } from '../fixtures/physical-goals'
 import type { MatchState } from '../../src/game/match/state'
 import {
   assessLooseBallRace, followMovingLooseBall,
@@ -163,6 +164,6 @@ describe('Phase 6.6 real loose-ball recognition and link play', () => {
     copy.advance(44)
     copy.advance(56)
     expect(copy.checkpoint()).toEqual(game.checkpoint())
-    expect(game.getState().teams.map(t => t.score)).toEqual([0, 0])
+    expectPhysicalGoals(game.getState(), setup)
   })
 })

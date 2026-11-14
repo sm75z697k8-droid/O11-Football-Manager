@@ -22,8 +22,11 @@ describe('S1.1 complete live seeded throw-in continuation', () => {
         sawThrowIn ||= live.outOfPlayEvents.some(e => e.kind === 'throwIn')
         sawRelease ||= live.contactEvents.some(e => e.outcome === 'thrownIn')
         if (sawRelease) break
-        if (live.goalEvents.length ||
-            (live.restart && live.restart.kind !== 'throwIn')) break
+        // Real goal kicks, corners and post-goal kickoffs now resume play.
+        // Do not stop this authentic throw-in search merely because
+        // another supported restart happened first.
+        if (live.period === 'fullTime' ||
+            live.period === 'halfTime') break
       }
       const state = session.state
       examined.push({

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { createFoundationMatch, restoreFoundationMatch } from '../../src/game/match/engine'
 import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
+import { expectPhysicalGoals } from '../fixtures/physical-goals'
 
 /** Informational Node benchmark only: NOT iPhone Safari FPS or a full match. */
 describe('Phase 5 autonomous reasoning workload', () => {
   it('runs 22 simulated decision-makers with existing movement and ball physics', () => {
-    const engine = createFoundationMatch(makeFictionalMatchSetup())
+    const fixture = makeFictionalMatchSetup()
+    const engine = createFoundationMatch(fixture)
     for (const club of ['club_harbor', 'club_vale']) {
       expect(engine.submitCommand({
         commandId: 'enable-' + club,
@@ -22,7 +24,7 @@ describe('Phase 5 autonomous reasoning workload', () => {
     expect(state.clock.tick).toBe(1000)
     expect(state.ai.enabledTeams).toEqual([true, true])
     expect(state.ai.decisionSnapshot).toHaveLength(22)
-    expect(state.teams.map(t => t.score)).toEqual([0, 0])
+    expectPhysicalGoals(state, fixture)
     const successfulAutonomousKicks = state.contactEvents.filter(event =>
       event.commandId.startsWith('ai-pass-') && event.outcome === 'kicked').length
     expect(successfulAutonomousKicks).toBeGreaterThan(0)
@@ -38,7 +40,7 @@ describe('Phase 5 autonomous reasoning workload', () => {
       automaticContactEvents: state.automaticContactEvents.length,
       elapsedMs: Number(elapsed.toFixed(2)),
       checkpointBytes: Buffer.byteLength(JSON.stringify(checkpoint), 'utf8'),
-      note: 'Diagnostic football decisions only; no match period, score or FPS.',
+      note: 'Diagnostic football decisions; physical goals can change after physics improvements; this is NOT iPhone Safari FPS.',
     }))
   })
 })
