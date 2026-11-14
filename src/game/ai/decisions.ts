@@ -199,7 +199,9 @@ export function planTeamDecisions(
         target = intendedReceiverTarget(state, setup, intent!)
       } else if (flightScreen?.screenerId===player.playerId &&
           player.playerId!==pursuit?.playerId &&
-          player.playerId!==committed?.playerId) {
+          player.playerId!==committed?.playerId &&
+          defensivePlan?.get(player.playerId)?.action!=='press' &&
+          defensivePlan?.get(player.playerId)?.action!=='jockey') {
         // Hold a genuine passing-lane screen through the kicked-ball flight
         // even if the recovery predictor temporarily favors our own team.
         action = 'screen'
