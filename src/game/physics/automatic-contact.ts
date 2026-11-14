@@ -10,6 +10,9 @@ import { goalkeeperCatchStretchPenalty, goalkeeperSaveWindow } from './goalkeepe
 import { planGoalkeeperOneOnOne } from '../ai/goalkeeper-one-on-one'
 import { forbiddenThrowInSecondTouch } from '../match/restarts'
 import { activeAerialDelivery, goalkeeperCrossHandReach } from '../ai/goalkeeper-aerial'
+import { activeOutfieldAerialDelivery } from '../ai/aerial-duels'
+import { outfieldHeaderReach, redirectPhysicalHeader } from './aerial-heading'
+import { forbiddenRestartSecondTouch } from '../match/restarts'
 
 /**
  * Phase 4 — physical detection when an agent has declared intent to contest.
@@ -28,6 +31,7 @@ interface ContactSample {
 interface Candidate {
   readonly player: PlayerMatchState
   readonly sample: ContactSample
+  readonly header: boolean
 }
 
 /**
@@ -43,6 +47,7 @@ export function sweptFootContact(
   ballAfter: BallMatchState,
   reachM = FOOT_REACH_M,
   maxHeightM = FOOT_CONTACT_MAX_HEIGHT_M,
+  minHeightM = BALL_RADIUS_M,
 ): ContactSample | null {
   const x0 = ballBefore.position.xM - playerBefore.position.xM
   const y0 = ballBefore.position.yM - playerBefore.position.yM
@@ -54,12 +59,19 @@ export function sweptFootContact(
   let hi = 1
   const h0 = ballBefore.heightM
   const dh = ballAfter.heightM - h0
-  if (h0 > maxHeightM &&
-      ballAfter.heightM > maxHeightM) return null
-  if (dh > 0 && h0 > maxHeightM) return null
-  if (dh < 0 && ballAfter.heightM > maxHeightM) return null
-  if (dh > 0) hi = Math.min(hi, (maxHeightM - h0) / dh)
-  if (dh < 0) lo = Math.max(lo, (maxHeightM - h0) / dh)
+  // Clamp the swept interval to the ACTUAL vertical collision range.
+  // Head and feet must never both claim the same 2D proximity at a
+  // different height. For ordinary foot interactions minHeightM is the
+  // ground ball radius, preserving earlier foot/keeper calculations.
+  if (Math.min(h0,ballAfter.heightM)>maxHeightM ||
+      Math.max(h0,ballAfter.heightM)<minHeightM) return null
+  if (dh > 0) {
+    lo = Math.max(lo,(minHeightM-h0)/dh)
+    hi = Math.min(hi,(maxHeightM-h0)/dh)
+  } else if (dh < 0) {
+    lo = Math.max(lo,(maxHeightM-h0)/dh)
+    hi = Math.min(hi,(minHeightM-h0)/dh)
+  } else if(h0<minHeightM || h0>maxHeightM) return null
   lo = Math.max(0, lo)
   hi = Math.min(1, hi)
   if (lo > hi) return null
@@ -204,6 +216,7 @@ function candidate(
   const options: Candidate[] = []
   const shot = activePhysicalShot(after)
   const shooter = shot && after.players.find(p => p.playerId === shot.shooterId)
+  const delivered = !owner && activeOutfieldAerialDelivery(after,setup)
   for (const p of after.players) {
     // A kick-off taker may not touch the ball again until another player
     // touches it; skip the taker during this protected opening passage.
@@ -244,11 +257,28 @@ function candidate(
       !!definition?.abilities.goalkeeping
     const reach = aerial && definition
       ? goalkeeperCrossHandReach(definition) : null
-    const result = sweptFootContact(old, p, before.ball, after.ball,
+    const physical = sweptFootContact(old, p, before.ball, after.ball,
       saveWindow?.reachM ?? reach?.horizontalM ??
         (smother ? 1.05 : FOOT_REACH_M),
       saveWindow?.maximumHeightM ?? reach?.maximumHeightM ??
         FOOT_CONTACT_MAX_HEIGHT_M)
+    const headingDecision = delivered && p.formationSlot!=='GK' &&
+      !forbiddenRestartSecondTouch(after,p.playerId)
+      ? after.ai.decisionSnapshot.find(d=>
+          d.playerId===p.playerId && d.action==='head' && d.engage)
+      : undefined
+    const headerDefinition = headingDecision &&
+      setup.players.find(d=>d.id===p.playerId)
+    const headerReach = headerDefinition &&
+      outfieldHeaderReach(p,headerDefinition,
+        (after.clock.tick-headingDecision!.tick)*.05)
+    const headerSample = headerReach &&
+      after.clock.tick-headingDecision!.tick>=2
+      ? sweptFootContact(old,p,before.ball,after.ball,
+          headerReach.horizontalM,headerReach.maximumHeightM,
+          headerReach.minimumHeightM)
+      : null
+    const result=headerSample ?? physical
     if (!result) continue
     // The goalkeeper's BODY being inside the box does not legalize a hand
     // claim where the actual ball impact is outside the penalty boundary.
@@ -257,7 +287,7 @@ function candidate(
     }, setup)) continue
     if (owner && alreadyHeldOffWithoutReapproach(
       before, after, old, p)) continue
-    options.push({ player: p, sample: result })
+    options.push({ player: p, sample: result, header: !!headerSample })
   }
   options.sort((a, b) =>
     a.sample.fraction - b.sample.fraction ||
@@ -296,6 +326,26 @@ export function resolveAutomaticBallContact(
 
   const definition = setup.players.find(d => d.id === player.playerId)
   if (!definition) throw new Error('Missing contender in authoritative match setup')
+  if(picked.header){
+    const delivered=activeOutfieldAerialDelivery(after,setup)
+    if(!delivered) return after
+    // The real airborne ball and the real 50ms player movement intersect
+    // the header envelope. Whichever opponent meets it first wins this
+    // contact, including a goalkeeper's earlier valid glove collision.
+    const impactHeight=before.ball.heightM+
+      sample.fraction*(after.ball.heightM-before.ball.heightM)
+    const redirected=redirectPhysicalHeader(after,setup,player,definition,
+      {impact:sample.impact,fraction:sample.fraction,
+        distanceM:sample.distanceM,heightM:impactHeight},
+      delivered.kickerClubId)
+    const recorded:AutomaticContactEvent={
+      tick,playerId:player.playerId,kind:'header',
+      outcome:redirected.outcome,contactFraction:sample.fraction,
+    }
+    return {...after,ball:redirected.ball,
+      ballContactCooldownUntilTick:tick+AUTO_CONTACT_COOLDOWN_TICKS,
+      automaticContactEvents:[...after.automaticContactEvents,recorded]}
+  }
   let ball = after.ball
   let outcome: AutomaticContactEvent['outcome']
   let kind: AutomaticContactEvent['kind']

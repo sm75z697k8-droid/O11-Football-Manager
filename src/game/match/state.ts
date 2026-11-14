@@ -63,8 +63,8 @@ export interface ContactEvent {
 export interface AutomaticContactEvent {
   readonly tick: number
   readonly playerId: PlayerId
-  readonly kind: 'interception' | 'challenge'
-  readonly outcome: 'intercepted' | 'deflected' | 'wonChallenge' | 'heldOff' | 'caught' | 'parried' | 'punched'
+  readonly kind: 'interception' | 'challenge' | 'header'
+  readonly outcome: 'intercepted' | 'deflected' | 'wonChallenge' | 'heldOff' | 'caught' | 'parried' | 'punched' | 'headed' | 'glanced'
   readonly contactFraction: number
 }
 /** The opening state and physical release; no other football restarts yet. */
@@ -109,7 +109,7 @@ export interface PeriodKickoffState {
   readonly phase: 'staging' | 'awaitingMovement'
   readonly kickedTick: number | null
 }
-export type AgentAction = 'shape' | 'support' | 'press' | 'jockey' | 'pursue' | 'carry' | 'receive' | 'cover' | 'mark' | 'recover' | 'shoot' | 'save' | 'oneOnOne' | 'claimCross'
+export type AgentAction = 'shape' | 'support' | 'press' | 'jockey' | 'pursue' | 'carry' | 'receive' | 'cover' | 'mark' | 'recover' | 'shoot' | 'save' | 'oneOnOne' | 'claimCross' | 'head'
 export interface AgentDecision {
   readonly tick: number
   readonly playerId: PlayerId

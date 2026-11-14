@@ -9,6 +9,7 @@ import { planGoalkeeperSave } from './goal-directed'
 import { planGoalkeeperPosition } from './goalkeeper-positioning'
 import { planGoalkeeperOneOnOne } from './goalkeeper-one-on-one'
 import { planGoalkeeperAerial } from './goalkeeper-aerial'
+import { planOutfieldAerialDuels } from './aerial-duels'
 import { assessLooseBallRace } from './loose-ball'
 import {
   canReleaseControlledBall, evaluateOnBallChoice,
@@ -61,6 +62,9 @@ export function planTeamDecisions(
   // Last touch is NOT possession. A misplaced pass is a genuine 50/50
   // recovery race, judged by future physical interception opportunities.
   const looseRace = ballUsable ? assessLooseBallRace(state, setup) : null
+  // One shared real-flight scan per planning snapshot, not 22 duplicated
+  // trajectories. Both attacking and defending players can compete.
+  const aerialDuels = planOutfieldAerialDuels(state, setup)
 
   for (const [teamIndex, team] of state.teams.entries()) {
     if (!state.ai.enabledTeams[teamIndex]) continue
@@ -140,6 +144,8 @@ export function planTeamDecisions(
 
       // Real incoming shots always take priority over ordinary position,
       // including a loose-ball race that briefly favours our own team.
+      const aerialRun = player.formationSlot !== 'GK'
+        ? aerialDuels.get(player.playerId) : undefined
       const keeperSave = player.formationSlot === 'GK'
         ? planGoalkeeperSave(state, setup, player, team) : null
       const keeperOneOnOne = !keeperSave && player.formationSlot === 'GK'
@@ -167,6 +173,13 @@ export function planTeamDecisions(
         action = 'shape'
         engage = false
         target = keeperPosition.target
+      } else if (aerialRun) {
+        // A planned header is an INTENTION only. Real locomotion, jump
+        // height, opponent competition and swept physical contact decide
+        // whether anyone actually reaches the airborne ball.
+        action = 'head'
+        engage = true
+        target = aerialRun.target
       } else if (player.playerId === owner?.playerId) {
         const canPass = canReleaseControlledBall(state, setup)
         const choice = evaluatedChoice !== undefined

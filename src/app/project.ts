@@ -1,7 +1,7 @@
 /** O11 project metadata. Real-time landscape Canvas now visualizes the authoritative headless engine; no official match rules or results yet. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = 'PHY-F1' as const
-export const ENGINE_STATUS = 'continuous-pressured-ball-control-phy-f1' as const
+export const PROJECT_PHASE = 'COR-S1' as const
+export const ENGINE_STATUS = 'physical-outfield-aerial-duels-cor-s1' as const
 
 export const FOUNDATION_STAGES = [
   { id: '0A', title: 'Project foundation', summary: 'App, TypeScript, tests and deployment' },
@@ -53,4 +53,5 @@ export const FOUNDATION_STAGES = [
   { id: 'GK-S1', title: 'Realistic goal-kick preparation and distribution', summary: 'Behind-ball keeper approach, physically staged build-out and pressing, short full-back/central outlets and pressure-aware midfield kicks' },
   { id: 'ATT-F1', title: 'Shooting opportunity recognition', summary: 'Assess the opportunity cost of delaying physically credible shots across sideways, backward and unproductive carry decisions; retain better-position and blocked-lane alternatives' },
   { id: 'PHY-F1', title: 'Continuous pressured ball control', summary: 'Continuously correct physically misaligned ball touches during a carry even under close pressure; preserve stable first-touch and passing/shooting contact points' },
+  { id: 'COR-S1', title: 'Physical outfield aerial duels and headers', summary: 'Shared cross and corner header planning for both teams, real swept head-height interception, ability-affected attacking headers and defensive clearances, goalkeeper reaction and offside continuity' },
 ] as const
