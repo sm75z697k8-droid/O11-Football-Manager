@@ -139,8 +139,10 @@ describe('THR-F1 — realistic, pressured legal throw-in plans',()=>{
         ? {...p,position:{xM:a.targets[0].xM+.22,
             yM:a.targets[0].yM+.25}}
         : p)}
+    const currentReceivers=a.options.map(option=>
+      covered.players.find(p=>p.playerId===option.playerId)!)
     const safe=assessThrowInOptions(covered,a.setup,a.event,
-      a.options,a.targets)
+      currentReceivers,a.targets)
     expect(safe).toHaveLength(3)
     expect(safe[0].playerId).not.toBe(a.options[0].playerId)
     expect(safe.find(c=>c.playerId===a.options[0].playerId)?.opponentGapM)
