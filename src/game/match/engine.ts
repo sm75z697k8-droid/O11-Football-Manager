@@ -669,7 +669,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         !player || teamIdx < 0 || player.clubId !== d.clubId ||
         !state.ai.enabledTeams[teamIdx] ||
         !Number.isSafeInteger(d.tick) || d.tick !== state.ai.lastDecisionTick ||
-        !['shape','support','press','jockey','pursue','carry','receive','cover','mark','recover','shoot','save','oneOnOne','claimCross'].includes(d.action) ||
+        !['shape','support','press','jockey','pursue','carry','receive','cover','mark','recover','shoot','save','oneOnOne','claimCross','head'].includes(d.action) ||
         typeof d.engage !== 'boolean' ||
         !object(d.target) || !insidePitch(d.target, setup.pitch) ||
         liveDecisions.has(d.playerId)) {
@@ -799,6 +799,9 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         !(
           (ev.kind === 'interception' &&
             ['intercepted', 'deflected', 'caught', 'parried', 'punched'].includes(ev.outcome)) ||
+          (ev.kind === 'header' && ['headed','glanced'].includes(ev.outcome) &&
+            setup.players.some(p=>p.id===ev.playerId &&
+              p.abilities.goalkeeping===null)) ||
           (ev.kind === 'challenge' &&
             (['wonChallenge', 'heldOff'].includes(ev.outcome) ||
               (ev.outcome === 'caught' &&
@@ -892,7 +895,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         ? setup.players.find(p => p.id === expectedController)
         : undefined
       const wrongKind = owner ? ev.kind !== 'challenge' ||
-        contender?.clubId === owner.clubId : ev.kind !== 'interception'
+        contender?.clubId === owner.clubId :
+        ev.kind !== 'interception' && ev.kind !== 'header'
       const manualContact = state.contactEvents.some(e => e.tick === tick &&
         ['controlled', 'miscontrolled', 'kicked', 'thrownIn', 'goalKicked', 'cornerKicked'].includes(e.outcome))
       const allowed = engagementAtTick.get(ev.playerId) ||
@@ -907,7 +911,8 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         expectedLastTouch = ev.playerId
         expectedCatchTick = ev.outcome === 'caught' ? tick : null
       } else if (ev.outcome === 'deflected' || ev.outcome === 'parried' ||
-                 ev.outcome === 'punched') {
+                 ev.outcome === 'punched' || ev.outcome === 'headed' ||
+                 ev.outcome === 'glanced') {
         expectedController = null
         expectedLastTouch = ev.playerId
         expectedCatchTick = null

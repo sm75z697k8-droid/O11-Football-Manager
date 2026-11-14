@@ -113,7 +113,7 @@ export function applyOffsideLaw(
       ['controlled','miscontrolled','kicked','thrown','thrownIn','goalKicked',
         'cornerKicked'].includes(touch.outcome) ||
       touch.type==='automatic' &&
-      ['intercepted','wonChallenge','caught'].includes(touch.outcome)
+      ['intercepted','wonChallenge','caught','headed'].includes(touch.outcome)
     if (phase && player.clubId===phase.attackingTeamId &&
         phase.playerIds.includes(player.playerId)) {
       const awarded=after.teams.find(t=>t.clubId!==player.clubId)

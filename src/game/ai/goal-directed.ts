@@ -147,6 +147,25 @@ export function activePhysicalShot(
   state: MatchState,
 ): { shooterId: string; tick: number } | null {
   if (state.ball.controllerId !== null || state.ball.outsidePitch) return null
+  // A real physically resolved attacking header is also a SHOT. The
+  // goalkeeper must be allowed the same reflex and swept-save response
+  // as for a foot strike, while clearances and glances aren't fake shots.
+  const header=state.automaticContactEvents.at(-1)
+  if(header?.kind==='header' && header.outcome==='headed' &&
+      state.ball.lastTouchPlayerId===header.playerId &&
+      state.clock.tick-header.tick<=85){
+    const player=state.players.find(p=>p.playerId===header.playerId)
+    const attacking=state.teams.find(t=>t.clubId===player?.clubId)
+    const keeper=state.players.find(p=>p.clubId!==player?.clubId &&
+      p.formationSlot==='GK')
+    // No hardcoded pitch length or width: a physically aimed header near
+    // the opposing goalkeeper's end is eligible for reactive gloved saves.
+    // Clearances by defenders at the opposite end do NOT become shots.
+    if(player && attacking && keeper &&
+        state.ball.velocity.xMps*attacking.attackingDirection>2.5 &&
+        Math.abs(state.ball.position.xM-keeper.position.xM)<37)
+      return {shooterId:player.playerId,tick:header.tick}
+  }
   const last = [...state.contactEvents].reverse().find(e =>
     e.outcome === 'kicked' && e.commandId.startsWith('ai-shot-'))
   if (!last || state.clock.tick - last.tick > 85 ||
