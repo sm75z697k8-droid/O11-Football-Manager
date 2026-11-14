@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createFoundationMatch } from '../../src/game/match/engine'
 import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
+import { copyableMatchDiagnostics } from '../../src/game/viewer/match-diagnostics'
 import { recordOutOfPlay,stageThrowIn,advanceThrowInStoppage,
   throwInReceiverTargets,throwInTakerTarget,
   throwInOpponentsClear } from '../../src/game/match/restarts'
@@ -136,6 +137,15 @@ describe('THR-F2 restart deadlock prevention',()=>{
     expect(first.pendingCommands.filter(c=>c.type==='attemptThrowIn'))
       .toHaveLength(0)
     expect(first.ball.outsidePitch).toBe(true)
+    const report=JSON.parse(copyableMatchDiagnostics(bad,x.setup))
+    expect(report.throwInLogicVersion)
+      .toBe('legal-throw-in-staging-deadlock-thr-f2-v1')
+    expect(report.throwInStaging.takerId).toBe(x.taker.playerId)
+    expect(report.throwInStaging.elapsedTicks).toBe(39)
+    expect(report.throwInStaging.blockedBy)
+      .toContain('opponent_within_two_metres')
+    expect(report.throwInStaging.nearestOpponents[0].distanceM)
+      .toBeLessThan(2)
     // Players must move; simply aging the award cannot grant a kick.
   })
 })
