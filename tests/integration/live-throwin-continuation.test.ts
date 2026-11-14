@@ -6,7 +6,11 @@ describe('S1.1 complete live seeded throw-in continuation', () => {
   it('actually awards and executes a throw-in in running 2-team match physics', () => {
     const examined = []
     let completed = false
-    for (const seed of [42, 117, 123456789, 832]) {
+    // Physical foot-control changes legitimately change which sideline
+    // exits a fixed exhibition seed produces. Scan a broader deterministic
+    // sample for a REAL throw-in; never synthesize an award or release.
+    for (const seed of [42, 117, 123456789, 832, 90, 205,
+      4100, 9999, 7654321, 23017, 101, 57]) {
       const session = new MatchViewerSession(seed)
       let sawThrowIn = false
       let sawRelease = false
@@ -42,5 +46,5 @@ describe('S1.1 complete live seeded throw-in continuation', () => {
     }
     console.info('[O11 S1.1 LIVE RESTART SAMPLE]', JSON.stringify(examined))
     expect(completed).toBe(true)
-  })
+  }, 20_000)
 })

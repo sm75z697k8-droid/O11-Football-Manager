@@ -81,7 +81,7 @@ export function canReachBall(player: PlayerMatchState, ball: BallMatchState): bo
  * This is a conservative first step, NOT free-ball touches or random
  * dribbling-loss rolls. Defenders still win only physical contacts.
  */
-export const CLOSE_CONTROL_VERSION = 'directional-foot-carry-p69n-v1'
+export const CLOSE_CONTROL_VERSION = 'continuous-pressured-carry-phy-f1-v1'
 export const CLOSE_CONTROL_STEP_SECONDS = .05
 export const CLOSE_CONTROL_MAX_OFFSET_M = .75
 const closeClamp = (n: number, lo: number, hi: number) =>
@@ -90,6 +90,7 @@ const closeClamp = (n: number, lo: number, hi: number) =>
 export function closeControlOffset(
   ball: BallMatchState, player: PlayerMatchState,
   definition: PlayerDefinition, pitch: PitchDefinition,
+  nearestDefender?: Point2,
 ): Point2 {
   if (definition.id !== player.playerId) {
     throw new Error('Close control requires the owning player definition')
@@ -118,10 +119,21 @@ export function closeControlOffset(
   const bearingLength = Math.hypot(blendedX, blendedY)
   const dx = blendedX / Math.max(bearingLength, 1e-6)
   const dy = blendedY / Math.max(bearingLength, 1e-6)
-  // Faster carries take a slightly longer touch; better ball control keeps
-  // that touch closer. Never exceed the 1.05m legal foot-reach envelope.
-  const desiredRadius = .41 +
-    .30 * closeClamp(speed / 8.5, 0, 1) * (1.10 - .20 * skill)
+  // Defenders affect the size and responsiveness of a corrective touch.
+  // Never steer the ball away from a defender automatically: that can
+  // actually take it CLOSER to the challenge while inventing shielding.
+  // A separate future tactical model can choose a deliberate safe-side
+  // control target; physical challenges remain authoritative here.
+  const gapM = nearestDefender
+    ? Math.hypot(nearestDefender.xM-player.position.xM,
+      nearestDefender.yM-player.position.yM) : Infinity
+  const pressure = closeClamp((3.8-gapM)/2.9,0,1)
+  // Faster carries produce a longer ball touch. Under close pressure a
+  // skilled player keeps the intended next touch somewhat shorter, while
+  // corrections stay bounded rather than snapping after a reception.
+  const desiredRadius = (.41 +
+    .30 * closeClamp(speed / 8.5, 0, 1) * (1.10 - .20 * skill)) *
+    (1 - pressure*(.06+.07*skill))
   const desired = { xM: dx * desiredRadius, yM: dy * desiredRadius }
   const previous = ball.controlOffset
   const gapX = desired.xM - previous.xM
@@ -129,8 +141,11 @@ export function closeControlOffset(
   const gap = Math.hypot(gapX, gapY)
   // Every 50ms tick can advance the contact point only a small physical
   // distance. Higher dribbling/first-touch/agility improves responsiveness.
+  // Actual body pressure asks for smaller, more deliberate corrections;
+  // skill still makes the foot more responsive. The maximum per-tick
+  // offset change stays far inside the legal one-metre reach envelope.
   const stepM = (2.1 + 2.3 * skill + .10 * speed) *
-    CLOSE_CONTROL_STEP_SECONDS
+    (1-.13*pressure) * CLOSE_CONTROL_STEP_SECONDS
   const fraction = gap > stepM ? stepM / gap : 1
   const movedX = previous.xM + gapX * fraction
   const movedY = previous.yM + gapY * fraction
@@ -149,6 +164,46 @@ export function closeControlOffset(
   return { xM: x - player.position.xM, yM: y - player.position.yM }
 }
 
+/**
+ * PHY-F1: only a real moving ball carrier gets continuous 50ms foot work.
+ * A player waiting to pass, an already-scheduled kick, a stationary
+ * receiver and a hand-holding goalkeeper must retain their genuine
+ * current contact point. The live match runner uses this predicate.
+ */
+export function activeCarryingTouch(
+  state: MatchState, player: PlayerMatchState,
+): boolean {
+  if (state.ball.controllerId !== player.playerId ||
+      state.ball.heightM !== BALL_RADIUS_M ||
+      !state.ball.controlOffset ||
+      player.intention.kind !== 'moveToPoint') return false
+  const intent=state.ai.decisionSnapshot.find(d=>
+    d.playerId===player.playerId)
+  if (intent?.action !== 'carry') return false
+  if (Math.hypot(
+    player.intention.target.xM-player.position.xM,
+    player.intention.target.yM-player.position.yM) < 1.1 ||
+    Math.hypot(player.velocity.xMps,player.velocity.yMps) < .35)
+    return false
+  // Only correct a REAL receiving/turning misalignment. Constantly
+  // readjusting an already well-placed foot offset changes the match
+  // trajectory without a physical need for another touch. Crucially,
+  // this check no longer excludes opponents within seven metres.
+  const offset=state.ball.controlOffset
+  const facingX=Math.cos(player.orientationRad)
+  const facingY=Math.sin(player.orientationRad)
+  const forward=facingX*offset.xM+facingY*offset.yM
+  const lateral=-facingY*offset.xM+facingX*offset.yM
+  if (forward>=.32 && Math.abs(lateral)<=.58) return false
+  // Preserve the contact geometry of this tick's already-applied foot
+  // action: a kick is resolved against the actual ball, not a shifted
+  // target introduced after the command was chosen.
+  return !state.appliedCommands.some(c=>
+    c.appliedTick===state.clock.tick &&
+    (c.type==='attemptKick' || c.type==='attemptFirstTouch') &&
+    c.playerId===player.playerId)
+}
+
 /** Advance the actual physical owner and its attached ball as one coherent
  * 50ms contact state. Hand-held GK catches remain unchanged. The optional
  * definition preserves the historical diagnostic API for direct unit callers;
@@ -156,13 +211,13 @@ export function closeControlOffset(
  */
 export function advanceControlledBall(
   ball: BallMatchState, player: PlayerMatchState, pitch: PitchDefinition,
-  definition?: PlayerDefinition,
+  definition?: PlayerDefinition, nearestDefender?: Point2,
 ): BallMatchState {
   if (ball.controllerId !== player.playerId || !ball.controlOffset) {
     throw new Error('Controlled ball must have a valid player and relative offset')
   }
   const offset = definition && ball.heightM !== GOALKEEPER_HAND_HEIGHT_M
-    ? closeControlOffset(ball, player, definition, pitch)
+    ? closeControlOffset(ball, player, definition, pitch, nearestDefender)
     : ball.controlOffset
   const position: Point2 = {
     xM: player.position.xM + offset.xM,
