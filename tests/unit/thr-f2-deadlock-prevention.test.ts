@@ -3,7 +3,7 @@ import { createFoundationMatch } from '../../src/game/match/engine'
 import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
 import { recordOutOfPlay,stageThrowIn,advanceThrowInStoppage,
   throwInReceiverTargets,throwInTakerTarget,
-  throwInOpponentsClear,throwInTakerFacingField } from '../../src/game/match/restarts'
+  throwInOpponentsClear } from '../../src/game/match/restarts'
 import { resolveContactAttempts } from '../../src/game/physics/contact'
 import { applyDueMatchCommands } from '../../src/game/match/commands'
 import type { MatchState } from '../../src/game/match/state'
