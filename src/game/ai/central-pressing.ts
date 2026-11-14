@@ -138,9 +138,25 @@ export function planCentralPressing(
   // A jockey holds a non-engaging goal-side point ON the dangerous lane.
   const shadowOffset = clamp(
     1.4 + gap * .08, 1.55, 2.45)
+  // The better the presser reads play, the more fully they can shape
+  // their run toward the threatening lane. Less aware players retain
+  // more of the old goal-side ball-oriented closing angle.
+  const primaryProfile = setup.players.find(p => p.id === primary.playerId)
+  const reading = primaryProfile ? (
+    .45 * primaryProfile.abilities.mental.anticipation +
+    .35 * primaryProfile.abilities.mental.decisions +
+    .20 * primaryProfile.abilities.mental.defensivePositioning) / 100 : .5
+  const awareness = clamp((reading - .27) * 1.4, .25, .94)
+  const standard = {
+    xM: ball.xM - team.attackingDirection * 1.9,
+    yM: ball.yM + clamp(
+      (primary.position.yM - ball.yM) * .16, -1.3, 1.3),
+  }
   const shadowTarget = boundedTarget({
-    xM: ball.xM + ux * shadowOffset,
-    yM: ball.yM + uy * shadowOffset,
+    xM: standard.xM * (1 - awareness) +
+      (ball.xM + ux * shadowOffset) * awareness,
+    yM: standard.yM * (1 - awareness) +
+      (ball.yM + uy * shadowOffset) * awareness,
   }, setup.pitch)
   const approachTarget = gap <= 3.5
     ? boundedTarget(ball, setup.pitch) : shadowTarget
