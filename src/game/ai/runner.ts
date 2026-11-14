@@ -54,6 +54,14 @@ export function runAutonomousDecisions(
   // tactical responsiveness ONLY while the verified failed contest is
   // still physically unresolved. Ordinary pressing does not speed up
   // decisions or encourage gratuitous short passes.
+  // A genuine goalkeeper catch is a tactical phase transition, even if
+  // the catch is logged on the same tick as the previous decision snapshot.
+  // A held keeper must never leave opponents pursuing or tackling the ball
+  // merely because the usual 12-tick decision gate has not elapsed.
+  const keeperHolding = activeGoalkeeperCatch(current) !== null
+  const staleHeldPressure = keeperHolding &&
+    current.ai.decisionSnapshot.some(d =>
+      d.action === 'press' || d.action === 'pursue' || d.engage)
   const unresolvedHeldOff = !!pressureOwner &&
     lastContest?.outcome === 'heldOff' &&
     current.ball.lastTouchPlayerId === pressureOwner.playerId &&
@@ -66,7 +74,7 @@ export function runAutonomousDecisions(
   if (current.ai.lastDecisionTick >= 0 &&
       current.clock.tick - current.ai.lastDecisionTick < decisionPeriod &&
       latestContactTick <= current.ai.lastDecisionTick &&
-      !receptionReleased) {
+      !receptionReleased && !staleHeldPressure) {
     return current
   }
   // Evaluate movement intent and kick release on the SAME physical world
@@ -76,7 +84,7 @@ export function runAutonomousDecisions(
     p.playerId === current.ball.controllerId)
   const index = current.teams.findIndex(t => t.clubId === owner?.clubId)
   const ownerActive = owner && index >= 0 && current.ai.enabledTeams[index]
-  const holding = activeGoalkeeperCatch(current) !== null
+  const holding = keeperHolding
   const choice = ownerActive && !holding
     ? evaluateOnBallChoice(current, setup,
       canReleaseControlledBall(current, setup), true)

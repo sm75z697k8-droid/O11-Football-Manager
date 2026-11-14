@@ -1,7 +1,7 @@
 /** O11 project metadata. Real-time landscape Canvas now visualizes the authoritative headless engine; no official match rules or results yet. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = 'PRS-S1.1' as const
-export const ENGINE_STATUS = 'outlet-aware-wide-pressing-traps-prs-s11' as const
+export const PROJECT_PHASE = 'PRS-S1.2' as const
+export const ENGINE_STATUS = 'central-cover-shadow-pressing-prs-s12' as const
 
 export const FOUNDATION_STAGES = [
   { id: '0A', title: 'Project foundation', summary: 'App, TypeScript, tests and deployment' },
@@ -58,5 +58,6 @@ export const FOUNDATION_STAGES = [
   { id: 'THR-F1', title: 'Pressure-aware physical throw-ins', summary: 'Legal two-metre opposition clearance, realistic forward/backward/inside receiving movement, physically forecast contested throw choice and correct second-half attack direction' },
   { id: 'DEF-F1', title: 'Individual defensive threat recognition', summary: 'Role- and attribute-sensitive defensive screening, global one-marker-per-threat assignment, anticipated runner movement and distinctive centre-back/full-back/midfield/forward shape decisions' },
   { id: 'THR-F2', title: 'Throw-in staging deadlock prevention', summary: 'Legal stance before inward turning, no conflicting locomotion near chalk, safe real receiver alternatives, and exact restart readiness diagnostics' },
-  { id: 'PRS-S1.1', title: 'Coordinated wide pressing traps', summary: 'Outlet-aware diagonal pressure, physically reachable passing-lane screens, separate defensive cover and mirrored tactical decisions' }
+  { id: 'PRS-S1.1', title: 'Coordinated wide pressing traps', summary: 'Outlet-aware diagonal pressure, physically reachable passing-lane screens, separate defensive cover and mirrored tactical decisions' },
+  { id: 'PRS-S1.2', title: 'Central cover shadows and handoffs', summary: 'Forward-lane-aware press angles, separate midfield screening, recoverable cover, attribute-sensitive timing and physical pass-flight eligibility' }
 ] as const
