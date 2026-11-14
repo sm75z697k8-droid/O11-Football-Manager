@@ -432,7 +432,10 @@ export function stageThrowIn(
     // leaving the taker trapped between opposite headings indefinitely.
     // Brake at the *real current position* first, then let the existing
     // physically rate-limited facing code rotate the standing player.
-    const nearLine=p.playerId===event.takerId &&
+    const stanceLegal=event.side==='top'
+      ? p.position.yM<=.47
+      : p.position.yM>=setup.pitch.widthM-.47
+    const nearLine=p.playerId===event.takerId && stanceLegal &&
       Math.hypot(p.position.xM-takerTarget.xM,
         p.position.yM-takerTarget.yM)<.60 &&
       Math.hypot(p.velocity.xMps,p.velocity.yMps)<1.05
