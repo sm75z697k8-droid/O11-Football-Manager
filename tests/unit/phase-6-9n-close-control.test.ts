@@ -170,7 +170,7 @@ describe('Phase 6.9N — bounded, direction-aware physical close control',()=>{
   })
 
   for(const side of [0,1] as const){
-    it(`PHY-F1 continuously moves an aligned carried ball even when marked from direction ${side}`,()=>{
+    it(`PHY-F1 corrects a misaligned carried ball even when marked from direction ${side}`,()=>{
       const a=stage(side)
       const original=createFoundationMatch(a.setup).getState()
       const direction=a.team.attackingDirection
@@ -179,11 +179,11 @@ describe('Phase 6.9N — bounded, direction-aware physical close control',()=>{
         intention:{kind:'moveToPoint' as const,
           target,sinceTick:0},
         velocity:{xMps:direction*3.3,yMps:0}}
-      const aligned:BallMatchState={...a.ball,
-        position:{xM:owner.position.xM+direction*.46,yM:34},
-        controlOffset:{xM:direction*.46,yM:0}}
-      let openBall=aligned
-      let pressuredBall=aligned
+      const misaligned:BallMatchState={...a.ball,
+        position:{xM:owner.position.xM-direction*.46,yM:34},
+        controlOffset:{xM:-direction*.46,yM:0}}
+      let openBall=misaligned
+      let pressuredBall=misaligned
       let maxMovement=0
       for(let tick=1;tick<=22;tick++){
         owner=projectPlayerToward(owner,a.definition,target,a.setup.pitch,tick)
@@ -209,6 +209,14 @@ describe('Phase 6.9N — bounded, direction-aware physical close control',()=>{
         pressuredBall=next
         openBall=free
       }
+      // Well-aligned touches must not be unnecessarily rewritten merely
+      // because a defender is nearby; that would distort seeded football.
+      const alignedState={...createFoundationMatch(a.setup).getState(),
+        ball:{...a.ball,controlOffset:{xM:direction*.5,yM:0}},
+        ai:{...createFoundationMatch(a.setup).getState().ai,
+          decisionSnapshot:[{playerId:owner.playerId,clubId:owner.clubId,
+            tick:30,action:'carry' as const,target,engage:true}]}}
+      expect(activeCarryingTouch(alignedState,owner)).toBe(false)
       expect(maxMovement).toBeGreaterThan(.001)
       expect(maxMovement).toBeLessThan(.3)
       // Under real close pressure the ball stays closer to the carrier's
