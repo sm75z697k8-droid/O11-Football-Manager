@@ -103,7 +103,19 @@ describe('PRS-S1.2 — central pressing cover shadows', () => {
       const plan = planCentralPressing(
         s.state, s.setup, s.team, s.ball,
         [s.presser], s.cover, s.blocks)
-      expect(plan).not.toBeNull()
+      expect(plan, 'central plan inputs '+JSON.stringify({
+        team:s.team,
+        ball:s.ball,controller:s.state.ball.controllerId,
+        actualCarrier:s.state.players.find(p=>
+          p.playerId===s.state.ball.controllerId),
+        presser:s.presser.position,
+        cover:s.cover.position,
+        outlets:s.state.players.filter(p=>
+          p.clubId!==s.team.clubId).map(p=>({
+            slot:p.formationSlot,pos:p.position,
+            forward:(s.ball.xM-p.position.xM)*s.team.attackingDirection,
+          })),
+      })).not.toBeNull()
       expect(plan!.shadowedOutletId).toBe(s.forward.playerId)
       expect(plan!.screenerId).toBe(s.screener.playerId)
       expect(plan!.screenedOutletId).toBe(s.alternative.playerId)
