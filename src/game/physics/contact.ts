@@ -6,7 +6,8 @@ import type { PlayerDefinition } from '../model/player'
 import type { PitchDefinition, Point2 } from '../model/pitch'
 import type { PlayerMatchState, BallMatchState, MatchState, ContactEvent } from '../match/state'
 import type { AppliedMatchCommand } from '../match/commands'
-import { throwInTakerTarget, forbiddenRestartSecondTouch } from '../match/restarts'
+import { throwInTakerTarget, throwInOpponentsClear, throwInTakerFacingField, forbiddenRestartSecondTouch } from '../match/restarts'
+import { throwInFlightVelocity, THROW_IN_LAUNCH_HEIGHT_M } from './throw-in-flight'
 import { offsideKickPrefix, offsideKickStationary, offsideOpponentsClear } from '../match/offside'
 import { foulKickPrefix, foulKickStationary, foulRestartPlayersLegal } from '../match/fouls'
 import { goalKickSpot, insideRestartPenaltyArea } from '../match/goal-kicks'
@@ -367,7 +368,13 @@ export function resolveContactAttempts(
         restart.awardedTeamId === player.clubId &&
         at !== null && ball.outsidePitch &&
         Math.hypot(player.position.xM - at.xM,
-          player.position.yM - at.yM) <= 1.15 &&
+          player.position.yM - at.yM) <= .90 &&
+        (restart.side === 'top'
+          ? player.position.yM <= .47
+          : player.position.yM >= setup.pitch.widthM - .47) &&
+        Math.hypot(player.velocity.xMps,player.velocity.yMps) < .7 &&
+        throwInTakerFacingField(player,restart) &&
+        throwInOpponentsClear(state, restart) &&
         state.clock.tick - restart.tick >= 14
       if (!legal || !at) {
         events.push(event(command, kind, 'notReady', 0))
@@ -387,30 +394,16 @@ export function resolveContactAttempts(
         .2 * a.mental.composure) / 100
       const spread = .014 + (1 - quality) * .10
       const error = (contactRng.nextFloat() - .5) * 2 * spread
-      const nominalAngle = Math.atan2(dy, dx)
-      const bearing = nominalAngle + error
-      const launchHeight = 1.85
-      const verticalSpeed = 2.9 + command.power * 2.2
-      // Aim the physical flight at a plausible receiving distance, not
-      // at a fixed 20m launch that flies past a short 8–12m outlet.
-      // Exact flight is still simulated by ball physics after release.
-      const flightTime = (verticalSpeed + Math.sqrt(
-        verticalSpeed * verticalSpeed +
-          2 * 9.81 * (launchHeight - BALL_RADIUS_M))) / 9.81
-      const idealPlanar = (Math.exp(.008 * distance) - 1) /
-        (.008 * flightTime)
-      const planarSpeed = Math.min(25, idealPlanar *
-        (.80 + .34 * command.power) *
-        (.97 + a.physical.strength * .0006))
-      const position = { ...restart.spot }
+      // Shared real throw physics and AI preview use identical speed,
+      // launch height and flight-time equations. The seeded error is
+      // consumed ONLY by the physically attempted release.
+      const velocity = throwInFlightVelocity(
+        restart.spot, command.target, command.power,
+        a.physical.strength, error)
       ball = {
-        ...ball, position,
-        heightM: launchHeight,
-        velocity: {
-          xMps: Math.cos(bearing) * planarSpeed,
-          yMps: Math.sin(bearing) * planarSpeed,
-          zMps: verticalSpeed,
-        },
+        ...ball, position: { ...restart.spot },
+        heightM: THROW_IN_LAUNCH_HEIGHT_M,
+        velocity,
         controllerId: null, controlOffset: null,
         lastTouchPlayerId: player.playerId, outsidePitch: false,
       }

@@ -1,7 +1,7 @@
 /** O11 project metadata. Real-time landscape Canvas now visualizes the authoritative headless engine; no official match rules or results yet. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = 'BOX-F1' as const
-export const ENGINE_STATUS = 'physical-post-kick-separation-box-f1' as const
+export const PROJECT_PHASE = 'THR-F1' as const
+export const ENGINE_STATUS = 'pressure-aware-physical-throwins-thr-f1' as const
 
 export const FOUNDATION_STAGES = [
   { id: '0A', title: 'Project foundation', summary: 'App, TypeScript, tests and deployment' },
@@ -55,4 +55,5 @@ export const FOUNDATION_STAGES = [
   { id: 'PHY-F1', title: 'Continuous pressured ball control', summary: 'Continuously correct physically misaligned ball touches during a carry even under close pressure; preserve stable first-touch and passing/shooting contact points' },
   { id: 'COR-S1', title: 'Physical outfield aerial duels and headers', summary: 'Shared cross and corner header planning for both teams, real swept head-height interception, ability-affected attacking headers and defensive clearances, goalkeeper reaction and offside continuity' },
   { id: 'BOX-F1', title: 'Physical post-kick contact separation', summary: 'Prevent a still-engaged kicker from immediately deflecting their own outgoing shot or pass until genuine foot separation, while defenders and valid rebounds remain physical' },
+  { id: 'THR-F1', title: 'Pressure-aware physical throw-ins', summary: 'Legal two-metre opposition clearance, realistic forward/backward/inside receiving movement, physically forecast contested throw choice and correct second-half attack direction' }
 ] as const
