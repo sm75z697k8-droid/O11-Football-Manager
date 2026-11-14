@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MatchSetup } from '../../src/game/model/match'
-import type { MatchState, PlayerMatchState } from '../../src/game/match/state'
+import type { MatchState } from '../../src/game/match/state'
 import { createFoundationMatch } from '../../src/game/match/engine'
 import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
 import {
@@ -54,10 +54,14 @@ function centralScene(side: 0 | 1) {
     kickoff: null,
     clock: { ...initial.clock, tick: 123 },
     players,
-    teams: initial.teams.map((entry, i) => ({
-      ...entry, pressingIntensity: i === side ? 'standard' as const :
-        entry.pressingIntensity,
-    })) as MatchState['teams'],
+    teams: [
+      { ...initial.teams[0],
+        pressingIntensity: side === 0 ? 'standard' :
+          initial.teams[0].pressingIntensity },
+      { ...initial.teams[1],
+        pressingIntensity: side === 1 ? 'standard' :
+          initial.teams[1].pressingIntensity },
+    ],
     ball: {
       ...initial.ball,
       position: ball,
