@@ -2,7 +2,7 @@ import type { PlayerDefinition } from '../model/player'
 import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
 import type { BallMatchState, MatchState, PlayerMatchState } from '../match/state'
-import { BALL_RADIUS_M, isBallFullyOutsidePitch } from './ball'
+import { isBallFullyOutsidePitch } from './ball'
 
 /**
  * COR-S1: physical, ability-sensitive outfield headings.
