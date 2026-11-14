@@ -13,7 +13,7 @@ import { cornerBallSpot } from './corners'
  * This is an incremental restart foundation; corners and goal kicks are
  * classified but left as explicit stoppages until their own restart rules.
  */
-export const OUT_OF_PLAY_VERSION = 'pressured-receiving-throw-in-thr-f1-v1'
+export const OUT_OF_PLAY_VERSION = 'legal-throw-in-staging-deadlock-thr-f2-v1'
 const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x))
 
 type Edge = OutOfPlayEvent['side']
