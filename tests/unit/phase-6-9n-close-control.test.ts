@@ -185,6 +185,8 @@ describe('Phase 6.9N — bounded, direction-aware physical close control',()=>{
       let openBall=misaligned
       let pressuredBall=misaligned
       let maxMovement=0
+      let initialPressStep=0
+      let initialOpenStep=0
       for(let tick=1;tick<=22;tick++){
         owner=projectPlayerToward(owner,a.definition,target,a.setup.pitch,tick)
         const defender={xM:owner.position.xM+direction*1.25,yM:owner.position.yM+.4}
@@ -201,6 +203,10 @@ describe('Phase 6.9N — bounded, direction-aware physical close control',()=>{
         const unpressured=activeCarryingTouch({...current,ball:openBall},owner)
         const free=advanceControlledBall(openBall,owner,a.setup.pitch,
           unpressured?a.definition:undefined)
+        if(tick===1){
+          initialPressStep=gap(pressuredBall.controlOffset!,next.controlOffset!)
+          initialOpenStep=gap(openBall.controlOffset!,free.controlOffset!)
+        }
         maxMovement=Math.max(maxMovement,gap(pressuredBall.controlOffset!,
           next.controlOffset!))
         expect(gap(next.position,owner.position))
@@ -221,13 +227,14 @@ describe('Phase 6.9N — bounded, direction-aware physical close control',()=>{
       expect(activeCarryingTouch(alignedState,owner)).toBe(false)
       expect(maxMovement).toBeGreaterThan(.001)
       expect(maxMovement).toBeLessThan(.3)
-      // Shielding moves the touch to a safer FOOT SIDE. Its total
-      // offset may be longer than the unpressured forward-only offset;
-      // test actual defender separation, not a mistaken radius rule.
-      const threat={xM:owner.position.xM+direction*1.25,
-        yM:owner.position.yM+.4}
-      expect(gap(pressuredBall.position,threat))
-        .toBeGreaterThan(gap(openBall.position,threat))
+      // The same starting touch should correct a little more carefully
+      // when a real defender is close, while neither path can snap or
+      // award artificial possession.
+      expect(initialPressStep).toBeGreaterThan(0)
+      expect(initialPressStep).toBeLessThan(initialOpenStep)
+      const forward=Math.cos(owner.orientationRad)*pressuredBall.controlOffset!.xM+
+        Math.sin(owner.orientationRad)*pressuredBall.controlOffset!.yM
+      expect(forward).toBeGreaterThan(.30)
     })
     it(`PHY-F1 retains authentic first-touch geometry until a moving carry on side ${side}`,()=>{
       const a=stage(side)
