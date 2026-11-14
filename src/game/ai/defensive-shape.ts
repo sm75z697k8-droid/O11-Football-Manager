@@ -4,6 +4,7 @@ import type {
   MatchState, PlayerMatchState, TeamMatchState,
 } from '../match/state'
 import { boundedTarget, separationM } from './coordination'
+import { planIndividualDefensiveResponses } from './defensive-individual'
 
 /**
  * Phase 6.5 — Team-first defensive responsibilities.
@@ -113,7 +114,7 @@ function keeperPenalty(player: PlayerMatchState) {
  * trained on professional tracking data. Real movement and tackles remain
  * in the 50ms physics engine.
  */
-export const DEFENSIVE_PLANNER_VERSION = 'contact-aware-tackling-and-jockeying-s17-v1'
+export const DEFENSIVE_PLANNER_VERSION = 'role-specific-threat-defence-def-f1-v1'
 export const PRESSING_SWITCH_MARGIN_M = 3.5
 
 interface PressContext {
@@ -318,22 +319,6 @@ function defensiveCover(
   return choices[0] ?? null
 }
 
-function markTargetNearBlock(
-  block: Point2, opponent: PlayerMatchState,
-  team: TeamMatchState, setup: MatchSetup,
-): Point2 {
-  const threatGoalSide = boundedTarget({
-    xM: opponent.position.xM - team.attackingDirection * 2.8,
-    yM: opponent.position.yM,
-  }, setup.pitch)
-  const offset = separationM(block, threatGoalSide)
-  const factor = offset > 8 ? 8 / offset : 1
-  return boundedTarget({
-    xM: block.xM + (threatGoalSide.xM - block.xM) * factor,
-    yM: block.yM + (threatGoalSide.yM - block.yM) * factor,
-  }, setup.pitch)
-}
-
 /** One consistent world snapshot assigns pressing, covering, marking, and
  * recovery roles. Exactly one assignment per team player, no side effects.
  */
@@ -348,12 +333,25 @@ export function planDefensiveResponsibilities(
   const cover = defensiveCover(
     teammates, ballPoint, team, setup, pressingIds)
   const assignments = new Map<string, DefensiveAssignment>()
-  const marked = new Set<string>()
+  // The shared physical snapshot still chooses at most the original
+  // pressers and one cover player. Everyone else reasons individually
+  // about off-ball runners, lanes, role, and their own abilities.
+  const blocks=new Map<string,Point2>(teammates.map(p=>{
+    const anchor=state.ai.formationPositions[p.playerId]
+    if(!anchor)throw new Error('Missing defensive formation anchor')
+    return [p.playerId,defensiveRecoveryTarget(
+      p,anchor,ballPoint,team,setup)]
+  }))
+  const eligible=teammates.filter(p=>
+    p.formationSlot!=='GK' && !pressingIds.has(p.playerId) &&
+    p.playerId!==cover?.playerId)
+  const threats=opponents.filter(p=>
+    isRelevantDefensiveThreat(p,ballPoint,team,setup))
+  const individual=planIndividualDefensiveResponses(
+    state,setup,team,ballPoint,eligible,threats,blocks)
   for (const player of teammates) {
-    const original = state.ai.formationPositions[player.playerId]
-    if (!original) throw new Error('Missing defensive formation anchor')
-    const block = defensiveRecoveryTarget(
-      player, original, ballPoint, team, setup)
+    const block=blocks.get(player.playerId)!
+
     let action: AssignedAction = 'recover'
     let target = block
     let engage = false
@@ -393,20 +391,14 @@ export function planDefensiveResponsibilities(
         xM: block.xM + (ideal.xM - block.xM) * ratio,
         yM: block.yM + (ideal.yM - block.yM) * ratio,
       }, setup.pitch)
-    } else if (midfielder(player) || defender(player) ||
-      player.formationSlot === 'RW' || player.formationSlot === 'LW') {
-      const candidates = opponents.filter(p =>
-        !marked.has(p.playerId) &&
-        isRelevantDefensiveThreat(p, ballPoint, team, setup) &&
-        separationM(p.position, block) <= 13)
-        .sort((a, b) =>
-          separationM(a.position, block) - separationM(b.position, block) ||
-          (a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0))
-      const threat = candidates[0]
-      if (threat) {
-        action = 'mark'
-        marked.add(threat.playerId)
-        target = markTargetNearBlock(block, threat, team, setup)
+    } else {
+      const response=individual.get(player.playerId)
+      if(response){
+        action=response.action
+        target=response.target
+        // Defensive recognition moves the player into space, NOT into
+        // automatic ownership or a guaranteed tackle animation.
+        engage=false
       }
     }
     assignments.set(player.playerId, {
