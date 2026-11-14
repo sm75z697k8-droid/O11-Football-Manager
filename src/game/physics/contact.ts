@@ -6,7 +6,7 @@ import type { PlayerDefinition } from '../model/player'
 import type { PitchDefinition, Point2 } from '../model/pitch'
 import type { PlayerMatchState, BallMatchState, MatchState, ContactEvent } from '../match/state'
 import type { AppliedMatchCommand } from '../match/commands'
-import { throwInTakerTarget, throwInOpponentsClear, forbiddenRestartSecondTouch } from '../match/restarts'
+import { throwInTakerTarget, throwInOpponentsClear, throwInTakerFacingField, forbiddenRestartSecondTouch } from '../match/restarts'
 import { throwInFlightVelocity, THROW_IN_LAUNCH_HEIGHT_M } from './throw-in-flight'
 import { offsideKickPrefix, offsideKickStationary, offsideOpponentsClear } from '../match/offside'
 import { foulKickPrefix, foulKickStationary, foulRestartPlayersLegal } from '../match/fouls'
@@ -372,6 +372,8 @@ export function resolveContactAttempts(
         (restart.side === 'top'
           ? player.position.yM <= .47
           : player.position.yM >= setup.pitch.widthM - .47) &&
+        Math.hypot(player.velocity.xMps,player.velocity.yMps) < .7 &&
+        throwInTakerFacingField(player,restart) &&
         throwInOpponentsClear(state, restart) &&
         state.clock.tick - restart.tick >= 14
       if (!legal || !at) {

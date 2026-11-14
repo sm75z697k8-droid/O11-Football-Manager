@@ -150,6 +150,7 @@ describe('S1.1 physical touchline restarts', () => {
     const readyPlayers = recorded.players.map(p =>
       p.playerId === restart.takerId ? {
         ...p, position: takerTarget,
+        orientationRad: restart.side === 'top' ? Math.PI / 2 : -Math.PI / 2,
       } : p.playerId === options[0].playerId ? {
         ...p, position: receiverTargets[0],
       } : p)
@@ -192,7 +193,9 @@ describe('S1.1 physical touchline restarts', () => {
       ...recorded, clock: { ...recorded.clock, tick: 130 },
       ai: { ...recorded.ai, enabledTeams: [true,true] },
       players: recorded.players.map(p => p.playerId === restart.takerId
-        ? { ...p, position: takerTarget }
+        ? { ...p, position: takerTarget,
+            orientationRad: restart.side === 'top'
+              ? Math.PI / 2 : -Math.PI / 2 }
         : p.playerId === receiver.playerId
           ? { ...p, position: receiverTargets[0] } : p),
     }

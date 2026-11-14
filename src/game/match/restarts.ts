@@ -3,7 +3,7 @@ import type { PitchDefinition, Point2 } from '../model/pitch'
 import type { BallMatchState, MatchState, OutOfPlayEvent, PlayerMatchState } from './state'
 import { BALL_RADIUS_M, advanceBallPhysics } from '../physics/ball'
 import { throwInFlightVelocity, THROW_IN_LAUNCH_HEIGHT_M } from '../physics/throw-in-flight'
-import { advancePlayerLocomotion } from '../physics/locomotion'
+import { advancePlayerLocomotion, deriveMotionLimits, wrapRadians } from '../physics/locomotion'
 import { scheduleMatchCommand } from './commands'
 import { goalKickSpot } from './goal-kicks'
 import { cornerBallSpot } from './corners'
@@ -229,6 +229,17 @@ export function throwInTakerTarget(event: OutOfPlayEvent, setup: MatchSetup): Po
  * autonomous defenders use regular locomotion to clear the area.
  */
 export const THROW_IN_OPPONENT_CLEARANCE_M = 2
+export const THROW_IN_FACING_TOLERANCE_RAD = .48
+export function throwInFacingAngle(event: OutOfPlayEvent): number {
+  return event.side === 'top' ? Math.PI / 2 : -Math.PI / 2
+}
+export function throwInTakerFacingField(
+  player: PlayerMatchState, event: OutOfPlayEvent,
+): boolean {
+  return Math.abs(wrapRadians(
+    player.orientationRad - throwInFacingAngle(event))) <=
+    THROW_IN_FACING_TOLERANCE_RAD
+}
 export function throwInOpponentsClear(
   state: MatchState, event: OutOfPlayEvent,
 ): boolean {
@@ -428,7 +439,9 @@ export function stageThrowIn(
   let staged:MatchState={...state,players,
     ai:{...state.ai,decisionSnapshot:[]}}
   const takerReady=Math.hypot(taker.position.xM-takerTarget.xM,
-    taker.position.yM-takerTarget.yM)<.65
+    taker.position.yM-takerTarget.yM)<.65 &&
+    Math.hypot(taker.velocity.xMps,taker.velocity.yMps)<.7 &&
+    throwInTakerFacingField(taker,event)
   const pending=staged.pendingCommands.some(c=>
     c.type==='attemptThrowIn' &&
     c.commandId.startsWith('ai-pass-throwin-'+event.tick+'-'))
@@ -469,7 +482,29 @@ export function advanceThrowInStoppage(
   const staged = stageThrowIn(state, setup)
   const moved = advancePlayerLocomotion(
     staged, setup.players, setup.pitch)
-  const contacted = resolveContact(moved, setup)
+  const event=moved.restart
+  // A taker who has reached the painted line must face INWARD before
+  // throwing. Rotate only after slowing down; cap every turn by the same
+  // individual agility/energy turning limit as regular player locomotion.
+  // The positional 2D engine cannot animate both feet and hand joints.
+  const facing=event?.kind==='throwIn'&&event.takerId
+    ? {...moved,players:moved.players.map(p=>{
+        if(p.playerId!==event.takerId)return p
+        const target=throwInTakerTarget(event,setup)
+        if(Math.hypot(p.position.xM-target.xM,
+            p.position.yM-target.yM)>.72 ||
+            Math.hypot(p.velocity.xMps,p.velocity.yMps)>.7)return p
+        const definition=setup.players.find(d=>d.id===p.playerId)
+        if(!definition)throw new Error('Thrower missing player definition')
+        const maxTurn=deriveMotionLimits(definition,p.energy)
+          .turningRadps*.05
+        const delta=clamp(wrapRadians(
+          throwInFacingAngle(event)-p.orientationRad),
+          -maxTurn,maxTurn)
+        return {...p,orientationRad:wrapRadians(
+          p.orientationRad+delta)}
+      })} : moved
+  const contacted = resolveContact(facing, setup)
   const outcome=contacted.contactEvents.find(c =>
     c.tick===contacted.clock.tick&&c.kind==='throwIn')
   if(!outcome||outcome.outcome!=='thrownIn'){

@@ -9,6 +9,7 @@ import {
   recordOutOfPlay, stageThrowIn, advanceThrowInStoppage,
   throwInTakerTarget, throwInReceiverTargets,
   throwInDefenderRetreat, throwInOpponentsClear, assessThrowInOptions,
+  throwInFacingAngle, throwInTakerFacingField,
 } from '../../src/game/match/restarts'
 import type { MatchState } from '../../src/game/match/state'
 
@@ -49,7 +50,9 @@ function prepared(side:'top'|'bottom',touchedBy:0|1=0){
     const target=p.playerId===a.event.takerId
       ? throwInTakerTarget(a.event,a.setup)
       : i>=0?targets[i]:p.position
-    return {...p,position:{...target},velocity:{xMps:0,yMps:0}}
+    return {...p,position:{...target},velocity:{xMps:0,yMps:0},
+      orientationRad:p.playerId===a.event.takerId
+        ? throwInFacingAngle(a.event) : p.orientationRad}
   })
   const state:MatchState={...a.state,
     clock:{...a.state.clock,tick:145},players}
@@ -177,6 +180,35 @@ describe('THR-F1 — realistic, pressured legal throw-in plans',()=>{
     expect(ball.position.yM).toBeLessThan(a.event.spot.yM)
     expect(ball.position.xM).toBeGreaterThan(0)
     expect(ball.position.xM).toBeLessThan(a.setup.pitch.lengthM)
+  })
+  it('rotates the waiting taker toward the field at a bounded physical speed before release',()=>{
+    const a=prepared('top')
+    const id=a.event.takerId!
+    const old=a.state.players.find(p=>p.playerId===id)!
+    const facingOut:MatchState={...a.state,players:a.state.players.map(p=>
+      p.playerId===id?{...p,orientationRad:-Math.PI/2}:p)}
+    expect(throwInTakerFacingField(
+      facingOut.players.find(p=>p.playerId===id)!,a.event)).toBe(false)
+    let current=facingOut
+    let lastAngle=-Math.PI/2
+    let turned=false
+    for(let tick=146;tick<173;tick++){
+      current=advanceThrowInStoppage({
+        ...current,clock:{...current.clock,tick},
+      },a.setup,resolveContactAttempts)
+      const next=current.players.find(p=>p.playerId===id)!
+      const delta=Math.abs(Math.atan2(
+        Math.sin(next.orientationRad-lastAngle),
+        Math.cos(next.orientationRad-lastAngle)))
+      expect(delta).toBeLessThan(.26)
+      lastAngle=next.orientationRad
+      if(throwInTakerFacingField(next,a.event)){
+        turned=true
+        break
+      }
+      expect(current.contactEvents.some(e=>e.outcome==='thrownIn')).toBe(false)
+    }
+    expect(turned).toBe(true)
   })
   it('replays a REAL seeded throw-in and following physical play exactly',()=>{
     // The live match sample deliberately uses the same deterministic
