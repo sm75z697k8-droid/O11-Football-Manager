@@ -184,7 +184,6 @@ describe('THR-F1 — realistic, pressured legal throw-in plans',()=>{
   it('rotates the waiting taker toward the field at a bounded physical speed before release',()=>{
     const a=prepared('top')
     const id=a.event.takerId!
-    const old=a.state.players.find(p=>p.playerId===id)!
     const facingOut:MatchState={...a.state,players:a.state.players.map(p=>
       p.playerId===id?{...p,orientationRad:-Math.PI/2}:p)}
     expect(throwInTakerFacingField(
