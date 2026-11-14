@@ -27,7 +27,7 @@ import {
   AUTO_CONTACT_COOLDOWN_TICKS, resolveAutomaticBallContact,
 } from '../physics/automatic-contact'
 import {
-  advanceControlledBall, resolveContactAttempts,
+  advanceControlledBall, activeCarryingTouch, resolveContactAttempts,
   expectedContactStream, FOOT_REACH_M,
 } from '../physics/contact'
 import {
@@ -1344,38 +1344,31 @@ export class FoundationMatchEngine {
       if (controller && !controllingDefinition) {
         throw new Error('Controlled-ball movement requires a player definition')
       }
-      // Only a real on-ball CARRY with a nontrivial movement target needs
-      // directional close-control updates. When settling to pass or shoot,
-      // preserve the existing physically caught foot-contact point. This
-      // avoids shifting kick origins and altering unrelated match outcomes.
-      const noNearbyChallenge = !!controller &&
-        agents.players.every(p => p.clubId === controller.clubId ||
-          Math.hypot(
-            p.position.xM - controller.position.xM,
-            p.position.yM - controller.position.yM) >= 7)
-      // A normal settled ball offset is already within foot reach and
-      // should not be changed merely because an attacker happens to run.
-      // Repair only an actual wrongly aligned position: behind the feet
-      // after a turn, or far across the carrier's body.
-      const oldOffset = agents.ball.controlOffset
-      const needsAlignment = !!controller && !!oldOffset &&
-        (Math.cos(controller.orientationRad) * oldOffset.xM +
-          Math.sin(controller.orientationRad) * oldOffset.yM < .32 ||
-        Math.abs(-Math.sin(controller.orientationRad) * oldOffset.xM +
-          Math.cos(controller.orientationRad) * oldOffset.yM) > .58)
-      const carrying = noNearbyChallenge && needsAlignment && !!controller &&
-        controller.intention.kind === 'moveToPoint' &&
-        Math.hypot(
-          controller.intention.target.xM - controller.position.xM,
-          controller.intention.target.yM - controller.position.yM) > 1.2 &&
-        Math.hypot(
-          controller.velocity.xMps, controller.velocity.yMps) > .5 &&
-        agents.ai.decisionSnapshot.some(d =>
-          d.playerId === controller.playerId && d.action === 'carry')
+      // PHY-F1: once the AI actually carries, advance its physical foot
+      // position on EVERY 50ms tick, not merely when the ball is already
+      // misaligned and not within 7m of a defender. Under pressure the
+      // nearest defender affects the carrier's bounded touch geometry.
+      // If a real kick is due now, keep its genuine pre-kick origin.
+      const carrying = !!controller && activeCarryingTouch(agents,controller)
+      let nearestDefender: typeof controller = null
+      if (carrying && controller) {
+        let nearestGapSq = Infinity
+        for (const opponent of agents.players) {
+          if (opponent.clubId === controller.clubId) continue
+          const dx=opponent.position.xM-controller.position.xM
+          const dy=opponent.position.yM-controller.position.yM
+          const gapSq=dx*dx+dy*dy
+          if (gapSq < nearestGapSq) {
+            nearestGapSq=gapSq
+            nearestDefender=opponent
+          }
+        }
+      }
       const ball = controller
         ? advanceControlledBall(
           agents.ball, controller, this.setup.pitch,
-          carrying ? controllingDefinition : undefined)
+          carrying ? controllingDefinition : undefined,
+          nearestDefender?.position)
         : advanceBallPhysics(agents.ball, this.setup.pitch)
       const moved = ball === agents.ball ? agents : { ...agents, ball }
       const contacted = resolveContactAttempts(moved, this.setup)

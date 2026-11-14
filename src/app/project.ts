@@ -1,7 +1,7 @@
 /** O11 project metadata. Real-time landscape Canvas now visualizes the authoritative headless engine; no official match rules or results yet. */
 export const PROJECT_NAME = 'O11 Football Manager' as const
-export const PROJECT_PHASE = 'ATT-F1' as const
-export const ENGINE_STATUS = 'shooting-opportunity-recognition-att-f1' as const
+export const PROJECT_PHASE = 'PHY-F1' as const
+export const ENGINE_STATUS = 'continuous-pressured-ball-control-phy-f1' as const
 
 export const FOUNDATION_STAGES = [
   { id: '0A', title: 'Project foundation', summary: 'App, TypeScript, tests and deployment' },
@@ -52,4 +52,5 @@ export const FOUNDATION_STAGES = [
   { id: 'ATT-S1', title: 'Coordinated attacking movement', summary: 'Team-level complementary winger, midfield, striker and conditional full-back movement with physical reach, offside advice and rest defence' },
   { id: 'GK-S1', title: 'Realistic goal-kick preparation and distribution', summary: 'Behind-ball keeper approach, physically staged build-out and pressing, short full-back/central outlets and pressure-aware midfield kicks' },
   { id: 'ATT-F1', title: 'Shooting opportunity recognition', summary: 'Assess the opportunity cost of delaying physically credible shots across sideways, backward and unproductive carry decisions; retain better-position and blocked-lane alternatives' },
+  { id: 'PHY-F1', title: 'Continuous pressured ball control', summary: 'Apply bounded attribute-dependent ball carry touches every physics tick including when pressured, with realistic first-touch offset continuity and unchanged passing/shooting contact origins' },
 ] as const

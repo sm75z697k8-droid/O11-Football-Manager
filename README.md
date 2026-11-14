@@ -1,3 +1,15 @@
+## PHY-F1 — Continuous, pressure-aware controlled-ball touches
+
+The authoritative 50 ms match runner previously activated its directional close-control helper **only** when a player's ball offset had already become misaligned AND no opposition player was within seven metres. Normal carries thus kept an essentially fixed foot offset, with unnatural movement precisely when the nearest defender challenged. The old isolated close-control tests exercised the helper, but did not verify this important live activation gate.
+
+PHY-F1 corrects the live integration, requiring an actual controlled, moving ball carrier and current tactical carry intent. Every such physics tick now calls the existing bounded, attribute-dependent foot-contact adjustment, even under real opposition pressure and even if the offset currently looks aligned. Nearby defenders influence modest, skill-dependent shielding and touch length. The existing 0.75 m control-offset cap, max 50 ms displacement, real physical interception/tackling, seed determinism and pitch limits remain in charge. After a real first touch, the ball begins at the physical impact offset and **gradually** responds when the receiving player actively carries; it is not teleported to an arbitrary frontal marker.
+
+Scheduled foot kicks/first touches and stationary passing or shooting preparation explicitly preserve the real pre-kick ball origin. Keeper hand possession is untouched. The code does not manufacture free-ball contacts, automatically award control, assign random losses, or change first-touch success thresholds; those are separate, measurable calibration tasks. It also does not yet model a fully autonomous series of discrete foot taps; this milestone is about continuous carrier foot geometry and first-touch continuity, not a complete physical foot/leg animation model.
+
+New regression tests cover both directions, pressured versus unpressured carried-ball movement, unchanged ownership and capped offset movement, preserving genuine initial first-touch offsets, no ball movement for pending foot kicks or shots, hand-held keeper protection, and exact-match seeded replay. Further real-match calibration will be needed before claiming first-touch and dribbling realism.
+
+---
+
 ## ATT-F1 — Shooting opportunity recognition (finish-or-recycle decisions)
 
 A code audit of the real on-ball AI found that the short-horizon planner formerly penalized delaying a credible immediate shot **only for materially backward passes**. Sideways/short-forward passes and unproductive carrying were not consistently charged for wasting a physically credible finishing window. Passing utilities still rightfully consider player attributes, pressure and receivability, but without comparing this opportunity cost the ball carrier could choose attractive-looking safe circulation instead of a usable shot.

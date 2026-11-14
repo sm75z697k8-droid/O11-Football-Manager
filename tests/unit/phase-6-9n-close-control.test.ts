@@ -3,7 +3,7 @@ import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
 import { createFoundationMatch, restoreFoundationMatch } from '../../src/game/match/engine'
 import {
   CLOSE_CONTROL_MAX_OFFSET_M, advanceControlledBall,
-  closeControlOffset,
+  closeControlOffset, activeCarryingTouch,
 } from '../../src/game/physics/contact'
 import { projectPlayerToward } from '../../src/game/physics/locomotion'
 import { BALL_RADIUS_M } from '../../src/game/physics/ball'
@@ -167,6 +167,117 @@ describe('Phase 6.9N — bounded, direction-aware physical close control',()=>{
     expect(after.controlOffset).toEqual(ball.controlOffset)
     expect(after.position).toEqual(ball.position)
     expect(after.heightM).toBe(GOALKEEPER_HAND_HEIGHT_M)
+  })
+
+  for(const side of [0,1] as const){
+    it(`PHY-F1 continuously moves an aligned carried ball even when marked from direction ${side}`,()=>{
+      const a=stage(side)
+      const original=createFoundationMatch(a.setup).getState()
+      const direction=a.team.attackingDirection
+      const target={xM:a.owner.position.xM+direction*18,yM:34}
+      let owner:PlayerMatchState={...a.owner,
+        intention:{kind:'moveToPoint' as const,
+          target,sinceTick:0},
+        velocity:{xMps:direction*3.3,yMps:0}}
+      const aligned:BallMatchState={...a.ball,
+        position:{xM:owner.position.xM+direction*.46,yM:34},
+        controlOffset:{xM:direction*.46,yM:0}}
+      let openBall=aligned
+      let pressuredBall=aligned
+      let maxMovement=0
+      for(let tick=1;tick<=22;tick++){
+        owner=projectPlayerToward(owner,a.definition,target,a.setup.pitch,tick)
+        const defender={xM:owner.position.xM+direction*1.25,yM:owner.position.yM+.4}
+        const decision={playerId:owner.playerId,clubId:owner.clubId,
+          tick,action:'carry' as const,target,engage:true}
+        const current={...original,clock:{...original.clock,tick},
+          players:original.players.map(p=>p.playerId===owner.playerId?owner:p),
+          ball:pressuredBall,
+          ai:{...original.ai,decisionSnapshot:[decision]}}
+        expect(activeCarryingTouch(current,owner)).toBe(true)
+        const next=advanceControlledBall(pressuredBall,owner,a.setup.pitch,
+          a.definition,defender)
+        const free=advanceControlledBall(openBall,owner,a.setup.pitch,
+          a.definition)
+        maxMovement=Math.max(maxMovement,gap(pressuredBall.controlOffset!,
+          next.controlOffset!))
+        expect(gap(next.position,owner.position))
+          .toBeLessThanOrEqual(CLOSE_CONTROL_MAX_OFFSET_M+1e-9)
+        expect(next.controllerId).toBe(owner.playerId)
+        expect(next.lastTouchPlayerId).toBe(owner.playerId)
+        expect(next.outsidePitch).toBe(false)
+        pressuredBall=next
+        openBall=free
+      }
+      expect(maxMovement).toBeGreaterThan(.001)
+      expect(maxMovement).toBeLessThan(.3)
+      // Under real close pressure the ball stays closer to the carrier's
+      // foot compared with the same unchallenged sprint.
+      expect(gap(pressuredBall.position,owner.position))
+        .toBeLessThan(gap(openBall.position,owner.position))
+    })
+    it(`PHY-F1 retains authentic first-touch geometry until a moving carry on side ${side}`,()=>{
+      const a=stage(side)
+      const initial=createFoundationMatch(a.setup).getState()
+      const direction=a.team.attackingDirection
+      const target={xM:a.owner.position.xM+direction*10,yM:34}
+      const receiving={...a.owner,intention:{
+        kind:'moveToPoint' as const,target,sinceTick:1},
+        velocity:{xMps:direction*2,yMps:0}}
+      const press={xM:receiving.position.xM+direction*1.8,yM:34}
+      const snapshot={playerId:receiving.playerId,clubId:receiving.clubId,
+        tick:1,action:'receive' as const,target,engage:true}
+      const afterTouch={...initial,
+        clock:{...initial.clock,tick:1},
+        ball:a.ball,
+        ai:{...initial.ai,decisionSnapshot:[snapshot]}}
+      expect(activeCarryingTouch(afterTouch,receiving)).toBe(false)
+      const held=advanceControlledBall(a.ball,receiving,a.setup.pitch)
+      expect(held.controlOffset).toEqual(a.ball.controlOffset)
+      const prepared={...afterTouch,ball:held,
+        ai:{...initial.ai,decisionSnapshot:[{
+          ...snapshot,action:'carry' as const}]}}
+      expect(activeCarryingTouch(prepared,receiving)).toBe(true)
+      const controlled=advanceControlledBall(
+        held,receiving,a.setup.pitch,a.definition,press)
+      expect(gap(controlled.controlOffset!,held.controlOffset!))
+        .toBeLessThan(.3)
+      expect(controlled.controllerId).toBe(a.owner.playerId)
+      expect(controlled.position.xM).not.toBe(held.position.xM)
+    })
+  }
+
+  it('PHY-F1 does not shift the actual ball contact point on a scheduled kick or stationary receive',()=>{
+    const a=stage(0)
+    const base=createFoundationMatch(a.setup).getState()
+    const player={...a.owner,intention:{
+      kind:'moveToPoint' as const,
+      target:{xM:a.owner.position.xM+12,yM:34},sinceTick:4},
+      velocity:{xMps:2,yMps:0}}
+    const decision={playerId:player.playerId,clubId:player.clubId,
+      action:'carry' as const,
+      target:{xM:a.owner.position.xM+12,yM:34},tick:5,engage:true}
+    const active={...base,clock:{...base.clock,tick:5},
+      ball:a.ball,ai:{...base.ai,decisionSnapshot:[decision]}}
+    expect(activeCarryingTouch(active,player)).toBe(true)
+    const command={
+      type:'attemptKick' as const,commandId:'test-carry-contact',
+      teamId:player.clubId,playerId:player.playerId,
+      requestedTick:4,targetTick:5,appliedTick:5,
+      target:{xM:60,yM:34},power:.45,lift:0,sequence:1,
+    }
+    const kicking={...active,appliedCommands:[command]}
+    expect(activeCarryingTouch(kicking,player)).toBe(false)
+    const unchanged=advanceControlledBall(
+      kicking.ball,player,a.setup.pitch)
+    expect(unchanged.controlOffset).toEqual(a.ball.controlOffset)
+    expect(activeCarryingTouch({
+      ...active,ai:{...base.ai,decisionSnapshot:[{...decision,
+        action:'shoot' as const}]}
+    },player)).toBe(false)
+    expect(activeCarryingTouch({
+      ...active,ball:{...active.ball,heightM:GOALKEEPER_HAND_HEIGHT_M}
+    },player)).toBe(false)
   })
 
   it('keeps exact live-seed physical checkpoint replay including controlled-ball offsets',()=>{
