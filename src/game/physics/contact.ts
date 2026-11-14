@@ -117,29 +117,20 @@ export function closeControlOffset(
   const blendedX = (1 - momentumWeight) * forwardX + momentumWeight * mx
   const blendedY = (1 - momentumWeight) * forwardY + momentumWeight * my
   const bearingLength = Math.hypot(blendedX, blendedY)
-  let dx = blendedX / Math.max(bearingLength, 1e-6)
-  let dy = blendedY / Math.max(bearingLength, 1e-6)
-  // Physically nearby pressure changes the carrier's FOOT placement. A
-  // good dribbler can protect the ball on the opposite side of an actual
-  // challenger, but only at the bounded 50ms foot-control rate below.
-  // Pressure doesn't disable updates or award an unearned won challenge.
+  const dx = blendedX / Math.max(bearingLength, 1e-6)
+  const dy = blendedY / Math.max(bearingLength, 1e-6)
+  // Defenders affect the size and responsiveness of a corrective touch.
+  // Never steer the ball away from a defender automatically: that can
+  // actually take it CLOSER to the challenge while inventing shielding.
+  // A separate future tactical model can choose a deliberate safe-side
+  // control target; physical challenges remain authoritative here.
   const gapM = nearestDefender
     ? Math.hypot(nearestDefender.xM-player.position.xM,
       nearestDefender.yM-player.position.yM) : Infinity
   const pressure = closeClamp((3.8-gapM)/2.9,0,1)
-  if (pressure > 0 && gapM > .01 && nearestDefender) {
-    const awayX=(player.position.xM-nearestDefender.xM)/gapM
-    const awayY=(player.position.yM-nearestDefender.yM)/gapM
-    const weight=pressure*(.10+.16*skill)
-    const safeX=dx*(1-weight)+awayX*weight
-    const safeY=dy*(1-weight)+awayY*weight
-    const magnitude=Math.hypot(safeX,safeY)
-    dx=safeX/Math.max(magnitude,1e-6)
-    dy=safeY/Math.max(magnitude,1e-6)
-  }
   // Faster carries produce a longer ball touch. Under close pressure a
-  // skilled player keeps the ball closer, instead of freezing its old
-  // (often backward-facing) reception offset for the entire dribble.
+  // skilled player keeps the intended next touch somewhat shorter, while
+  // corrections stay bounded rather than snapping after a reception.
   const desiredRadius = (.41 +
     .30 * closeClamp(speed / 8.5, 0, 1) * (1.10 - .20 * skill)) *
     (1 - pressure*(.06+.07*skill))
