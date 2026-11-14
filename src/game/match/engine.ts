@@ -669,7 +669,7 @@ function validateRestoredState(setup: MatchSetup, input: unknown): MatchState {
         !player || teamIdx < 0 || player.clubId !== d.clubId ||
         !state.ai.enabledTeams[teamIdx] ||
         !Number.isSafeInteger(d.tick) || d.tick !== state.ai.lastDecisionTick ||
-        !['shape','support','press','jockey','pursue','carry','receive','cover','mark','recover','shoot','save','oneOnOne','claimCross','head'].includes(d.action) ||
+        !['shape','support','press','jockey','pursue','carry','receive','cover','mark','screen','recover','shoot','save','oneOnOne','claimCross','head'].includes(d.action) ||
         typeof d.engage !== 'boolean' ||
         !object(d.target) || !insidePitch(d.target, setup.pitch) ||
         liveDecisions.has(d.playerId)) {
