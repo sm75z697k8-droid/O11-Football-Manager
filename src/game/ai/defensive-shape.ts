@@ -6,6 +6,7 @@ import type {
 import { boundedTarget, separationM } from './coordination'
 import { planIndividualDefensiveResponses } from './defensive-individual'
 import { maintainWidePassFlightScreen, planWidePressingTrap } from './pressing-traps'
+import { planCentralPressing } from './central-pressing'
 
 /**
  * Phase 6.5 — Team-first defensive responsibilities.
@@ -115,7 +116,7 @@ function keeperPenalty(player: PlayerMatchState) {
  * trained on professional tracking data. Real movement and tackles remain
  * in the 50ms physics engine.
  */
-export const DEFENSIVE_PLANNER_VERSION = 'wide-trap-coordinated-defence-s11-v1'
+export const DEFENSIVE_PLANNER_VERSION = 'central-cover-shadows-prs-s12-v1'
 export const PRESSING_SWITCH_MARGIN_M = 3.5
 
 interface PressContext {
@@ -228,8 +229,8 @@ function primaryPressers(
         leavingShape * .10 -
         // Modest continuity: one slightly closer colleague should not
         // instantly reverse 6v6 pressing responsibility every 0.6 seconds.
-        (context.carrier && previousPressIds.has(p.playerId)
-          ? PRESSING_SWITCH_MARGIN_M : 0) -
+        (context.carrier && previousPressIds.has(p.playerId) &&
+          distance <= 9 ? PRESSING_SWITCH_MARGIN_M : 0) -
         (!context.carrier && p.playerId === preferredPlayerId ? 20 : 0)
       return {player:p,score,distance}
     })
@@ -349,7 +350,10 @@ export function planDefensiveResponsibilities(
   // No invented interception: only a movement target for existing physics.
   const trap=planWidePressingTrap(
     state,setup,team,ballPoint,pressing,cover?.playerId??null,blocks)
-  const reservedScreenerId=trap?.screenerId??flightScreen?.screenerId
+  const central=trap ? null : planCentralPressing(
+    state,setup,team,ballPoint,pressing,cover,blocks)
+  const reservedScreenerId=trap?.screenerId??central?.screenerId??
+    flightScreen?.screenerId
   const eligible=teammates.filter(p=>
     p.formationSlot!=='GK' && !pressingIds.has(p.playerId) &&
     p.playerId!==cover?.playerId && p.playerId!==reservedScreenerId)
@@ -377,11 +381,15 @@ export function planDefensiveResponsibilities(
       target = committed
         ? trap?.presserId===player.playerId
           ? trap.approachTarget
-          : pressingApproachTarget(player, ballPoint, team, setup)
-        : boundedTarget({
-          xM:ballPoint.xM-team.attackingDirection*1.3,
-          yM:ballPoint.yM+(player.position.yM<ballPoint.yM?-1.1:1.1),
-        },setup.pitch)
+          : central?.presserId===player.playerId
+            ? central.approachTarget
+            : pressingApproachTarget(player, ballPoint, team, setup)
+        : central?.presserId===player.playerId
+          ? central.jockeyTarget
+          : boundedTarget({
+            xM:ballPoint.xM-team.attackingDirection*1.3,
+            yM:ballPoint.yM+(player.position.yM<ballPoint.yM?-1.1:1.1),
+          },setup.pitch)
     } else if (cover?.playerId === player.playerId) {
       action = 'cover'
       // Goal-side containment should SCREEN the carrier, not drag a
@@ -407,6 +415,12 @@ export function planDefensiveResponsibilities(
       action='screen'
       target=trap.screenTarget
       // The opposition still owns the ball; merely block the lane.
+      engage=false
+    } else if (central?.screenerId===player.playerId &&
+        central.screenTarget) {
+      // Different central forward lane; passive until a genuine ball flight.
+      action='screen'
+      target=central.screenTarget
       engage=false
     } else if (flightScreen?.screenerId===player.playerId) {
       action='screen'
