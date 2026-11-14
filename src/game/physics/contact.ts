@@ -194,6 +194,16 @@ export function activeCarryingTouch(
     player.intention.target.yM-player.position.yM) < 1.1 ||
     Math.hypot(player.velocity.xMps,player.velocity.yMps) < .35)
     return false
+  // Only correct a REAL receiving/turning misalignment. Constantly
+  // readjusting an already well-placed foot offset changes the match
+  // trajectory without a physical need for another touch. Crucially,
+  // this check no longer excludes opponents within seven metres.
+  const offset=state.ball.controlOffset
+  const facingX=Math.cos(player.orientationRad)
+  const facingY=Math.sin(player.orientationRad)
+  const forward=facingX*offset.xM+facingY*offset.yM
+  const lateral=-facingY*offset.xM+facingX*offset.yM
+  if (forward>=.32 && Math.abs(lateral)<=.58) return false
   // Preserve the contact geometry of this tick's already-applied foot
   // action: a kick is resolved against the actual ball, not a shifted
   // target introduced after the command was chosen.
