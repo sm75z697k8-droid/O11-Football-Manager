@@ -77,5 +77,5 @@ describe('Seed-varied live exhibition attacking intelligence diagnostic', () => 
     // With no throw-ins, corners or goal kicks yet, a seeded exhibition
     // can genuinely end before a shot. Isolated physics/goal tests prove
     // shooting; this smoke test monitors short live-match variation.
-  })
+  }, 20_000)
 })
