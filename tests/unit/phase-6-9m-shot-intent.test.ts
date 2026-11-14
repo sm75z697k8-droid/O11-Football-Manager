@@ -6,7 +6,9 @@ import { choosePossessionRelease } from '../../src/game/ai/decisions'
 import {
   evaluateShootingOpportunity, shootingCorridorObstruction,
 } from '../../src/game/ai/goal-directed'
-import { reviewOnBallActions } from '../../src/game/ai/short-horizon'
+import {
+  reviewOnBallActions, opportunityCostOfDelayingShot,
+} from '../../src/game/ai/short-horizon'
 import { evaluatePhysicalShotWindows } from '../../src/game/ai/shot-window'
 import { resolveContactAttempts } from '../../src/game/physics/contact'
 import type { MatchState } from '../../src/game/match/state'
@@ -199,9 +201,9 @@ describe('Phase 6.9M — decisions and physical shot-frame preview',()=>{
     const openReview=reviewOnBallActions(open.state,open.setup,[pass])
     const blockedReview=reviewOnBallActions(blocked.state,blocked.setup,[pass])
     expect(openReview.assessments[0].reasons)
-      .toContain('Backward pass wastes a credible immediate shooting window')
+      .toContain('Passing delays a credible immediate shooting window')
     expect(blockedReview.assessments[0].reasons)
-      .not.toContain('Backward pass wastes a credible immediate shooting window')
+      .not.toContain('Passing delays a credible immediate shooting window')
     expect(blockedReview.assessments[0].utility)
       .toBeGreaterThan(openReview.assessments[0].utility)
   })
@@ -220,4 +222,87 @@ describe('Phase 6.9M — decisions and physical shot-frame preview',()=>{
     expect(['pass','carry','shoot']).toContain(plan.choice?.kind)
     expect(a.state.contactEvents).toHaveLength(0)
   })
+  // ATT-F1: a sideways pass that preserves possession but not shooting
+  // quality should not automatically beat a clear physical finish.
+  for(const side of [0,1] as const) {
+    it(`recognizes sideways and minor-forward recycling as an immediate-shot cost on side ${side}`,()=>{
+      const a=stage(side)
+      const realShot=evaluateShootingOpportunity(
+        a.shooter,a.def,a.opponents,a.team,a.setup)!
+      expect(realShot).not.toBeNull()
+      const dir=a.team.attackingDirection
+      const sideways={xM:a.shooter.position.xM,yM:40}
+      const forward={xM:a.shooter.position.xM+dir*3,yM:34}
+      const backwards={xM:a.shooter.position.xM-dir*5,yM:34}
+      const flankCost=opportunityCostOfDelayingShot(
+        realShot,a.shooter,a.team,a.setup,a.opponents,sideways)
+      const forwardCost=opportunityCostOfDelayingShot(
+        realShot,a.shooter,a.team,a.setup,a.opponents,forward)
+      const backwardsCost=opportunityCostOfDelayingShot(
+        realShot,a.shooter,a.team,a.setup,a.opponents,backwards)
+      expect(flankCost).toBeGreaterThan(3)
+      expect(backwardsCost).toBeGreaterThan(3)
+      expect(forwardCost).toBeLessThan(flankCost)
+      expect(opportunityCostOfDelayingShot(
+        realShot,a.shooter,a.team,a.setup,a.opponents,sideways))
+        .toBe(flankCost)
+    })
+
+    it(`prioritizes an immediate physical finish over speculative lateral passing on side ${side}`,()=>{
+      const a=stage(side)
+      const shot=evaluateShootingOpportunity(
+        a.shooter,a.def,a.opponents,a.team,a.setup)!
+      const receiver=a.state.players.find(p=>p.playerId===a.dm.playerId)!
+      const relocation={xM:a.shooter.position.xM,yM:40}
+      const moved={...receiver,position:relocation,
+        velocity:{xMps:0,yMps:0}}
+      const state:MatchState={...a.state,players:a.state.players.map(p=>
+        p.playerId===receiver.playerId?moved:p)}
+      const pass={kind:'pass' as const,receiverId:receiver.playerId,
+        target:relocation,power:.23,lift:0,utility:shot.utility+4}
+      const shoot={kind:'shoot' as const,target:shot.target,
+        power:shot.power,lift:shot.lift,utility:shot.utility}
+      const review=reviewOnBallActions(state,a.setup,[pass,shoot],shot)
+      expect(pass.utility).toBeGreaterThan(shoot.utility)
+      expect(review.assessments[0].choice.kind).toBe('shoot')
+      const passReview=review.assessments.find(x=>x.choice.kind==='pass')!
+      expect(passReview.reasons)
+        .toContain('Passing delays a credible immediate shooting window')
+      expect(reviewOnBallActions(state,a.setup,[pass,shoot],shot)).toEqual(review)
+      expect(state.goalEvents).toHaveLength(0)
+      expect(state.contactEvents).toHaveLength(0)
+    })
+  }
+
+  it('does not force risky shooting against a blocked goalmouth',()=>{
+    const blocked=stage(0,{blocked:true})
+    const shot=evaluateShootingOpportunity(blocked.shooter,
+      blocked.def,blocked.opponents,blocked.team,blocked.setup)
+    expect(shot).not.toBeNull()
+    const cost=opportunityCostOfDelayingShot(
+      shot,blocked.shooter,blocked.team,blocked.setup,
+      blocked.opponents,{xM:blocked.shooter.position.xM-4,yM:38})
+    expect(cost).toBe(0)
+  })
+
+  it('lets better shooters recognize more urgency without forcing poor finishers',()=>{
+    const a=stage(0,{shooterX:88})
+    const elite=skillSetup(a.setup,a.shooter.playerId,96)
+    const low=skillSetup(a.setup,a.shooter.playerId,12)
+    const highDef=elite.players.find(p=>p.id===a.shooter.playerId)!
+    const lowDef=low.players.find(p=>p.id===a.shooter.playerId)!
+    const shotHigh=evaluateShootingOpportunity(
+      a.shooter,highDef,a.opponents,a.team,elite)
+    const shotLow=evaluateShootingOpportunity(
+      a.shooter,lowDef,a.opponents,a.team,low)
+    const alt={xM:a.shooter.position.xM,yM:40}
+    const highCost=opportunityCostOfDelayingShot(
+      shotHigh,a.shooter,a.team,elite,a.opponents,alt)
+    const lowCost=opportunityCostOfDelayingShot(
+      shotLow,a.shooter,a.team,low,a.opponents,alt)
+    expect(highCost).toBeGreaterThan(0)
+    expect(highCost).toBeGreaterThan(lowCost)
+    expect(highCost).toBeLessThanOrEqual(17)
+  })
+
 })

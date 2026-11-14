@@ -1,3 +1,15 @@
+## ATT-F1 — Shooting opportunity recognition (finish-or-recycle decisions)
+
+A code audit of the real on-ball AI found that the short-horizon planner formerly penalized delaying a credible immediate shot **only for materially backward passes**. Sideways/short-forward passes and unproductive carrying were not consistently charged for wasting a physically credible finishing window. Passing utilities still rightfully consider player attributes, pressure and receivability, but without comparing this opportunity cost the ball carrier could choose attractive-looking safe circulation instead of a usable shot.
+
+ATT-F1 adds an explainable, deterministic **opportunity cost of delaying a shot** to the existing short-horizon ranking, covering lateral and forward recycling as well as dribbles that do not substantially improve shooting position. Its bounded strength comes from the same existing physical shot windows, estimated on-frame fraction, quality adjusted for the actual shooter's finishing attributes, defender obstruction, goalkeeper coverage, proximity to goal, and the alternative's plausible improvement in sight of goal. A truly better shooting location substantially discounts the cost; a blocked or unreliable shot receives **no special preference**. The system does **not** issue scripted shot commands, raise shot accuracy, assign possession, mint goals, or bypass the normal seeded variation, cooldowns and physical interactions. Both teams use exactly the same calculations, and all thresholds are estimated game-design values rather than real-world probabilities.
+
+The focused regression tests cover sideways and backward missed opportunities, purposeful forward moves, repeated deterministic ranking, physical shot-versus-safe-pass preference, obstructed shooting, individual finishing skill, and both attacking directions, as well as existing shot-window / 90-minute regression tests.
+
+**Important limitations:** This step does not change dribbling physics, first-touch reliability, finishing execution accuracy, or the limited shot eligibility window. It should be evaluated with a series of real seeded matches and shot-refusal/blocked-shot diagnostics before declaring that shot rate, goals per match or mobile performance are realistically calibrated. Continuous controlled-ball physics is the subsequent separately scoped priority (PHY-F1).
+
+---
+
 ## GK-S1 — Goal-kick realism: setup, approach, decisions
 
 A targeted code audit found three flaws in the previous S1.2 implementation: the goalkeeper was aimed **0.43 m in front of the dead ball**, short distribution was normally limited to two centre-backs with an emergency midfield kick, and all other outfield players essentially kept their old positions during the dead-ball setup. These facts concern the prior implementation; realistic on-device match behaviour is not yet calibrated.

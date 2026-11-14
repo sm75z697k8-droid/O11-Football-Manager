@@ -114,6 +114,58 @@ function estimatedPassSeconds(choice: Extract<PossessionChoice, {kind:'pass'}>,
   return clip(flight, .25, ON_BALL_HORIZON_SECONDS)
 }
 
+/**
+ * ATT-F1: the *opportunity cost* of not taking a credible shot now.
+ *
+ * Evaluates the SAME physically rehearsed shooting window already used
+ * by the on-ball planner. The cost applies to sideways, short-forward and
+ * backwards recycling, as well as unproductive dribbles. It drops when
+ * the proposed next location offers a substantially better view of goal.
+ *
+ * This is an estimated decision utility—not an xG figure, forced shot,
+ * automatic contact or guaranteed goal. A blocked / unlikely-to-hit-the-
+ * frame shot has no special preference.
+ */
+export function opportunityCostOfDelayingShot(
+  shot: ShootingOpportunity | null,
+  owner: PlayerMatchState,
+  team: MatchState['teams'][number],
+  setup: MatchSetup,
+  opponents: readonly PlayerMatchState[],
+  alternative: Point2,
+): number {
+  if (!shot || shot.onFrameShare < .55 ||
+      shot.chanceQuality < .19) return 0
+  const obstruction = shootingCorridorObstruction(
+    owner.position, shot.target, opponents)
+  if (obstruction >= 1.8) return 0
+  const distanceToGoal = team.attackingDirection === 1
+    ? setup.pitch.lengthM - owner.position.xM : owner.position.xM
+  if (distanceToGoal > 25 || distanceToGoal < 1) return 0
+
+  const currentChance = attackingOpportunityAt(
+    owner.position, team, setup, opponents)
+  const nextChance = attackingOpportunityAt(
+    alternative, team, setup, opponents)
+  const improvement = nextChance - currentChance
+  // Moving the ball to a better shooting location is valuable. The
+  // alternative can still win if that gain outweighs giving up the shot.
+  const improvedMultiplier = improvement > 5 ? .08 :
+    improvement > 3 ? .25 :
+      improvement > 1.5 ? .55 : 1
+  const pressureGap = opponents.reduce((d, p) =>
+    Math.min(d, distance(p.position, owner.position)), 100)
+  // Pressure can justify an immediate pass rather than shooting blindly.
+  // This does not shut off all finishing when a defender approaches.
+  const pressureFactor = clip((pressureGap - 1.1) / 2.1, .40, 1)
+  const opportunity =
+    3.7 + (shot.chanceQuality - .19) * 22 +
+    (shot.onFrameShare - .55) * 9 +
+    Math.max(0, 19 - distanceToGoal) * .37 +
+    shot.keeperGap * 3.1
+  return clip(opportunity, 0, 17) * improvedMultiplier * pressureFactor
+}
+
 function assessedPass(
   choice: Extract<PossessionChoice, {kind:'pass'}>,
   owner: PlayerMatchState, state: MatchState, setup: MatchSetup,
@@ -203,30 +255,13 @@ function assessedPass(
         continuationAdjustment > 0)
       continuationAdjustment *= .2
   }
-  // A carrier with a real, clear shooting window pays an opportunity
-  // cost for retreating into a less dangerous position. This is a
-  // relative evaluation—not a "shoot whenever close" switch. Retreats
-  // remain sensible when the lane is blocked, the carrier is pressured,
-  // or the intended receiver genuinely improves the scoring position.
-  const progress = (choice.target.xM - owner.position.xM) *
-    team.attackingDirection
-  const remainingToGoal = team.attackingDirection === 1
-    ? setup.pitch.lengthM - owner.position.xM
-    : owner.position.xM
-  const immediateLane = immediateShot &&
-    immediateShot.onFrameShare >= .6 &&
-    immediateShot.chanceQuality >= .24 &&
-    shootingCorridorObstruction(
-      owner.position, immediateShot.target, opponents) < 1.8
-  const unpressured = clip(
-    (nearby(owner.position, opponents, setup, .15) - 2) / 2.5, 0, 1)
-  const backwardsWaste = progress < -2.5 &&
-    futureChance <= oldChance + 2 &&
-    remainingToGoal <= 22 && remainingToGoal >= 2
-  const shotOpportunityCost = immediateLane && backwardsWaste
-    ? clip(3.5 + immediateShot.chanceQuality * 14 +
-      (20 - remainingToGoal) * .25, 0, 13) * unpressured
-    : 0
+  // ATT-F1: every alternative to a credible immediate finish has
+  // an opportunity cost. Previously only significantly backwards
+  // passes were penalized, allowing endless sideways/short-forward
+  // recycling in front of goal. Better attacking positions, marked
+  // shot corridors and player finishing ability naturally change it.
+  const shotOpportunityCost = opportunityCostOfDelayingShot(
+    immediateShot, owner, team, setup, opponents, predictedReceiver)
   const penalty = laneRisk * 1.15 + pressureRisk + receivingRisk
   const utility = choice.utility - .6 - penalty + futureGain +
     continuationAdjustment - shotOpportunityCost
@@ -243,7 +278,7 @@ function assessedPass(
         'Maintains a viable possession option',
     ...(continuationReason ? [continuationReason] : []),
     ...(shotOpportunityCost > 2
-      ? ['Backward pass wastes a credible immediate shooting window']
+      ? ['Passing delays a credible immediate shooting window']
       : []),
   ]
   return { choice, utility, horizonSeconds: flight,
@@ -254,6 +289,7 @@ function assessedCarry(
   choice: Extract<PossessionChoice, {kind:'carry'}>,
   owner: PlayerMatchState, state: MatchState, setup: MatchSetup,
   opponents: readonly PlayerMatchState[],
+  immediateShot: ShootingOpportunity | null,
 ): ActionAssessment {
   const def = setup.players.find(p => p.id === owner.playerId)!
   const team = state.teams.find(t => t.clubId === owner.clubId)!
@@ -283,8 +319,10 @@ function assessedCarry(
     owner.intention.kind === 'moveToPoint' &&
     distance(owner.intention.target, choice.target) < 2.4
   const continuity = continuing && pressureRisk < 3 ? 1.8 : 0
+  const shotOpportunityCost = opportunityCostOfDelayingShot(
+    immediateShot, owner, team, setup, opponents, reached)
   const utility = choice.utility - pressureRisk +
-    forwardAdvantage + opportunity + continuity
+    forwardAdvantage + opportunity + continuity - shotOpportunityCost
   const reasons = [
     pressureRisk > 2.2 ? 'Defender can challenge the dribble' :
       'Space available to carry',
@@ -293,6 +331,9 @@ function assessedCarry(
     opportunity > 1 ? 'Creates a better shooting position' :
       'Maintains current attacking position',
     ...(continuity ? ['Continues a sensible existing run'] : []),
+    ...(shotOpportunityCost > 2
+      ? ['Carrying delays a credible immediate shooting window']
+      : []),
   ]
   return { choice, utility, horizonSeconds: horizon,
     reasons, laneRisk: pressureRisk, receivingRisk: 0 }
@@ -357,7 +398,7 @@ export function reviewOnBallActions(
     choice.kind === 'pass'
       ? assessedPass(choice, owner, state, setup, opponents, immediateShot)
       : choice.kind === 'carry'
-        ? assessedCarry(choice, owner, state, setup, opponents)
+        ? assessedCarry(choice, owner, state, setup, opponents, immediateShot)
         : assessedShot(choice, owner, state, setup, opponents))
     .sort((a, b) => b.utility - a.utility ||
       (a.choice.kind < b.choice.kind ? -1 :
