@@ -1,3 +1,24 @@
+## DEF-F1 — Individualized defensive responsibilities, not cloned movement
+
+Previously, most non-pressing outfielders were given a recovery point whose X/Y coordinates shared the same ball-following shift. The old defensive planner also let the first defender encountered in roster iteration take a nearby runner, even if a more suitable teammate (e.g. the full-back against a wide run) could cover that opponent. This looked like players making a single decision mirrored at different formation offsets.
+
+The **DEF-F1** upgrade preserves the existing one- or two-player PRESS, the dedicated COVER player, goalkeeper logic, real 50ms locomotion, contact laws and physical tackling. For the remaining non-engaging players, it makes **individual choices from one consistent team world snapshot**:
+
+- Centre-backs prioritize central striker/attacking-midfield runs and guard the last line rather than chasing the ball.
+- Full-backs assess their own wide channel and track nearby runners while preserving left/right flank identities.
+- Defensive midfielder screens dangerous central lanes and adjusts toward a relevant threat, not the generic ball shift.
+- Central midfielders recognize runners in their own half-space and help block inside lanes.
+- Wingers either support a ball-side wide trap or tuck in on the far side to cover switches.
+- Strikers prioritize screening recycling outlets rather than imitating a center-back's recovery.
+- Each footballer uses **individual attributes** (defensive positioning, anticipation, decisions, marking, teamwork, work rate, energy and hold-position tendency) for perception horizon, threat evaluation and bounded positioning.
+- A single globally ranked, deterministically tie-broken mark-assignment pass picks **one suitable defender per opponent**, independent of lineup array order; at most four active markers, leaving screening and recovery duties intact. Existing pressing/cover assignments stay prioritized and do not get replaced.
+
+All defensive intentions are **targets only**. Position and body motion update from the existing physical movement integrator; an opponent, tackle, interception or goal cannot be fabricated by a mark or screening instruction. There is no random selection, hidden puppet movement, persistent schema migration or per-frame full-pitch planner. The same criteria run for BOTH clubs and for reversed halftime attacking directions.
+
+This is a focused first stage, **not** fully autonomous multi-agent learning: improving real-time pressure-cover-switch communication, position-specific defensive tactics, offside traps and varied team defensive strategies is a separate next iteration. Calibrate visible behavior over several seeds on an iPhone before declaring it realistic.
+
+---
+
 ## THR-F1 — Lawful, pressure-aware physical throw-ins (both teams, both halves)
 
 The first S1.1 throw-in implementation correctly awarded touchline restarts and executed an actual seeded, airborne hand release, but its AI selected the first nearby receiver from two fixed targets and ignored opposing pressure and the Law 15 two-metre exclusion zone. Its hardcoded home/away direction also inverted forward/backward support after the teams switched ends at halftime.
