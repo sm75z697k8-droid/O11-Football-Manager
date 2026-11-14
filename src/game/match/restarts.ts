@@ -512,8 +512,17 @@ export function advanceThrowInStoppage(
     ? {...moved,players:moved.players.map(p=>{
         if(p.playerId!==event.takerId)return p
         const target=throwInTakerTarget(event,setup)
-        if(Math.hypot(p.position.xM-target.xM,
-            p.position.yM-target.yM)>.72 ||
+        // Crucial: only rotate after the player's physical centre has
+        // actually entered the LAW-15 stance band. Turning inward while
+        // still inside the pitch cancels normal locomotion's outward
+        // turn on every tick; with facing-based acceleration this can
+        // leave a taker motionless ~0.4m short indefinitely.
+        const legalStance=event.side==='top'
+          ?p.position.yM<=.47
+          :p.position.yM>=setup.pitch.widthM-.47
+        if(!legalStance||
+            Math.hypot(p.position.xM-target.xM,
+              p.position.yM-target.yM)>.72 ||
             Math.hypot(p.velocity.xMps,p.velocity.yMps)>.7)return p
         const definition=setup.players.find(d=>d.id===p.playerId)
         if(!definition)throw new Error('Thrower missing player definition')
