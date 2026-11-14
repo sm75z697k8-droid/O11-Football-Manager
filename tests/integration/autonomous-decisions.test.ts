@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createFoundationMatch, restoreFoundationMatch } from '../../src/game/match/engine'
 import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
+import { expectPhysicalGoals } from '../fixtures/physical-goals'
 import { AI_DECISION_PERIOD_TICKS, choosePossessionRelease, planTeamDecisions } from '../../src/game/ai/decisions'
 import type { MatchState } from '../../src/game/match/state'
 
@@ -123,7 +124,10 @@ describe('Phase 5 opt-in tactical decision system', () => {
           state.ai.formationPositions[p.playerId].xM,
         p.position.yM - state.ai.formationPositions[p.playerId].yM) > 1)).toBe(true)
     expect(state.automaticContactEvents.length).toBeGreaterThan(0)
-    expect(state.teams.map(t => t.score)).toEqual([0, 0])
+    // The historical 0-0 score was an incidental seed outcome, not an
+    // invariant of autonomous movement. Any scored goal must still be
+    // explained by genuine contact and a legal goalmouth crossing.
+    expectPhysicalGoals(state, setup())
     expect(state.period).toBe('notStarted')
     expect(state.players.every(p =>
       p.position.xM >= 0 && p.position.xM <= 105 &&

@@ -3,6 +3,7 @@ import type { MatchSetup } from '../../src/game/model/match'
 import type { MatchState } from '../../src/game/match/state'
 import { createFoundationMatch, restoreFoundationMatch } from '../../src/game/match/engine'
 import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
+import { expectPhysicalGoals } from '../fixtures/physical-goals'
 import {
   defensiveRecoveryTarget, isRelevantDefensiveThreat,
   planDefensiveResponsibilities,
@@ -218,6 +219,6 @@ describe('Phase 6.5 football-aware defensive transitions', () => {
     clone.advance(73)
     expect(clone.checkpoint()).toEqual(engine.checkpoint())
     expect(engine.getState().players).toHaveLength(22)
-    expect(engine.getState().teams.map(t => t.score)).toEqual([0, 0])
+    expectPhysicalGoals(engine.getState(), fixture)
   })
 })

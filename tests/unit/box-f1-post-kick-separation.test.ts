@@ -139,6 +139,8 @@ describe('BOX-F1 physical separation after a foot kick', () => {
     const shots = state.contactEvents.filter(e =>
       e.outcome === 'kicked' && e.commandId.startsWith('ai-shot-'))
     expect(shots.length).toBeGreaterThan(0)
+    expect(shots.some(e => e.tick === 1047 &&
+      e.playerId === 'vale_player_10')).toBe(true)
     const ownImmediate = state.automaticContactEvents.filter(event =>
       shots.some(kick => event.playerId === kick.playerId &&
         event.tick > kick.tick && event.tick <= kick.tick + 2))
