@@ -306,7 +306,7 @@ export function assessThrowInOptions(
     const definition=setup.players.find(p=>p.id===player.playerId)
     if(!definition)continue
     const power=clamp(.55+distance*.0105,.55,.82)
-    let flight={
+    let flight:BallMatchState={
       ...state.ball,
       position:{...event.spot},heightM:THROW_IN_LAUNCH_HEIGHT_M,
       velocity:throwInFlightVelocity(event.spot,player.position,
