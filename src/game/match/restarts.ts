@@ -1,7 +1,8 @@
 import type { MatchSetup } from '../model/match'
 import type { PitchDefinition, Point2 } from '../model/pitch'
 import type { BallMatchState, MatchState, OutOfPlayEvent, PlayerMatchState } from './state'
-import { BALL_RADIUS_M } from '../physics/ball'
+import { BALL_RADIUS_M, advanceBallPhysics } from '../physics/ball'
+import { throwInFlightVelocity, THROW_IN_LAUNCH_HEIGHT_M } from '../physics/throw-in-flight'
 import { advancePlayerLocomotion } from '../physics/locomotion'
 import { scheduleMatchCommand } from './commands'
 import { goalKickSpot } from './goal-kicks'
@@ -12,7 +13,7 @@ import { cornerBallSpot } from './corners'
  * This is an incremental restart foundation; corners and goal kicks are
  * classified but left as explicit stoppages until their own restart rules.
  */
-export const OUT_OF_PLAY_VERSION = 'touchline-throw-in-continuity-s11-v1'
+export const OUT_OF_PLAY_VERSION = 'pressured-receiving-throw-in-thr-f1-v1'
 const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x))
 
 type Edge = OutOfPlayEvent['side']
@@ -216,119 +217,244 @@ export const forbiddenThrowInSecondTouch = forbiddenRestartSecondTouch
 export function throwInTakerTarget(event: OutOfPlayEvent, setup: MatchSetup): Point2 {
   return {
     xM: clamp(event.spot.xM, .35, setup.pitch.lengthM - .35),
-    yM: event.side === 'top' ? .48 : setup.pitch.widthM - .48,
+    // The footballer's centre stays close enough to the painted line
+    // for a simplified .3m stance footprint to overlap the touchline.
+    yM: event.side === 'top' ? .25 : setup.pitch.widthM - .25,
   }
 }
 
-/** Two physically mobile short receiving options, on opposite sides of the
- * taker along the pitch. Their real ability, marking and incoming ball flight
- * determine whether either succeeds.
+/**
+ * Law 15: the opposition cannot stand within two metres of the actual
+ * touchline restart location. No teleport or penalty is manufactured:
+ * autonomous defenders use regular locomotion to clear the area.
+ */
+export const THROW_IN_OPPONENT_CLEARANCE_M = 2
+export function throwInOpponentsClear(
+  state: MatchState, event: OutOfPlayEvent,
+): boolean {
+  return state.players.every(p => p.clubId === event.awardedTeamId ||
+    Math.hypot(p.position.xM - event.spot.xM,
+      p.position.yM - event.spot.yM) >= THROW_IN_OPPONENT_CLEARANCE_M - 1e-8)
+}
+
+export function throwInDefenderRetreat(
+  position: Point2, event: OutOfPlayEvent,
+  setup: MatchSetup,
+): Point2 {
+  const dx = position.xM - event.spot.xM
+  const dy = position.yM - event.spot.yM
+  const distance = Math.hypot(dx,dy)
+  if(distance >= THROW_IN_OPPONENT_CLEARANCE_M+.7)return position
+  const inward=event.side==='top'?1:-1
+  const ux=distance>.02?dx/distance:0
+  const uy=distance>.02?dy/distance:inward
+  return {
+    xM:clamp(event.spot.xM+ux*2.9,0,setup.pitch.lengthM),
+    yM:clamp(event.spot.yM+uy*2.9,0,setup.pitch.widthM),
+  }
+}
+
+/** Three stable receiving lanes: a forward outlet, safe backward outlet,
+ * and central third-man option. Real halftime directions come from state
+ * teams, not static fixture club order.
  */
 export function throwInReceiverTargets(
   event: OutOfPlayEvent, setup: MatchSetup,
-): readonly [Point2, Point2] {
-  const dir = setup.clubs[0].id === event.awardedTeamId ? 1 : -1
-  const inward = event.side === 'top' ? 1 : -1
-  return [
-    { xM: clamp(event.spot.xM + dir * 8, 2.5, setup.pitch.lengthM - 2.5),
-      yM: clamp(event.spot.yM + inward * 7.2, 2.5, setup.pitch.widthM - 2.5) },
-    { xM: clamp(event.spot.xM - dir * 5.5, 2.5, setup.pitch.lengthM - 2.5),
-      yM: clamp(event.spot.yM + inward * 9, 2.5, setup.pitch.widthM - 2.5) },
-  ]
+  attackingDirection: 1|-1 =
+    setup.clubs[0].id===event.awardedTeamId?1:-1,
+): readonly [Point2,Point2,Point2] {
+  const inward=event.side==='top'?1:-1
+  const x=event.spot.xM,y=event.spot.yM
+  const target=(forward:number,depth:number):Point2=>({
+    xM:clamp(x+attackingDirection*forward,2.5,setup.pitch.lengthM-2.5),
+    yM:clamp(y+inward*depth,2.5,setup.pitch.widthM-2.5),
+  })
+  return [target(8,7.2),target(-5.5,9),target(2.8,14.5)]
 }
 
+/** Inspect where the SAME real flight integrator would bring a correctly
+ * aimed overhead throw toward each footballer. Receiver and opponent
+ * locations are tactical forecasts; no contact or possession is granted.
+ */
+export interface ThrowInOption {
+  readonly playerId:string
+  readonly target:Point2
+  readonly power:number
+  readonly score:number
+  readonly arrivalGapM:number
+  readonly opponentGapM:number
+}
+export function assessThrowInOptions(
+  state:MatchState,setup:MatchSetup,
+  event:OutOfPlayEvent,
+  receivers:readonly PlayerMatchState[],
+  targets:readonly Point2[],
+):readonly ThrowInOption[]{
+  const team=state.teams.find(t=>t.clubId===event.awardedTeamId)
+  if(!team)return []
+  const taker=setup.players.find(p=>p.id===event.takerId)
+  if(!taker)return []
+  const choices:ThrowInOption[]=[]
+  for(let i=0;i<receivers.length;i++){
+    const player=receivers[i]
+    const designated=targets[i]
+    if(!designated || Math.hypot(player.position.xM-designated.xM,
+        player.position.yM-designated.yM)>2.5)continue
+    const distance=Math.hypot(player.position.xM-event.spot.xM,
+      player.position.yM-event.spot.yM)
+    if(distance<2.5||distance>27.5)continue
+    const definition=setup.players.find(p=>p.id===player.playerId)
+    if(!definition)continue
+    const power=clamp(.55+distance*.0105,.55,.82)
+    let flight={
+      ...state.ball,
+      position:{...event.spot},heightM:THROW_IN_LAUNCH_HEIGHT_M,
+      velocity:throwInFlightVelocity(event.spot,player.position,
+        power,taker.abilities.physical.strength),
+      controllerId:null,controlOffset:null,outsidePitch:false,
+    }
+    let landing={...player.position}
+    let seconds=1.2
+    for(let step=1;step<=48;step++){
+      flight=advanceBallPhysics(flight,setup.pitch)
+      if(flight.outsidePitch)break
+      if(flight.heightM<=.53 && flight.velocity.zMps<=0){
+        landing={...flight.position};seconds=step*.05
+        break
+      }
+    }
+    const arrivalGap=Math.hypot(player.position.xM-landing.xM,
+      player.position.yM-landing.yM)
+    let opponentGap=100
+    for(const defender of state.players){
+      if(defender.clubId===event.awardedTeamId)continue
+      const projected={
+        xM:defender.position.xM+defender.velocity.xMps*
+          Math.min(.35,seconds*.25),
+        yM:defender.position.yM+defender.velocity.yMps*
+          Math.min(.35,seconds*.25),
+      }
+      const gap=Math.hypot(projected.xM-landing.xM,
+        projected.yM-landing.yM)
+      opponentGap=Math.min(opponentGap,gap)
+    }
+    const forward=(player.position.xM-event.spot.xM)*
+      team.attackingDirection
+    const firstTouch=definition.abilities.technical.firstTouch
+    const opponentPressure=Math.max(0,4.5-opponentGap)*2.6
+    const receptionRisk=arrivalGap*2.1
+    const score=opponentGap*.52+forward*.24+
+      firstTouch*.055-receptionRisk-opponentPressure-
+      distance*.11
+    choices.push({playerId:player.playerId,target:{...player.position},
+      power,score,arrivalGapM:arrivalGap,opponentGapM:opponentGap})
+  }
+  return choices.sort((a,b)=>b.score-a.score ||
+    a.playerId.localeCompare(b.playerId))
+}
+
+/** Real throw-ins require movement before release. Coordinates describe
+ * RUNS, never teleported receptions. Defenders can track an option while
+ * staying legally at least 2m from the touchline throwing point.
+ */
 export function stageThrowIn(
   state: MatchState, setup: MatchSetup,
 ): MatchState {
-  const event = state.restart
-  if (event?.kind !== 'throwIn' || !event.awardedTeamId ||
-      !event.takerId) return state
-  const aiIndex = state.teams.findIndex(t => t.clubId === event.awardedTeamId)
-  // Autonomous choreography cannot take over a team whose AI is disabled.
-  if (aiIndex < 0 || !state.ai.enabledTeams[aiIndex]) return state
-
-  const taker = state.players.find(p => p.playerId === event.takerId)
-  if (!taker) throw new Error('Missing throw-in taker')
-  const takerTarget = throwInTakerTarget(event, setup)
-  const options = state.players.filter(p =>
-    p.clubId === event.awardedTeamId &&
-    p.playerId !== event.takerId && p.formationSlot !== 'GK')
-    .sort((a, b) => {
-      // Keep roles fixed throughout the stoppage: sorting by each tick's
-      // MOVING coordinates causes receivers to exchange targets repeatedly.
-      const point = (p: PlayerMatchState) =>
-        state.ai.formationPositions[p.playerId] ?? p.position
-      return Math.hypot(point(a).xM - event.spot.xM,
-        point(a).yM - event.spot.yM) -
-        Math.hypot(point(b).xM - event.spot.xM,
-          point(b).yM - event.spot.yM) ||
+  const event=state.restart
+  if(event?.kind!=='throwIn'||!event.awardedTeamId||!event.takerId)
+    return state
+  const aiIndex=state.teams.findIndex(t=>t.clubId===event.awardedTeamId)
+  if(aiIndex<0||!state.ai.enabledTeams[aiIndex])return state
+  const team=state.teams[aiIndex]
+  const taker=state.players.find(p=>p.playerId===event.takerId)
+  if(!taker)throw new Error('Missing throw-in taker')
+  const takerTarget=throwInTakerTarget(event,setup)
+  const available=state.players.filter(p=>
+    p.clubId===event.awardedTeamId&&p.playerId!==event.takerId&&
+    p.formationSlot!=='GK')
+    .sort((a,b)=>{
+      const point=(p:PlayerMatchState)=>
+        state.ai.formationPositions[p.playerId]??p.position
+      return Math.hypot(point(a).xM-event.spot.xM,
+        point(a).yM-event.spot.yM)-
+        Math.hypot(point(b).xM-event.spot.xM,
+          point(b).yM-event.spot.yM)||
         a.playerId.localeCompare(b.playerId)
     })
-  const receivers = options.slice(0, 2)
-  const targets = throwInReceiverTargets(event, setup)
-  const byId = new Map<string, Point2>([
-    [event.takerId, takerTarget],
-    ...receivers.map((p, index) =>
-      [p.playerId, targets[index]] as [string, Point2]),
+  const receivers=available.slice(0,3)
+  const targets=throwInReceiverTargets(event,setup,team.attackingDirection)
+  const assignments=new Map<string,Point2>([
+    [event.takerId,takerTarget],
+    ...receivers.map((p,i)=>
+      [p.playerId,targets[i]] as [string,Point2]),
   ])
-  const players = state.players.map(p => {
-    const teamIndex = state.teams.findIndex(t => t.clubId === p.clubId)
-    if (teamIndex < 0 || !state.ai.enabledTeams[teamIndex]) return p
-    const target = byId.get(p.playerId) ?? p.position
-    const same = p.intention.kind === 'moveToPoint' &&
-      Math.hypot(p.intention.target.xM - target.xM,
-        p.intention.target.yM - target.yM) < .2
-    return {
-      ...p, engagesBall: false,
-      intention: same ? p.intention : {
-        kind: 'moveToPoint' as const,
-        sinceTick: state.clock.tick, target: { ...target },
-      },
-    }
+  // Opponents that are already near a nominated outlet maintain a
+  // credible marker. Others retain their natural pre-restart positions.
+  const defenders=state.players.filter(p=>
+    p.clubId!==event.awardedTeamId&&p.formationSlot!=='GK')
+  const assignedMarkers=new Set<string>()
+  for(let i=0;i<Math.min(2,receivers.length);i++){
+    const target=targets[i]
+    const mark=defenders.filter(p=>!assignedMarkers.has(p.playerId) &&
+      Math.hypot(p.position.xM-target.xM,
+        p.position.yM-target.yM)<7)
+      .sort((a,b)=>Math.hypot(a.position.xM-target.xM,
+          a.position.yM-target.yM)-
+        Math.hypot(b.position.xM-target.xM,
+          b.position.yM-target.yM)||
+        a.playerId.localeCompare(b.playerId))[0]
+    if(!mark)continue
+    assignedMarkers.add(mark.playerId)
+    assignments.set(mark.playerId,throwInDefenderRetreat({
+      xM:clamp(target.xM-team.attackingDirection*1.6,
+        .3,setup.pitch.lengthM-.3),
+      yM:target.yM,
+    },event,setup))
+  }
+  const players=state.players.map(p=>{
+    const side=state.teams.findIndex(t=>t.clubId===p.clubId)
+    if(side<0||!state.ai.enabledTeams[side])return p
+    const nominated=assignments.get(p.playerId)??p.position
+    const target=p.clubId===event.awardedTeamId?nominated:
+      throwInDefenderRetreat(nominated,event,setup)
+    const same=p.intention.kind==='moveToPoint' &&
+      Math.hypot(p.intention.target.xM-target.xM,
+        p.intention.target.yM-target.yM)<.2
+    return {...p,engagesBall:false,intention:same?p.intention:{
+      kind:'moveToPoint' as const,
+      sinceTick:state.clock.tick,target:{...target},
+    }}
   })
-  let staged: MatchState = {
-    ...state, players,
-    ai: { ...state.ai, decisionSnapshot: [] },
-  }
-  const travelled = Math.hypot(taker.position.xM - takerTarget.xM,
-    taker.position.yM - takerTarget.yM)
-  const receiverReady = receivers.some((p, index) =>
-    Math.hypot(p.position.xM - targets[index].xM,
-      p.position.yM - targets[index].yM) < 2.0)
-  const pending = [...staged.pendingCommands, ...staged.appliedCommands].some(c =>
-    c.type === 'attemptThrowIn' && c.commandId === 'ai-pass-throwin-' + event.tick)
-  if (travelled < .8 && receiverReady &&
-      state.clock.tick - event.tick >= 14 && !pending) {
-    const nearest = receivers.find((p, index) =>
-      Math.hypot(p.position.xM - targets[index].xM,
-        p.position.yM - targets[index].yM) < 2.0)!
-    const target = nearest.position
-    const receipt = scheduleMatchCommand(staged, {
-      commandId: 'ai-pass-throwin-' + event.tick,
-      type: 'attemptThrowIn',
-      teamId: event.awardedTeamId,
-      playerId: event.takerId,
-      target: { ...target },
-      power: .59,
-    }, setup.pitch)
-    if (!receipt.receipt.accepted) {
-      throw new Error('Could not stage legal throw-in: ' + receipt.receipt.reason)
-    }
-    staged = {
-      ...receipt.state,
-      ai: {
-        ...receipt.state.ai, lastPassTick: state.clock.tick,
-        passIntent: {
-          commandId: 'ai-pass-throwin-' + event.tick,
-          teamId: event.awardedTeamId,
-          passerId: event.takerId,
-          receiverId: nearest.playerId,
-          requestedTick: state.clock.tick,
-          target: { ...target },
-        },
-      },
-    }
-  }
+  let staged:MatchState={...state,players,
+    ai:{...state.ai,decisionSnapshot:[]}}
+  const takerReady=Math.hypot(taker.position.xM-takerTarget.xM,
+    taker.position.yM-takerTarget.yM)<.65
+  const pending=staged.pendingCommands.some(c=>
+    c.type==='attemptThrowIn' &&
+    c.commandId.startsWith('ai-pass-throwin-'+event.tick+'-'))
+  const actedThisTick=staged.appliedCommands.some(c=>
+    c.type==='attemptThrowIn'&&c.appliedTick===state.clock.tick)
+  if(!takerReady||state.clock.tick-event.tick<14||
+      pending||actedThisTick||
+      !throwInOpponentsClear(staged,event))return staged
+  const choices=assessThrowInOptions(staged,setup,event,receivers,targets)
+  if(!choices.length)return staged
+  const selected=choices[0]
+  const commandId='ai-pass-throwin-'+event.tick+'-'+state.clock.tick
+  const receipt=scheduleMatchCommand(staged,{
+    commandId,type:'attemptThrowIn',
+    teamId:event.awardedTeamId,playerId:event.takerId,
+    target:{...selected.target},power:selected.power,
+  },setup.pitch)
+  if(!receipt.receipt.accepted)
+    throw new Error('Could not stage physical throw-in: '+
+      receipt.receipt.reason)
+  staged={...receipt.state,ai:{
+    ...receipt.state.ai,lastPassTick:state.clock.tick,
+    passIntent:{commandId,teamId:event.awardedTeamId,
+      passerId:event.takerId,receiverId:selected.playerId,
+      requestedTick:state.clock.tick,target:{...selected.target}},
+  }}
   return staged
 }
 
@@ -344,8 +470,15 @@ export function advanceThrowInStoppage(
   const moved = advancePlayerLocomotion(
     staged, setup.players, setup.pitch)
   const contacted = resolveContact(moved, setup)
-  if (!contacted.contactEvents.some(c =>
-    c.tick === contacted.clock.tick &&
-    c.kind === 'throwIn' && c.outcome === 'thrownIn')) return contacted
+  const outcome=contacted.contactEvents.find(c =>
+    c.tick===contacted.clock.tick&&c.kind==='throwIn')
+  if(!outcome||outcome.outcome!=='thrownIn'){
+    // A failed contact is NOT a successful restart. Retire the
+    // speculative receiver and let staging issue a fresh, distinct
+    // command once both teams are physically in legal positions.
+    if(outcome && contacted.ai.passIntent?.commandId===outcome.commandId)
+      return {...contacted,ai:{...contacted.ai,passIntent:null}}
+    return contacted
+  }
   return { ...contacted, restart: null }
 }
