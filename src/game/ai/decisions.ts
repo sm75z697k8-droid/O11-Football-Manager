@@ -11,7 +11,7 @@ import { planGoalkeeperPosition } from './goalkeeper-positioning'
 import { planGoalkeeperOneOnOne } from './goalkeeper-one-on-one'
 import { planGoalkeeperAerial } from './goalkeeper-aerial'
 import { planOutfieldAerialDuels } from './aerial-duels'
-import { assessLooseBallRace } from './loose-ball'
+import { assessLooseBallRace, CLEAR_RECOVERY_ADVANTAGE_S } from './loose-ball'
 import {
   canReleaseControlledBall, evaluateOnBallChoice,
 } from './possession'
@@ -92,13 +92,18 @@ export function planTeamDecisions(
     const isDefending = !inAttack && (ball.controllerId !== null ||
       (ball.lastTouchPlayerId !== null && !ownsLooseBall) ||
       looseRace !== null)
+    const rivalTeamId = state.teams[1 - teamIndex].clubId
+    const rivalClearlyFirst = looseRace !== null &&
+      looseRace.arrivalSeconds[team.clubId] >
+        looseRace.arrivalSeconds[rivalTeamId] + CLEAR_RECOVERY_ADVANTAGE_S
     const rank = rankBallChasers(
       teammates, definitions, ball, setup.pitch, restrictedTaker)
     // Defensive pressure is assigned to the TEAM rather than choosing
     // isolated chasers. Attacking pursuit remains with the original physics.
     const defensivePlan = isDefending && ballUsable
       ? planDefensiveResponsibilities(state, setup, team, projectedBall,
-        looseRace?.pursuerIds[team.clubId])
+        rivalClearlyFirst ? undefined : looseRace?.pursuerIds[team.clubId],
+        rivalClearlyFirst)
       : null
     const flightScreen = maintainWidePassFlightScreen(state, team)
     const pressCount = !ballUsable || owner || isDefending ? 0 :

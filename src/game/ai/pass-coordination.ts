@@ -1,7 +1,7 @@
 import type { MatchSetup } from '../model/match'
 import type { Point2 } from '../model/pitch'
 import type { MatchState, CoordinatedPassIntent, PlayerMatchState } from '../match/state'
-import { estimatedRecoverySeconds } from './loose-ball'
+import { CLEAR_RECOVERY_ADVANTAGE_S, estimatedRecoverySeconds } from './loose-ball'
 import {
   boundedTarget, estimateInterception, predictBallAt,
 } from './coordination'
@@ -12,14 +12,14 @@ import {
 export const PASS_INTENT_MAX_AGE_TICKS = 80
 /** Reassess live recovery only every 200 simulated milliseconds. */
 export const PASS_RECOVERY_REVIEW_INTERVAL_TICKS = 4
-/** Abandon only an unreachable receiver for a clearly faster chaser. */
+/** Abandon an unreachable receiver for a clearly faster teammate. */
 export const PASS_RECOVERY_HANDOFF_MARGIN_S = 0.55
 
 /**
- * A nominated receiver retains priority while a plausible intercept exists.
- * After the kick, a materially faster outfield teammate can take over a
- * missed/deflected pass. Both estimates use the existing physical
- * interception predictor; no contact or possession is fabricated.
+ * A nominated receiver retains priority in a contested race, but must yield
+ * when an opponent can reach the real ball clearly sooner. A teammate takes
+ * over only when the original receiver is physically unreachable. All
+ * estimates use the existing predictor; no possession is fabricated.
  *
  * Pure and bounded: at most 10 prospective teammates every four ticks
  * while an actual kicked pass remains loose. Once released, normal team
@@ -41,12 +41,27 @@ export function shouldYieldPassReception(
   if (!original) return false
   const definition = setup.players.find(p => p.id === intent.receiverId)
   if (!definition) throw new Error('Missing intended pass receiver definition')
-  // A teammate being closer to the travelling ball does not invalidate an
-  // intentional, still-reachable pass. Only replace the intended runner
-  // if their own interception estimate has become physically implausible.
-  if (estimateInterception(original, definition, state.ball, setup.pitch))
-    return false
-  const originalTime = estimatedRecoverySeconds(original, state, setup)
+  const originalReach = estimateInterception(
+    original, definition, state.ball, setup.pitch)
+  const originalTime = originalReach?.etaSeconds ??
+    estimatedRecoverySeconds(original, state, setup)
+  // A pass commitment is not an exclusive claim on the ball. Once an
+  // opponent has a CLEARLY earlier physical interception opportunity, stop
+  // sending the distant original receiver after a likely lost ball. Marginal
+  // 50/50 races remain contested rather than being decided by this estimate.
+  const clearlyBeaten = state.players.some(p => {
+    if (p.clubId === intent.teamId || p.formationSlot === 'GK') return false
+    const rival = setup.players.find(d => d.id === p.playerId)
+    if (!rival) throw new Error('Missing opponent recovery definition')
+    const reach = estimateInterception(p, rival, state.ball, setup.pitch)
+    return reach !== null &&
+      reach.etaSeconds + CLEAR_RECOVERY_ADVANTAGE_S < originalTime
+  })
+  if (clearlyBeaten) return true
+  // Still-plausible intentional receptions are preserved against ordinary
+  // teammate proximity. Teammate handoff stays restricted to genuinely
+  // unreachable original receivers.
+  if (originalReach) return false
   return state.players.some(p => {
     if (p.clubId !== intent.teamId || p.formationSlot === 'GK' ||
         p.playerId === intent.receiverId || p.playerId === intent.passerId)

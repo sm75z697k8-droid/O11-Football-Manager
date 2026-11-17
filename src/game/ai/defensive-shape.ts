@@ -204,8 +204,13 @@ function primaryPressers(
   state: MatchState, setup: MatchSetup,
   teammates: readonly PlayerMatchState[], ball: Point2,
   team: TeamMatchState, preferredPlayerId?: string,
+  containClearOpposingRecovery = false,
 ): PlayerMatchState[] {
   const context = pressContext(state, ball, team, setup)
+  // A clearly lost loose-ball race should trigger recovery of defensive
+  // positions, not a hopeless distant chase. Once an opponent actually
+  // controls the ball, the usual pressing rules become active again.
+  if (containClearOpposingRecovery && !context.carrier) return []
   const previousPressIds = new Set(state.ai.decisionSnapshot
     .filter(d => d.clubId === team.clubId && d.action === 'press')
     .map(d => d.playerId))
@@ -237,7 +242,12 @@ function primaryPressers(
     .sort((a, b) => a.score - b.score ||
       (a.player.playerId < b.player.playerId ? -1 :
         a.player.playerId > b.player.playerId ? 1 : 0))
-  const primary = candidates[0]
+  // The shared loose-ball predictor has already ranked time-to-intercept.
+  // For a FREE ball, follow that nomination instead of overriding it with
+  // raw proximity to the projected ball (or a large distance bonus).
+  const primary = !context.carrier && preferredPlayerId
+    ? candidates.find(c => c.player.playerId === preferredPlayerId) ?? candidates[0]
+    : candidates[0]
   if (!primary) return []
   if (team.pressingIntensity !== 'high') return [primary.player]
   const second = candidates.find(p => p.player.playerId !== primary.player.playerId &&
@@ -327,10 +337,13 @@ function defensiveCover(
 export function planDefensiveResponsibilities(
   state: MatchState, setup: MatchSetup, team: TeamMatchState,
   ballPoint: Point2, preferredRecoveryId?: string,
+  containClearOpposingRecovery = false,
 ): ReadonlyMap<string, DefensiveAssignment> {
   const teammates = state.players.filter(p => p.clubId === team.clubId)
   const opponents = state.players.filter(p => p.clubId !== team.clubId)
-  const pressing = primaryPressers(state, setup, teammates, ballPoint, team, preferredRecoveryId)
+  const pressing = primaryPressers(
+    state, setup, teammates, ballPoint, team, preferredRecoveryId,
+    containClearOpposingRecovery)
   const pressingIds = new Set(pressing.map(p => p.playerId))
   const flightScreen = maintainWidePassFlightScreen(state,team)
   const cover = defensiveCover(

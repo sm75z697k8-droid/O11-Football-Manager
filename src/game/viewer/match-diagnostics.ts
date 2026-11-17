@@ -4,6 +4,7 @@ import { formatMatchTime } from '../match/periods'
 import { OUT_OF_PLAY_VERSION,throwInTakerTarget,throwInFacingAngle,
   throwInReceiverTargets,assessThrowInOptions } from '../match/restarts'
 import { wrapRadians } from '../physics/locomotion'
+import { assessLooseBallRace, estimatedRecoverySeconds, LOOSE_BALL_AI_VERSION } from '../ai/loose-ball'
 
 /** An explicitly user-requested copyable reproduction report.
  * No network request, browser identifiers, account data or device location.
@@ -179,6 +180,25 @@ export function copyableMatchDiagnostics(
     latestAutomaticContacts: state.automaticContactEvents.slice(-8).map(e =>
       ({ tick:e.tick, playerId:e.playerId, outcome:e.outcome })),
     lastAiDecisionTick: state.ai.lastDecisionTick,
+    looseBallAiVersion: LOOSE_BALL_AI_VERSION,
+    recoveryDiagnostics: {
+      passIntent: state.ai.passIntent,
+      looseBallRace: setup ? assessLooseBallRace(state, setup) : null,
+      activeChasers: state.ai.decisionSnapshot
+        .filter(d => d.engage &&
+          (d.action === 'receive' || d.action === 'pursue' || d.action === 'press'))
+        .map(d => {
+          const p = state.players.find(player => player.playerId === d.playerId)
+          return {
+            playerId: d.playerId, clubId: d.clubId,
+            action: d.action, target: d.target,
+            position: p?.position ?? null,
+            estimatedRecoverySeconds: setup && p && ball.controllerId === null
+              ? Number(estimatedRecoverySeconds(p, state, setup).toFixed(2))
+              : null,
+          }
+        }),
+    },
     goals: state.goalEvents.length,
   }, null, 2)
 }

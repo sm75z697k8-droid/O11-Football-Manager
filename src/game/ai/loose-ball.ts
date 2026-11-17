@@ -11,7 +11,10 @@ import {
  *
  * These are estimates of reaching the ball, not awarded interceptions.
  */
-export const LOOSE_BALL_AI_VERSION = 'contested-recovery-v1'
+export const LOOSE_BALL_AI_VERSION = 'contested-recovery-mis-f1-v1'
+/** Estimated ETA advantage required to treat a loose ball as clearly won.
+ * This is a tactical confidence margin, not an awarded interception. */
+export const CLEAR_RECOVERY_ADVANTAGE_S = 0.85
 const RECOVERY_SAMPLE_LIMIT_S = 3.2
 
 export function estimatedRecoverySeconds(
