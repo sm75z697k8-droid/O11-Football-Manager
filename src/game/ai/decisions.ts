@@ -50,6 +50,7 @@ function belongsTo(teamId: string, playerId: string | null,
 export function planTeamDecisions(
   state: MatchState, setup: MatchSetup,
   evaluatedChoice?: PossessionChoice | null,
+  releasedReceiverId: string | null = null,
 ): readonly AgentDecision[] {
   const definitions = new Map(setup.players.map(p => [p.id, p]))
   const decisions: AgentDecision[] = []
@@ -95,10 +96,12 @@ export function planTeamDecisions(
     const rivalTeamId = state.teams[1 - teamIndex].clubId
     const lastTouchClub = state.players.find(p =>
       p.playerId === ball.lastTouchPlayerId)?.clubId
-    // Only the team that actually LOST its own last touch should stop a
-    // hopeless recovery chase. The opposition must still press a legitimate
-    // pass as it develops (particularly straight after the opening kickoff).
+    // Only a confirmed abandoned pass reception can temporarily suppress a
+    // hopeless chase. Ordinary free-ball defending must still press, including
+    // after a legitimate kickoff. Other tactical transitions stay unchanged.
     const rivalClearlyFirst = looseRace !== null &&
+      releasedReceiverId !== null &&
+      teammates.some(p => p.playerId === releasedReceiverId) &&
       lastTouchClub === team.clubId &&
       looseRace.arrivalSeconds[team.clubId] >
         looseRace.arrivalSeconds[rivalTeamId] + CLEAR_RECOVERY_ADVANTAGE_S

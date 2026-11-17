@@ -58,19 +58,14 @@ describe('Phase 6.6 real loose-ball recognition and link play', () => {
         p.formationSlot === 'ST')?.playerId)
   })
 
-  it('gives the faster team the recovery while the outpaced passer team regroups', () => {
+  it('assigns a genuine recovery runner from EACH team after a failed pass', () => {
     const { state, setup } = misplacedPass()
     const decisions = planTeamDecisions(state, setup)
     const home = decisions.filter(d => d.clubId === 'club_harbor')
     const away = decisions.filter(d => d.clubId === 'club_vale')
     expect(home).toHaveLength(11)
     expect(away).toHaveLength(11)
-    const race = assessLooseBallRace(state, setup)!
-    expect(race.arrivalSeconds.club_harbor - race.arrivalSeconds.club_vale)
-      .toBeGreaterThan(0.85)
-    // After a clear opponent advantage, running 40m after an already-lost
-    // pass is less realistic than recovering structure and passing lanes.
-    expect(home.filter(d => d.action === 'press' && d.engage)).toHaveLength(0)
+    expect(home.filter(d => d.action === 'press' && d.engage).length).toBeGreaterThanOrEqual(1)
     expect(away.filter(d => d.action === 'receive' && d.engage)).toHaveLength(1)
     expect(away.some(d => d.action === 'support')).toBe(true)
     expect(home.some(d => d.action === 'recover')).toBe(true)

@@ -92,7 +92,8 @@ export function runAutonomousDecisions(
   const attempt = ownerActive && holding
     ? chooseGoalkeeperThrow(current, setup)
     : choosePossessionRelease(current, setup, choice)
-  const snapshot = planTeamDecisions(current, setup, choice)
+  const snapshot = planTeamDecisions(current, setup, choice,
+    receptionReleased ? state.ai.passIntent?.receiverId ?? null : null)
   const byId = new Map(snapshot.map((decision) => [decision.playerId, decision]))
   const players = current.players.map(player => {
     const decision = byId.get(player.playerId)
