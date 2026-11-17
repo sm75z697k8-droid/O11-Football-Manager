@@ -93,7 +93,13 @@ export function planTeamDecisions(
       (ball.lastTouchPlayerId !== null && !ownsLooseBall) ||
       looseRace !== null)
     const rivalTeamId = state.teams[1 - teamIndex].clubId
+    const lastTouchClub = state.players.find(p =>
+      p.playerId === ball.lastTouchPlayerId)?.clubId
+    // Only the team that actually LOST its own last touch should stop a
+    // hopeless recovery chase. The opposition must still press a legitimate
+    // pass as it develops (particularly straight after the opening kickoff).
     const rivalClearlyFirst = looseRace !== null &&
+      lastTouchClub === team.clubId &&
       looseRace.arrivalSeconds[team.clubId] >
         looseRace.arrivalSeconds[rivalTeamId] + CLEAR_RECOVERY_ADVANTAGE_S
     const rank = rankBallChasers(
