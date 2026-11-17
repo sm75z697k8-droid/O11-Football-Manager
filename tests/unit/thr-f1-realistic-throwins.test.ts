@@ -215,7 +215,7 @@ describe('THR-F1 — realistic, pressured legal throw-in plans',()=>{
     // trajectories; never fabricate a throw-in or a contact to pass.
     const { MatchViewerSession }=requireViewerSession()
     let session:InstanceType<typeof MatchViewerSession>|null=null
-    for(const seed of [42,117,832,90]){
+    for(const seed of [205,42,117,832,90]){
       const candidate=new MatchViewerSession(seed)
       for(let i=0;i<330;i++){
         candidate.advance(8)
