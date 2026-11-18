@@ -142,74 +142,64 @@ function drawGoalEndCanopies(
   ]
 
   for (const { edgeX, breadth, direction } of ends) {
-    // Portrait layouts have no useful goal-end apron: never cover the pitch.
-    if (breadth < 32 || viewportHeight < 90) continue
+    // Leave the seating visible. Never squeeze a roof into a portrait apron.
+    if (breadth < 50 || viewportHeight < 180) continue
 
-    const padY = Math.max(9, Math.min(18, viewportHeight * 0.045))
-    const frontX = edgeX + direction * Math.min(8, breadth * 0.16)
-    const rearX = edgeX + direction * (breadth - Math.min(10, breadth * 0.14))
-    const cornerInset = Math.min(11, breadth * 0.12)
-    const curveInsetY = Math.min(35, viewportHeight * 0.11)
+    const insetY = Math.max(11, Math.min(28, viewportHeight * 0.07))
+    const outerMargin = Math.max(6, Math.min(14, breadth * 0.085))
+    const roofWidth = Math.min(76, breadth * 0.34)
+    // direction faces away from the pitch; inward points back towards it.
+    const inward = -direction
+    const outerX = edgeX + direction * (breadth - outerMargin)
+    const innerX = outerX + inward * roofWidth
+    const frontY = viewportHeight - insetY
 
-    // A recessed membrane casts a discreet shade on the seating beneath.
-    ctx.fillStyle = 'rgba(5, 16, 18, 0.28)'
+    // Small cast shadow on the exposed terrace; no roof touches the pitch.
+    ctx.fillStyle = 'rgba(5, 17, 20, 0.18)'
     ctx.fillRect(
-      Math.min(frontX, rearX) + 2, padY + 5,
-      Math.max(0, Math.abs(rearX - frontX) - 4), viewportHeight - 2 * padY - 10,
+      Math.min(innerX, innerX + inward * 10),
+      insetY + 13, 10, viewportHeight - 2 * insetY - 26,
     )
 
-    const fabric = ctx.createLinearGradient(rearX, 0, frontX, 0)
+    const fabric = ctx.createLinearGradient(outerX, 0, innerX, 0)
     fabric.addColorStop(0, '#d8e1de')
     fabric.addColorStop(0.38, '#f5f8f6')
     fabric.addColorStop(0.76, '#e9f0ed')
     fabric.addColorStop(1, '#bccdca')
     ctx.fillStyle = fabric
     ctx.beginPath()
-    ctx.moveTo(rearX, padY + 11)
-    ctx.lineTo(frontX + direction * cornerInset, padY)
-    ctx.lineTo(frontX, padY + curveInsetY)
-    ctx.lineTo(frontX, viewportHeight - padY - curveInsetY)
-    ctx.lineTo(frontX + direction * cornerInset, viewportHeight - padY)
-    ctx.lineTo(rearX, viewportHeight - padY - 11)
-    ctx.lineTo(rearX, padY + 11)
+    ctx.moveTo(outerX, insetY + 12)
+    ctx.lineTo(outerX + inward * roofWidth * 0.76, insetY)
+    ctx.lineTo(innerX - inward * 2, insetY + 24)
+    // Gentle taper in the fabric lip, rather than a massive white block.
+    ctx.lineTo(innerX + inward * 2, viewportHeight * 0.32)
+    ctx.lineTo(innerX + inward * 4, viewportHeight * 0.5)
+    ctx.lineTo(innerX + inward * 2, viewportHeight * 0.68)
+    ctx.lineTo(innerX - inward * 2, frontY - 24)
+    ctx.lineTo(outerX + inward * roofWidth * 0.76, frontY)
+    ctx.lineTo(outerX, frontY - 12)
+    ctx.lineTo(outerX, insetY + 12)
     ctx.fill()
 
-    // Seam pairs suggest individual stretched fabric bays, not a flat slab.
-    const baySpacing = Math.max(28, Math.min(44, viewportHeight / 9))
-    for (let y = padY + curveInsetY + 8;
-      y < viewportHeight - padY - curveInsetY - 6; y += baySpacing) {
-      const slope = (y - viewportHeight / 2) * 0.025
-      ctx.strokeStyle = 'rgba(92, 119, 119, 0.38)'
-      ctx.lineWidth = 1.1
+    // Just a few light membrane seams, aligned across the short-end stand.
+    const seamPitch = Math.max(55, viewportHeight / 6)
+    for (let y = insetY + 40; y < frontY - 30; y += seamPitch) {
+      ctx.strokeStyle = 'rgba(92, 119, 119, 0.24)'
+      ctx.lineWidth = 0.8
       ctx.beginPath()
-      ctx.moveTo(rearX, y)
-      ctx.lineTo(frontX, y + slope)
-      ctx.stroke()
-
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.74)'
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      ctx.moveTo(rearX, y + 2.5)
-      ctx.lineTo(frontX, y + slope + 2.5)
+      ctx.moveTo(outerX + inward * 6, y)
+      ctx.lineTo(innerX - inward * 5, y)
       ctx.stroke()
     }
 
-    // Silver support spine and a bright, softly faceted pitch-facing lip.
-    const spineX = rearX + (frontX - rearX) * 0.74
-    ctx.strokeStyle = 'rgba(105, 129, 132, 0.46)'
-    ctx.lineWidth = Math.max(1, Math.min(2, breadth * 0.012))
+    ctx.strokeStyle = 'rgba(234, 244, 242, 0.8)'
+    ctx.lineWidth = 1.4
     ctx.beginPath()
-    ctx.moveTo(spineX, padY + 24)
-    ctx.lineTo(spineX, viewportHeight - padY - 24)
-    ctx.stroke()
-
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.94)'
-    ctx.lineWidth = Math.max(1.5, Math.min(3, breadth * 0.022))
-    ctx.beginPath()
-    ctx.moveTo(frontX + direction * cornerInset, padY)
-    ctx.lineTo(frontX, padY + curveInsetY)
-    ctx.lineTo(frontX, viewportHeight - padY - curveInsetY)
-    ctx.lineTo(frontX + direction * cornerInset, viewportHeight - padY)
+    ctx.moveTo(innerX - inward * 2, insetY + 24)
+    ctx.lineTo(innerX + inward * 2, viewportHeight * 0.32)
+    ctx.lineTo(innerX + inward * 4, viewportHeight * 0.5)
+    ctx.lineTo(innerX + inward * 2, viewportHeight * 0.68)
+    ctx.lineTo(innerX - inward * 2, frontY - 24)
     ctx.stroke()
   }
 }

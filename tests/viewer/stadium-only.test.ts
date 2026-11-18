@@ -78,5 +78,16 @@ describe('stadium-only entry screen', () => {
     expect(roofPolygons[1].every(({ x }) => x > pitch.x + pitch.width)).toBe(true)
     expect(roofPolygons.flat().every(({ x, y }) =>
       Number.isFinite(x) && y >= 0 && y <= height)).toBe(true)
+    // The canopy is a slim outer terrace roof, not a full-width white wall.
+    const leftX = roofPolygons[0].map(({ x }) => x)
+    const rightX = roofPolygons[1].map(({ x }) => x)
+    expect(Math.max(...leftX) - Math.min(...leftX)).toBeLessThan(pitch.x * 0.4)
+    expect(Math.max(...rightX) - Math.min(...rightX)).toBeLessThan(pitch.x * 0.4)
+    expect(pitch.x - Math.max(...leftX)).toBeGreaterThan(pitch.x * 0.4)
+    expect(Math.min(...rightX) - (pitch.x + pitch.width)).toBeGreaterThan(pitch.x * 0.4)
+
+    // On a portrait screen the roof disappears instead of obscuring turf.
+    renderStadiumOnly(ctx, DEFAULT_PITCH, 390, 844)
+    expect(roofPolygons).toHaveLength(2)
   })
 })
