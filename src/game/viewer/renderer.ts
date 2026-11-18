@@ -77,7 +77,7 @@ function drawMarkings(
  * Never stretch one coordinate axis or clip players just to fill a screen.
  */
 function drawStadiumBackdrop(
-  ctx: CanvasRenderingContext2D, projection: PitchProjection,
+  ctx: CanvasRenderingContext2D, _projection: PitchProjection,
   viewportWidth: number, viewportHeight: number,
 ): void {
   const right = projection.x + projection.width
@@ -88,53 +88,72 @@ function drawStadiumBackdrop(
   ctx.fillStyle = surface
   ctx.fillRect(0, 0, viewportWidth, viewportHeight)
 
-  // The reference shows three long, horizontally ribbed silver-white roof
-  // bays on EACH goal end, joined by tapered transverse white beams.
-  // Keep all geometry strictly inside the goal-end aprons: the existing field,
-  // pitch projection, markings and match engine are never affected.
+}
+
+/**
+ * Foreground roof drawing: render turf FIRST, roof SECOND, so the pitch
+ * appears under the projecting roof rather than above it.
+ */
+function drawGoalEndRoofs(
+  ctx: CanvasRenderingContext2D, projection: PitchProjection,
+  viewportWidth: number, viewportHeight: number,
+): void {
+  // White roof geometry follows the existing two goal-end stands only.
+  // A small overhang and cast shadow show the pitch underneath the roof.
   const endStands = [
     { x: 0, width: projection.x, rightSide: false },
     { x: right, width: viewportWidth - right, rightSide: true },
   ]
-  const sections = [0, 0.28, 0.72, 1]
+  const beamFractions = [0.25, 0.5, 0.75]
+  const sections = [0, ...beamFractions, 1]
+
+  // Skip thin goal-end margins rather than obscuring a portrait pitch.
+  if (endStands.some(stand => stand.width < 20)) return
 
   for (const { x, width, rightSide } of endStands) {
-    if (width < 4) continue
-    const innerEdge = rightSide ? x : x + width
+    const overhang = Math.min(12, projection.width * 0.012, width * 0.16)
+    const innerEdge = rightSide ? x - overhang : x + width + overhang
     const outerEdge = rightSide ? x + width : x
+    const roofX = rightSide ? innerEdge : outerEdge
+    const roofWidth = width + overhang
+
+    // Cast shadow extends just beyond the roof lip onto the pitch grass.
+    ctx.fillStyle = 'rgba(3, 17, 19, 0.32)'
+    ctx.fillRect(rightSide ? right - overhang - 7 : projection.x,
+      projection.y, overhang + 7, projection.height)
 
     // Ribbed roof panels. Each bay shades from light silver to muted grey,
     // following the horizontal, stepped appearance of the supplied image.
     for (let bay = 0; bay < sections.length - 1; bay += 1) {
       const top = viewportHeight * sections[bay]
       const bottom = viewportHeight * sections[bay + 1]
-      const panel = ctx.createLinearGradient(x, top, x, bottom)
+      const panel = ctx.createLinearGradient(roofX, top, roofX, bottom)
       panel.addColorStop(0, '#eeeeed')
       panel.addColorStop(0.22, '#e3e4e2')
       panel.addColorStop(0.72, '#d1d3d2')
       panel.addColorStop(1, '#c4c7c6')
       ctx.fillStyle = panel
-      ctx.fillRect(x, top, width, bottom - top)
+      ctx.fillRect(roofX, top, roofWidth, bottom - top)
 
       // Fine horizontal corrugations, not stadium seat rows. Static Canvas
       // shapes avoid texture downloads and remain inexpensive on iPhone.
       const ribSpacing = Math.max(5.5, Math.min(9, viewportHeight * 0.011))
       for (let y = top + 3; y < bottom - 2; y += ribSpacing) {
         ctx.fillStyle = 'rgba(106, 114, 113, 0.14)'
-        ctx.fillRect(x + 2, y, Math.max(0, width - 4), 0.85)
+        ctx.fillRect(roofX + 2, y, Math.max(0, roofWidth - 4), 0.85)
         ctx.fillStyle = 'rgba(255, 255, 255, 0.45)'
-        ctx.fillRect(x + 2, y + 1.25, Math.max(0, width - 4), 0.9)
+        ctx.fillRect(roofX + 2, y + 1.25, Math.max(0, roofWidth - 4), 0.9)
       }
     }
 
     // In the reference, three bright projecting cross beams divide the
     // panels. Their tips are thicker at the pitch-facing edge and taper
     // towards the outside wall; mirror the geometry at the opposite goal.
-    for (const fraction of [0.28, 0.72, 0.955]) {
+    for (const fraction of beamFractions) {
       const y = viewportHeight * fraction
       const beamThickness = Math.max(4, Math.min(10, viewportHeight * 0.017))
       ctx.fillStyle = 'rgba(86, 91, 91, 0.18)'
-      ctx.fillRect(x, y + beamThickness * 0.55, width, beamThickness * 0.62)
+      ctx.fillRect(roofX, y + beamThickness * 0.55, roofWidth, beamThickness * 0.62)
 
       const beam = ctx.createLinearGradient(outerEdge, y, innerEdge, y)
       beam.addColorStop(0, '#e2e3e1')
@@ -149,14 +168,11 @@ function drawStadiumBackdrop(
       ctx.fill()
     }
 
-    // Slim silver fascia between the white roof and the dark pitch apron.
-    // Drawn inside each end stand, never over the field.
-    ctx.fillStyle = 'rgba(103, 112, 112, 0.30)'
-    ctx.fillRect(rightSide ? innerEdge : innerEdge - 3, 0,
-      Math.min(3, width), viewportHeight)
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.54)'
-    ctx.fillRect(rightSide ? innerEdge + 3 : innerEdge - 4, 0,
-      Math.min(1, width), viewportHeight)
+    // Silver-white pitch-facing fascia sits over the grass at each goal.
+    ctx.fillStyle = 'rgba(88, 100, 102, 0.48)'
+    ctx.fillRect(rightSide ? innerEdge + 1 : innerEdge - 3, 0, 2, viewportHeight)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.74)'
+    ctx.fillRect(rightSide ? innerEdge : innerEdge - 1, 0, 1, viewportHeight)
   }
 }
 
@@ -206,6 +222,7 @@ export function renderStadiumOnly(
   drawStadiumBackdrop(ctx, projection, width, height)
   if (projection.scale <= 0) return
   drawPitch(ctx, projection, pitch.lengthM, pitch.widthM)
+  drawGoalEndRoofs(ctx, projection, width, height)
 }
 
 function drawSelection(
@@ -241,6 +258,7 @@ export function renderMatchFrame(ctx: CanvasRenderingContext2D, scene: FrameScen
   drawStadiumBackdrop(ctx, projection, width, height)
   if (projection.scale <= 0) return
   drawPitch(ctx, projection, setup.pitch.lengthM, setup.pitch.widthM)
+  drawGoalEndRoofs(ctx, projection, width, height)
 
   const previousById = new Map(previous.players.map(p => [p.playerId, p]))
   const alpha = Math.max(0, Math.min(1, scene.alpha))

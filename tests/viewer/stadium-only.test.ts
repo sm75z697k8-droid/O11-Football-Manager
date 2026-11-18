@@ -39,15 +39,15 @@ describe('stadium-only entry screen', () => {
     expect(operations.filter(op => op === 'arc')).toHaveLength(4)
   })
 
-  it('matches the reference: three white horizontal roof bays behind each goal', () => {
+  it('renders three evenly spaced mirrored beams above the pitch edges', () => {
     const width = 844
     const height = 390
-    const pitch = projectPitch(width, height, DEFAULT_PITCH)
-    const whitePanels: Array<{ x: number; y: number; w: number; h: number }> = []
+    const projection = projectPitch(width, height, DEFAULT_PITCH)
+    const panels: Array<{ x: number; y: number; w: number; h: number }> = []
     const beams: Array<Array<{ x: number; y: number }>> = []
-    let fillPaint: unknown
+    const drawOrder: string[] = []
+    let paint: unknown
     let path: Array<{ x: number; y: number }> = []
-
     const ctx = {
       clearRect: () => {},
       createLinearGradient: () => {
@@ -55,9 +55,11 @@ describe('stadium-only entry screen', () => {
         return { stops, addColorStop: (_offset: number, color: string) => { stops.push(color) } }
       },
       fillRect: (x: number, y: number, w: number, h: number) => {
-        if (fillPaint && typeof fillPaint === 'object' && 'stops' in fillPaint &&
-          (fillPaint as { stops: string[] }).stops.includes('#eeeeed')) {
-          whitePanels.push({ x, y, w, h })
+        if (paint === '#2a6a42') drawOrder.push('pitch')
+        if (paint && typeof paint === 'object' && 'stops' in paint &&
+          (paint as { stops: string[] }).stops.includes('#eeeeed')) {
+          panels.push({ x, y, w, h })
+          drawOrder.push('roof')
         }
       },
       beginPath: () => { path = [] },
@@ -67,38 +69,47 @@ describe('stadium-only entry screen', () => {
       strokeRect: () => {},
       arc: () => {},
       fill: () => {
-        if (fillPaint && typeof fillPaint === 'object' && 'stops' in fillPaint &&
-          (fillPaint as { stops: string[] }).stops.includes('#ffffff')) {
+        if (paint && typeof paint === 'object' && 'stops' in paint &&
+          (paint as { stops: string[] }).stops.includes('#ffffff')) {
           beams.push([...path])
         }
       },
     } as unknown as CanvasRenderingContext2D
     Object.defineProperty(ctx, 'fillStyle', {
-      get: () => fillPaint,
-      set: (value: unknown) => { fillPaint = value },
+      get: () => paint,
+      set: (value: unknown) => { paint = value },
     })
 
     renderStadiumOnly(ctx, DEFAULT_PITCH, width, height)
-    expect(whitePanels).toHaveLength(6)
-    expect(beams).toHaveLength(6)
-    const leftPanels = whitePanels.slice(0, 3)
-    const rightPanels = whitePanels.slice(3)
-    expect(leftPanels.every(panel => panel.x === 0 && panel.w === pitch.x)).toBe(true)
-    expect(rightPanels.every(panel => panel.x >= pitch.x + pitch.width)).toBe(true)
-    expect(whitePanels.every(panel => panel.y >= 0 && panel.y + panel.h <= height)).toBe(true)
-
-    // Beam polygons must stay entirely behind the goals on either side.
-    for (const beam of beams.slice(0, 3)) {
-      expect(beam.length).toBe(4)
-      expect(beam.every(({ x }) => x <= pitch.x)).toBe(true)
+    expect(drawOrder[0]).toBe('pitch')
+    expect(drawOrder.slice(1)).toEqual(Array(8).fill('roof'))
+    expect(panels).toHaveLength(8) // four equal roof panels per end
+    expect(beams).toHaveLength(6) // three support beams per end
+    for (let i = 0; i < 4; i++) {
+      const left = panels[i]
+      const right = panels[i + 4]
+      expect(left.y).toBe(height * i / 4)
+      expect(left.h).toBe(height / 4)
+      expect(right.y).toBe(left.y)
+      expect(right.h).toBe(left.h)
+      expect(left.x).toBe(0)
+      expect(right.x + right.w).toBeCloseTo(width)
+      expect(right.w).toBeCloseTo(left.w)
+      expect(left.w).toBeGreaterThan(projection.x)
+      expect(left.w - projection.x).toBeLessThanOrEqual(12)
+      expect(right.x).toBeLessThan(projection.x + projection.width)
     }
-    for (const beam of beams.slice(3)) {
-      expect(beam.length).toBe(4)
-      expect(beam.every(({ x }) => x >= pitch.x + pitch.width)).toBe(true)
+    for (let i = 0; i < 3; i++) {
+      const left = beams[i]
+      const right = beams[i + 3]
+      expect(left).toHaveLength(4)
+      expect(right).toHaveLength(4)
+      for (let j = 0; j < 4; j++) {
+        expect(left[j].x + right[j].x).toBeCloseTo(width)
+        expect(left[j].y).toBeCloseTo(right[j].y)
+      }
+      const thickness = Math.max(4, Math.min(10, height * 0.017))
+      expect(left[0].y).toBeCloseTo(height * (i + 1) / 4 - thickness * 0.22)
     }
-    // Main tier divisions follow the supplied screenshot's proportions.
-    expect(leftPanels[0].h).toBeCloseTo(height * 0.28)
-    expect(leftPanels[1].h).toBeCloseTo(height * 0.44)
-    expect(leftPanels[2].h).toBeCloseTo(height * 0.28)
   })
 })
