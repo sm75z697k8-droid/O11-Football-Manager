@@ -228,9 +228,16 @@ describe('stadium-only entry screen', () => {
       expect(reach).toBeLessThan(width * 0.08)
       const isLeft = shape === left
       expect(isLeft ? tip!.coords[0] > innerX : tip!.coords[0] < innerX).toBe(true)
-      // Both roof-edge positions remain behind the actual goal line at
-      // pitch height, leaving grass and net space intact.
+      // The CURVED VISIBLE roof edge at the first playable touchline
+      // remains behind 2m of net space. Its rectangular paint bounds can
+      // extend further, but clipping protects the actual pitch.
       expect(isLeft ? innerX < pitch.x : innerX > pitch.x + pitch.width).toBe(true)
+      const t = Math.sqrt(pitch.y / cornerHeight)
+      const visibleAtTouchline = innerX + (tip!.coords[0] - innerX) * (1 - t) ** 2
+      const netSpace = 2 * pitch.scale
+      expect(isLeft
+        ? visibleAtTouchline < pitch.x - netSpace
+        : visibleAtTouchline > pitch.x + pitch.width + netSpace).toBe(true)
     }
     const leftCurve = left.filter(p => p.op === 'Q')
     const rightCurve = right.filter(p => p.op === 'Q')
@@ -313,10 +320,11 @@ describe('stadium-only entry screen', () => {
       expect(right.w).toBeCloseTo(left.w)
       const goalLineLeft = projection.x
       const goalLineRight = projection.x + projection.width
-      const netDepth = 2 * projection.scale
-      // Roofs are set back behind the marked lines, leaving net space.
-      expect(left.x + left.w).toBeLessThan(goalLineLeft - netDepth)
-      expect(right.x).toBeGreaterThan(goalLineRight + netDepth)
+      // Raw paint rectangles now REACH the curved tips at the top/bottom;
+      // the clipped silhouette (tested above) stays behind the net space
+      // at the level of the playable field.
+      expect(left.x + left.w).toBeGreaterThan(goalLineLeft)
+      expect(right.x).toBeLessThan(goalLineRight)
       expect(right.w).toBeCloseTo(left.w)
     }
     for (let i = 0; i < 3; i++) {
