@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { makeFictionalMatchSetup } from '../../src/data/fixtures/fictional-match'
 import { createFoundationMatch } from '../../src/game/match/engine'
 import {
+  GOAL_END_RUNOFF_M, TOUCHLINE_RUNOFF_M,
   findPlayerAt, projectPitch, projectPoint,
 } from '../../src/game/viewer/geometry'
 import { BALL_RADIUS_M } from '../../src/game/physics/ball'
@@ -10,7 +11,7 @@ describe('Full-screen, geometrically correct O11 pitch projection', () => {
   const setup = makeFictionalMatchSetup()
   const state = createFoundationMatch(setup).getState()
 
-  it('uses nearly the entire available landscape height without cropping the field', () => {
+  it('fills the landscape viewport with grass while keeping legal lines inset', () => {
     for (const [width, height] of [
       [844, 390], [667, 375], [1024, 768], [1366, 768],
     ] as const) {
@@ -22,9 +23,15 @@ describe('Full-screen, geometrically correct O11 pitch projection', () => {
       expect(view.x + view.width).toBeLessThanOrEqual(width)
       expect(view.y + view.height).toBeLessThanOrEqual(height)
       expect(view.width / view.height).toBeCloseTo(105 / 68, 9)
-      // There is no side panel or permanent header stealing canvas height.
+      // The green run-off is still part of the visible full-screen surface.
+      // Keep the original immersive coverage requirement for the GRASS,
+      // not the inset legal touchlines and goal lines.
+      const grassWidth = view.width + 2 * GOAL_END_RUNOFF_M * view.scale
+      const grassHeight = view.height + 2 * TOUCHLINE_RUNOFF_M * view.scale
+      expect(grassWidth).toBeLessThanOrEqual(width)
+      expect(grassHeight).toBeLessThanOrEqual(height)
       if (width / height > 105 / 68) {
-        expect(view.height / height).toBeGreaterThan(.95)
+        expect(grassHeight / height).toBeGreaterThan(.95)
       }
     }
   })
