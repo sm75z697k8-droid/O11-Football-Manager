@@ -13,7 +13,7 @@ import { FORMATION_433_SLOTS } from '../../src/game/model/team'
 
 describe('first senior team', () => {
   it('creates a complete fictional 4-3-3 with unique players and shirt numbers', () => {
-    expect(FIRST_TEAM_CLUB.name).toBe('Harbor Athletic')
+    expect(FIRST_TEAM_CLUB.name).toBe('Man Utd')
     expect(FIRST_TEAM_SHEET.clubId).toBe(FIRST_TEAM_CLUB.id)
     expect(FIRST_TEAM_SHEET.formation).toBe('4-3-3')
     expect(FIRST_TEAM_PLAYERS).toHaveLength(11)
@@ -54,9 +54,9 @@ describe('first senior team', () => {
       }
     }
     const html = renderToStaticMarkup(createElement(FirstTeamPreview))
-    expect(html).toContain('Harbor Athletic')
-    expect(html).toContain('Fictional first team')
-    expect(html).toContain('4-3-3')
+    expect(html).toContain('Man Utd')
+    expect(html).toContain('Fictional players')
+    expect(html).toContain('4-2-3-1')
     expect(html).toContain('Football stadium and pitch beneath a fictional starting eleven')
     expect(html).not.toContain('match-scoreboard')
   })

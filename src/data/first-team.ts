@@ -16,10 +16,11 @@ import type { ClubDefinition, Formation433Slot, PlayerDuty, TeamSheet } from '..
  * preserved Harbor v Vale diagnostic fixture and does not start a match.
  */
 export const FIRST_TEAM_CLUB: ClubDefinition = {
-  id: 'club_harbor',
-  name: 'Harbor Athletic',
-  shortName: 'HAR',
-  colors: { primary: '#3A9CE8', secondary: '#E8F5FF' },
+  // New club identity; stable legacy player IDs and all players are retained.
+  id: 'club_man_utd',
+  name: 'Man Utd',
+  shortName: 'MUN',
+  colors: { primary: '#DA291C', secondary: '#FFFFFF' },
 }
 
 interface SeniorPlayerSeed {

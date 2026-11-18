@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { PlayerDefinition } from '../game/model/player'
-import type { StartingAssignment } from '../game/model/team'
+import type { PlayerDuty, PlayerRole } from '../game/model/team'
 import {
   ATTRIBUTE_CATEGORY_LABELS, attributeProfile, categoryRows,
 } from '../game/model/attribute-profile'
@@ -66,7 +66,14 @@ export default function PlayerStatsPanel({
   player, assignment, onClose,
 }: {
   readonly player: PlayerDefinition
-  readonly assignment: StartingAssignment
+  // The player panel can describe a preview-only 4-2-3-1 slot, without
+  // widening the 4-3-3 match-engine contract.
+  readonly assignment: {
+    readonly slot: string
+    readonly shirtNumber: number
+    readonly role: PlayerRole
+    readonly duty: PlayerDuty
+  }
   readonly onClose: () => void
 }) {
   const [tab, setTab] = useState<AttributeCategory>(

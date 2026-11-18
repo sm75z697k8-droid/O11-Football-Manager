@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { FIRST_TEAM } from '../data/first-team'
+import {
+  FIRST_TEAM_4231_ASSIGNMENTS, FIRST_TEAM_PREVIEW_FORMATION,
+} from '../data/first-team-lineup'
 import { DEFAULT_PITCH } from '../game/model/pitch'
 import { projectPitch, projectPoint } from '../game/viewer/geometry'
-import type { Formation433Slot } from '../game/model/team'
 import PlayerStatsPanel from './PlayerStatsPanel'
 import StadiumOnly from './StadiumOnly'
 import './FirstTeamPreview.css'
@@ -37,24 +39,24 @@ export default function FirstTeamPreview() {
 
   const projection = projectPitch(size.width, size.height, DEFAULT_PITCH)
   const selectedPlayer = FIRST_TEAM.players.find(player => player.id === selectedId)
-  const selectedAssignment = FIRST_TEAM.sheet.starters.find(item => item.playerId === selectedId)
+  const selectedAssignment = FIRST_TEAM_4231_ASSIGNMENTS.find(item => item.playerId === selectedId)
 
   return (
     <div className="first-team-preview" ref={rootRef}>
       <StadiumOnly canvasLabel="Football stadium and pitch beneath a fictional starting eleven" />
       <header className="first-team-identity">
-        <span className="first-team-crest" aria-hidden="true">H</span>
+        <span className="first-team-crest" aria-hidden="true">MU</span>
         <span className="first-team-identity-copy">
           <strong>{FIRST_TEAM.club.name}</strong>
-          <span>Fictional first team · Lineup preview</span>
+          <span>Fictional players · Left-half preview</span>
         </span>
-        <span className="first-team-formation">{FIRST_TEAM.sheet.formation}</span>
+        <span className="first-team-formation">{FIRST_TEAM_PREVIEW_FORMATION}</span>
       </header>
 
-      {projection.scale > 0 && FIRST_TEAM.sheet.starters.map(starter => {
+      {projection.scale > 0 && FIRST_TEAM_4231_ASSIGNMENTS.map(starter => {
         const player = FIRST_TEAM.players.find(item => item.id === starter.playerId)
         if (!player) return null
-        const point = projectPoint(FIRST_TEAM.positions[starter.slot as Formation433Slot], projection)
+        const point = projectPoint(starter.position, projection)
         const positionStyle: CSSProperties = { left: point.x, top: point.y }
         const surname = player.profile.fullName.split(' ').at(-1)
         return (
@@ -68,13 +70,15 @@ export default function FirstTeamPreview() {
             aria-label={'Number ' + starter.shirtNumber + ', ' + player.profile.fullName +
               ', ' + starter.slot + '. Show player attributes'}
           >
-            <span className="first-team-marker-disc">{starter.shirtNumber}</span>
+            <span className="first-team-marker-shirt" aria-hidden="true">
+              <span className="first-team-marker-shirt-number">{starter.shirtNumber}</span>
+            </span>
             <span className="first-team-marker-name">{surname}</span>
           </button>
         )
       })}
 
-      <div className="first-team-hint">Tap a player to inspect</div>
+      <div className="first-team-hint">4-2-3-1 · Tap a player to inspect</div>
       {selectedPlayer && selectedAssignment && (
         <PlayerStatsPanel key={selectedPlayer.id} player={selectedPlayer}
           assignment={selectedAssignment} onClose={() => setSelectedId(null)} />
