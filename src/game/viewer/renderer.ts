@@ -119,6 +119,9 @@ function drawGoalEndRoofs(
     const outerEdge = rightSide ? x + width : x
     const roofX = rightSide ? innerEdge : outerEdge
     const roofWidth = width - lipInset
+    // Curve the two corners facing the pitch; keep the exterior wall square.
+    const cornerRadius = Math.max(5, Math.min(36, viewportHeight * 0.075, roofWidth * 0.34))
+    const cornerX = innerEdge + (rightSide ? cornerRadius : -cornerRadius)
 
     // Shadow falls onto the outer grass behind each goal. The goal line
     // and the 2m net depth remain uncovered by the roof panels themselves.
@@ -127,6 +130,19 @@ function drawGoalEndRoofs(
     ctx.fillRect(rightSide ? innerEdge - shadowWidth : innerEdge,
       projection.y - TOUCHLINE_RUNOFF_M * projection.scale,
       shadowWidth, projection.height + 2 * TOUCHLINE_RUNOFF_M * projection.scale)
+
+    // Round both ends of each pitch-facing roof lip, clipping panels AND
+    // structural beams so nothing pokes through the softened silhouette.
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(outerEdge, 0)
+    ctx.lineTo(cornerX, 0)
+    ctx.quadraticCurveTo(innerEdge, 0, innerEdge, cornerRadius)
+    ctx.lineTo(innerEdge, viewportHeight - cornerRadius)
+    ctx.quadraticCurveTo(innerEdge, viewportHeight, cornerX, viewportHeight)
+    ctx.lineTo(outerEdge, viewportHeight)
+    ctx.closePath()
+    ctx.clip()
 
     // Ribbed roof panels. Each bay shades from light silver to muted grey,
     // following the horizontal, stepped appearance of the supplied image.
@@ -174,11 +190,20 @@ function drawGoalEndRoofs(
       ctx.fill()
     }
 
-    // Silver-white pitch-facing fascia sits over the grass at each goal.
-    ctx.fillStyle = 'rgba(88, 100, 102, 0.48)'
-    ctx.fillRect(rightSide ? innerEdge + 1 : innerEdge - 3, 0, 2, viewportHeight)
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.74)'
-    ctx.fillRect(rightSide ? innerEdge : innerEdge - 1, 0, 1, viewportHeight)
+    ctx.restore()
+
+    // The slender pitch-facing fascia must follow the same curved edge.
+    ctx.beginPath()
+    ctx.moveTo(cornerX, 0)
+    ctx.quadraticCurveTo(innerEdge, 0, innerEdge, cornerRadius)
+    ctx.lineTo(innerEdge, viewportHeight - cornerRadius)
+    ctx.quadraticCurveTo(innerEdge, viewportHeight, cornerX, viewportHeight)
+    ctx.strokeStyle = 'rgba(100, 116, 115, 0.60)'
+    ctx.lineWidth = 2.2
+    ctx.stroke()
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.73)'
+    ctx.lineWidth = 0.85
+    ctx.stroke()
   }
 }
 

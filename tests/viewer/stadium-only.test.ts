@@ -25,6 +25,11 @@ describe('stadium-only entry screen', () => {
       beginPath: () => operations.push('beginPath'),
       moveTo: () => {},
       lineTo: () => {},
+      quadraticCurveTo: () => {},
+      closePath: () => {},
+      clip: () => {},
+      save: () => {},
+      restore: () => {},
       stroke: () => operations.push('stroke'),
       strokeRect: () => operations.push('strokeRect'),
       arc: () => operations.push('arc'),
@@ -55,6 +60,11 @@ describe('stadium-only entry screen', () => {
       beginPath: () => {},
       moveTo: () => {},
       lineTo: () => {},
+      quadraticCurveTo: () => {},
+      closePath: () => {},
+      clip: () => {},
+      save: () => {},
+      restore: () => {},
       stroke: () => {},
       strokeRect: (x: number, y: number, w: number, h: number) => {
         if (style === 'rgba(234,255,236,0.76)') markingRects.push({ x, y, w, h })
@@ -99,6 +109,11 @@ describe('stadium-only entry screen', () => {
       beginPath: () => {},
       moveTo: () => {},
       lineTo: () => {},
+      quadraticCurveTo: () => {},
+      closePath: () => {},
+      clip: () => {},
+      save: () => {},
+      restore: () => {},
       stroke: () => {},
       strokeRect: () => {},
       arc: () => {},
@@ -143,6 +158,59 @@ describe('stadium-only entry screen', () => {
     }
   })
 
+  it('rounds all four pitch-facing roof corners with symmetric clipped curves', () => {
+    const width = 844
+    const height = 390
+    const roofPaths: Array<Array<{ op: string; coords: number[] }>> = []
+    let path: Array<{ op: string; coords: number[] }> = []
+    let saves = 0
+    let restores = 0
+    const ctx = {
+      clearRect: () => {},
+      createLinearGradient: () => ({ addColorStop: () => {} }),
+      fillRect: () => {},
+      beginPath: () => { path = [] },
+      moveTo: (x: number, y: number) => { path.push({ op: 'M', coords: [x, y] }) },
+      lineTo: (x: number, y: number) => { path.push({ op: 'L', coords: [x, y] }) },
+      quadraticCurveTo: (cx: number, cy: number, x: number, y: number) => {
+        path.push({ op: 'Q', coords: [cx, cy, x, y] })
+      },
+      closePath: () => { path.push({ op: 'Z', coords: [] }) },
+      clip: () => { roofPaths.push([...path]) },
+      save: () => { saves += 1 },
+      restore: () => { restores += 1 },
+      stroke: () => {},
+      strokeRect: () => {},
+      arc: () => {},
+      fill: () => {},
+    } as unknown as CanvasRenderingContext2D
+
+    renderStadiumOnly(ctx, DEFAULT_PITCH, width, height)
+    expect(saves).toBe(2)
+    expect(restores).toBe(2)
+    expect(roofPaths).toHaveLength(2)
+    const [left, right] = roofPaths
+    for (const outline of roofPaths) {
+      expect(outline.at(-1)?.op).toBe('Z')
+      const curves = outline.filter(command => command.op === 'Q')
+      expect(curves).toHaveLength(2)
+      expect(curves[0].coords[1]).toBe(0)
+      expect(curves[1].coords[1]).toBe(height)
+      const radius = curves[0].coords[3]
+      expect(radius).toBeGreaterThan(5)
+      expect(outline.some(command => command.op === 'L' &&
+        command.coords[1] === height - radius)).toBe(true)
+    }
+    const curvesLeft = left.filter(command => command.op === 'Q')
+    const curvesRight = right.filter(command => command.op === 'Q')
+    for (let i = 0; i < 2; i++) {
+      expect(curvesLeft[i].coords[0] + curvesRight[i].coords[0]).toBeCloseTo(width)
+      expect(curvesLeft[i].coords[2] + curvesRight[i].coords[2]).toBeCloseTo(width)
+      expect(curvesLeft[i].coords[1]).toBe(curvesRight[i].coords[1])
+      expect(curvesLeft[i].coords[3]).toBe(curvesRight[i].coords[3])
+    }
+  })
+
   it('renders three evenly spaced mirrored beams above the pitch edges', () => {
     const width = 844
     const height = 390
@@ -169,6 +237,11 @@ describe('stadium-only entry screen', () => {
       beginPath: () => { path = [] },
       moveTo: (x: number, y: number) => { path.push({ x, y }) },
       lineTo: (x: number, y: number) => { path.push({ x, y }) },
+      quadraticCurveTo: () => {},
+      closePath: () => {},
+      clip: () => {},
+      save: () => {},
+      restore: () => {},
       stroke: () => {},
       strokeRect: () => {},
       arc: () => {},
