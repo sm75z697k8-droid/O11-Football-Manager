@@ -39,55 +39,50 @@ describe('stadium-only entry screen', () => {
     expect(operations.filter(op => op === 'arc')).toHaveLength(4)
   })
 
-  it('keeps both white roof planes behind the goals and off the pitch', () => {
-    const width = 844
-    const height = 390
-    const pitch = projectPitch(width, height, DEFAULT_PITCH)
-    const roofPolygons: Array<Array<{ x: number; y: number }>> = []
-    let path: Array<{ x: number; y: number }> = []
+  it('recolors the original two goal-end terraces white without adding canopy polygons', () => {
+    const viewportWidth = 844
+    const viewportHeight = 390
+    const pitch = projectPitch(viewportWidth, viewportHeight, DEFAULT_PITCH)
+    const gradients: Array<{ stops: string[] }> = []
+    const terraceRects: Array<{ x: number; y: number; w: number; h: number; stops: string[] }> = []
     let paint: unknown
+    let outlinedSegments = 0
+    let filledPolygonCount = 0
 
     const ctx = {
       clearRect: () => {},
       createLinearGradient: () => {
-        const colors: string[] = []
-        return { colors, addColorStop: (_offset: number, color: string) => { colors.push(color) } }
+        const gradient = { stops: [] as string[],
+          addColorStop: (_offset: number, color: string) => { gradient.stops.push(color) } }
+        gradients.push(gradient)
+        return gradient
       },
-      fillRect: () => {},
-      beginPath: () => { path = [] },
-      moveTo: (x: number, y: number) => { path.push({ x, y }) },
-      lineTo: (x: number, y: number) => { path.push({ x, y }) },
+      fillRect: (x: number, y: number, w: number, h: number) => {
+        if (paint && typeof paint === 'object' && 'stops' in paint) {
+          terraceRects.push({ x, y, w, h, stops: (paint as { stops: string[] }).stops })
+        }
+      },
+      beginPath: () => { outlinedSegments = 0 },
+      moveTo: () => { outlinedSegments += 1 },
+      lineTo: () => { outlinedSegments += 1 },
       stroke: () => {},
       strokeRect: () => {},
       arc: () => {},
-      fill: () => {
-        if (paint && typeof paint === 'object' && 'colors' in paint &&
-          (paint as { colors: string[] }).colors.includes('#f5f8f6')) {
-          roofPolygons.push([...path])
-        }
-      },
+      fill: () => { if (outlinedSegments > 0) filledPolygonCount += 1 },
     } as unknown as CanvasRenderingContext2D
     Object.defineProperty(ctx, 'fillStyle', {
       get: () => paint,
       set: (value: unknown) => { paint = value },
     })
 
-    renderStadiumOnly(ctx, DEFAULT_PITCH, width, height)
-    expect(roofPolygons).toHaveLength(2)
-    expect(roofPolygons[0].every(({ x }) => x < pitch.x)).toBe(true)
-    expect(roofPolygons[1].every(({ x }) => x > pitch.x + pitch.width)).toBe(true)
-    expect(roofPolygons.flat().every(({ x, y }) =>
-      Number.isFinite(x) && y >= 0 && y <= height)).toBe(true)
-    // The canopy is a slim outer terrace roof, not a full-width white wall.
-    const leftX = roofPolygons[0].map(({ x }) => x)
-    const rightX = roofPolygons[1].map(({ x }) => x)
-    expect(Math.max(...leftX) - Math.min(...leftX)).toBeLessThan(pitch.x * 0.4)
-    expect(Math.max(...rightX) - Math.min(...rightX)).toBeLessThan(pitch.x * 0.4)
-    expect(pitch.x - Math.max(...leftX)).toBeGreaterThan(pitch.x * 0.4)
-    expect(Math.min(...rightX) - (pitch.x + pitch.width)).toBeGreaterThan(pitch.x * 0.4)
-
-    // On a portrait screen the roof disappears instead of obscuring turf.
-    renderStadiumOnly(ctx, DEFAULT_PITCH, 390, 844)
-    expect(roofPolygons).toHaveLength(2)
+    renderStadiumOnly(ctx, DEFAULT_PITCH, viewportWidth, viewportHeight)
+    expect(gradients).toHaveLength(3) // backdrop and original two stands
+    const whiteTerraces = terraceRects.filter(rect => rect.stops.includes('#f6f8f5'))
+    expect(whiteTerraces).toHaveLength(2)
+    expect(whiteTerraces[0]).toMatchObject({ x: 0, y: 0, w: pitch.x, h: viewportHeight })
+    expect(whiteTerraces[1].x).toBeCloseTo(pitch.x + pitch.width)
+    expect(whiteTerraces[1].w).toBeCloseTo(pitch.x)
+    expect(whiteTerraces[1].h).toBe(viewportHeight)
+    expect(filledPolygonCount).toBe(0) // no canopy sheets
   })
 })

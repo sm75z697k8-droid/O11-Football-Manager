@@ -97,110 +97,37 @@ function drawStadiumBackdrop(
   for (const [origin, breadth, rightSide] of wings) {
     if (breadth < 3) continue
     const grad = ctx.createLinearGradient(origin, 0, origin + breadth, 0)
+    // Keep the original full-width terraces and their seat-row geometry.
+    // Only the goal-end stand finish changes: pearl-white concrete/seating.
     if (rightSide) {
-      grad.addColorStop(0, '#244038')
-      grad.addColorStop(0.14, '#24352f')
-      grad.addColorStop(1, '#101c1c')
+      grad.addColorStop(0, '#c8d4d1')
+      grad.addColorStop(0.16, '#edf2ef')
+      grad.addColorStop(0.72, '#f6f8f5')
+      grad.addColorStop(1, '#cbd6d3')
     } else {
-      grad.addColorStop(0, '#101c1c')
-      grad.addColorStop(.86, '#24352f')
-      grad.addColorStop(1, '#244038')
+      grad.addColorStop(0, '#cbd6d3')
+      grad.addColorStop(0.28, '#f6f8f5')
+      grad.addColorStop(0.84, '#edf2ef')
+      grad.addColorStop(1, '#c8d4d1')
     }
     ctx.fillStyle = grad
     ctx.fillRect(origin, 0, breadth, viewportHeight)
     const tierWidth = Math.max(0, breadth - 17)
     const tierX = rightSide ? origin + 17 : origin
-    ctx.fillStyle = 'rgba(233,238,226,0.043)'
+    // Original seat lines, made visible on the pale surface without
+    // adding new roof slabs, struts, silhouettes, or perspective changes.
+    ctx.fillStyle = 'rgba(82, 105, 104, 0.23)'
     for (let row = 9; row < viewportHeight; row += 10) {
       ctx.fillRect(tierX, row, tierWidth, 2)
     }
-    ctx.fillStyle = 'rgba(0,0,0,.17)'
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.62)'
+    for (let row = 12; row < viewportHeight; row += 10) {
+      ctx.fillRect(tierX, row, tierWidth, 1)
+    }
+    ctx.fillStyle = 'rgba(52, 74, 76, 0.17)'
     for (let row = 4; row < viewportHeight; row += 41) {
       ctx.fillRect(tierX, row, tierWidth, 1)
     }
-  }
-}
-
-
-/**
- * Lightweight, stationary pearl-white tensile roof planes above the two
- * goal-end stands. Every point stays outside the projected touchline/goal
- * rectangle, so the roof cannot obscure the pitch or match interactions.
- * The long side stands deliberately remain uncovered.
- */
-function drawGoalEndCanopies(
-  ctx: CanvasRenderingContext2D, projection: PitchProjection,
-  viewportWidth: number, viewportHeight: number,
-): void {
-  const ends = [
-    { edgeX: projection.x, breadth: projection.x, direction: -1 },
-    {
-      edgeX: projection.x + projection.width,
-      breadth: viewportWidth - projection.x - projection.width,
-      direction: 1,
-    },
-  ]
-
-  for (const { edgeX, breadth, direction } of ends) {
-    // Leave the seating visible. Never squeeze a roof into a portrait apron.
-    if (breadth < 50 || viewportHeight < 180) continue
-
-    const insetY = Math.max(11, Math.min(28, viewportHeight * 0.07))
-    const outerMargin = Math.max(6, Math.min(14, breadth * 0.085))
-    const roofWidth = Math.min(76, breadth * 0.34)
-    // direction faces away from the pitch; inward points back towards it.
-    const inward = -direction
-    const outerX = edgeX + direction * (breadth - outerMargin)
-    const innerX = outerX + inward * roofWidth
-    const frontY = viewportHeight - insetY
-
-    // Small cast shadow on the exposed terrace; no roof touches the pitch.
-    ctx.fillStyle = 'rgba(5, 17, 20, 0.18)'
-    ctx.fillRect(
-      Math.min(innerX, innerX + inward * 10),
-      insetY + 13, 10, viewportHeight - 2 * insetY - 26,
-    )
-
-    const fabric = ctx.createLinearGradient(outerX, 0, innerX, 0)
-    fabric.addColorStop(0, '#d8e1de')
-    fabric.addColorStop(0.38, '#f5f8f6')
-    fabric.addColorStop(0.76, '#e9f0ed')
-    fabric.addColorStop(1, '#bccdca')
-    ctx.fillStyle = fabric
-    ctx.beginPath()
-    ctx.moveTo(outerX, insetY + 12)
-    ctx.lineTo(outerX + inward * roofWidth * 0.76, insetY)
-    ctx.lineTo(innerX - inward * 2, insetY + 24)
-    // Gentle taper in the fabric lip, rather than a massive white block.
-    ctx.lineTo(innerX + inward * 2, viewportHeight * 0.32)
-    ctx.lineTo(innerX + inward * 4, viewportHeight * 0.5)
-    ctx.lineTo(innerX + inward * 2, viewportHeight * 0.68)
-    ctx.lineTo(innerX - inward * 2, frontY - 24)
-    ctx.lineTo(outerX + inward * roofWidth * 0.76, frontY)
-    ctx.lineTo(outerX, frontY - 12)
-    ctx.lineTo(outerX, insetY + 12)
-    ctx.fill()
-
-    // Just a few light membrane seams, aligned across the short-end stand.
-    const seamPitch = Math.max(55, viewportHeight / 6)
-    for (let y = insetY + 40; y < frontY - 30; y += seamPitch) {
-      ctx.strokeStyle = 'rgba(92, 119, 119, 0.24)'
-      ctx.lineWidth = 0.8
-      ctx.beginPath()
-      ctx.moveTo(outerX + inward * 6, y)
-      ctx.lineTo(innerX - inward * 5, y)
-      ctx.stroke()
-    }
-
-    ctx.strokeStyle = 'rgba(234, 244, 242, 0.8)'
-    ctx.lineWidth = 1.4
-    ctx.beginPath()
-    ctx.moveTo(innerX - inward * 2, insetY + 24)
-    ctx.lineTo(innerX + inward * 2, viewportHeight * 0.32)
-    ctx.lineTo(innerX + inward * 4, viewportHeight * 0.5)
-    ctx.lineTo(innerX + inward * 2, viewportHeight * 0.68)
-    ctx.lineTo(innerX - inward * 2, frontY - 24)
-    ctx.stroke()
   }
 }
 
@@ -248,7 +175,6 @@ export function renderStadiumOnly(
   ctx.clearRect(0, 0, width, height)
   const projection = projectPitch(width, height, pitch)
   drawStadiumBackdrop(ctx, projection, width, height)
-  drawGoalEndCanopies(ctx, projection, width, height)
   if (projection.scale <= 0) return
   drawPitch(ctx, projection, pitch.lengthM, pitch.widthM)
 }
@@ -284,7 +210,6 @@ export function renderMatchFrame(ctx: CanvasRenderingContext2D, scene: FrameScen
   ctx.clearRect(0, 0, width, height)
   const projection = projectPitch(width, height, setup.pitch)
   drawStadiumBackdrop(ctx, projection, width, height)
-  drawGoalEndCanopies(ctx, projection, width, height)
   if (projection.scale <= 0) return
   drawPitch(ctx, projection, setup.pitch.lengthM, setup.pitch.widthM)
 
