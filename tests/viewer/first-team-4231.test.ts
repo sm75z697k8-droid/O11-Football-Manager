@@ -5,7 +5,7 @@ import {
   FIRST_TEAM_PREVIEW_FORMATION, FORMATION_4231_SLOTS,
 } from '../../src/data/first-team-lineup'
 import { DEFAULT_PITCH } from '../../src/game/model/pitch'
-import { projectPitch, projectPoint } from '../../src/game/viewer/geometry'
+import { facingAngleDegrees, projectPitch, projectPoint } from '../../src/game/viewer/geometry'
 import { readFileSync } from 'node:fs'
 
 describe('Man Utd one-half first-team 4-2-3-1', () => {
@@ -62,7 +62,22 @@ describe('Man Utd one-half first-team 4-2-3-1', () => {
     }
   })
 
-  it('restores numbered circular red and white player markers, not jerseys', () => {
+  it('derives a facing direction from pitch coordinates, not an invented live AI state', () => {
+    expect(facingAngleDegrees({ xM: 30, yM: 34 }, { xM: 105, yM: 34 })).toBeCloseTo(0)
+    expect(facingAngleDegrees({ xM: 90, yM: 34 }, { xM: 0, yM: 34 })).toBeCloseTo(180)
+    expect(facingAngleDegrees({ xM: 10, yM: 10 }, { xM: 10, yM: 25 })).toBeCloseTo(90)
+    expect(facingAngleDegrees({ xM: 10, yM: 25 }, { xM: 10, yM: 10 })).toBeCloseTo(-90)
+    expect(facingAngleDegrees({ xM: 5, yM: 5 }, { xM: 5, yM: 5 })).toBe(0)
+    const goal = { xM: DEFAULT_PITCH.lengthM, yM: DEFAULT_PITCH.widthM / 2 }
+    const playerHeadings = FIRST_TEAM_4231_ASSIGNMENTS.map(p => facingAngleDegrees(p.position, goal))
+    expect(playerHeadings).toHaveLength(11)
+    expect(playerHeadings.every(h => h > -45 && h < 45)).toBe(true)
+    // Players above and below the centre line should angle toward the same goal.
+    expect(facingAngleDegrees(FIRST_TEAM_4231_POSITIONS.LW, goal)).toBeGreaterThan(0)
+    expect(facingAngleDegrees(FIRST_TEAM_4231_POSITIONS.RW, goal)).toBeLessThan(0)
+  })
+
+  it('uses smaller circular red markers with a gold heading pointer, not jerseys', () => {
     const css = readFileSync('src/app/FirstTeamPreview.css','utf8')
     const component = readFileSync('src/app/FirstTeamPreview.tsx','utf8')
     expect(css).toContain('.first-team-marker-disc')
@@ -72,6 +87,12 @@ describe('Man Utd one-half first-team 4-2-3-1', () => {
     expect(css).toContain('color: #FFFFFF')
     expect(css).toContain('.first-team-marker--selected .first-team-marker-disc')
     expect(component).toContain('className="first-team-marker-disc"')
+    expect(css).toContain('width: 23px')
+    expect(css).toContain('width: 21px')
+    expect(css).toContain('min-width: 44px')
+    expect(css).toContain('.first-team-marker-facing::after')
+    expect(css).toContain('border-left: 6px solid #ffe39a')
+    expect(component).toContain('style={directionStyle}')
     expect(component).toContain('{starter.shirtNumber}')
     expect(component).not.toContain('first-team-marker-shirt')
     expect(css).not.toContain('clip-path: polygon')

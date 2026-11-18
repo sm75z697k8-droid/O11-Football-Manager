@@ -67,8 +67,9 @@
 }
 /* Original round 2D match markers, now in Man Utd red and white. */
 .first-team-marker-disc {
-  width: 30px;
-  height: 30px;
+  position: relative;
+  width: 23px;
+  height: 23px;
   flex: none;
   border-radius: 50%;
   display: grid;
@@ -78,8 +79,29 @@
   border: 2px solid #FFFFFF;
   color: #FFFFFF;
   box-shadow: 0 2px 6px rgba(0, 0, 0, .38), inset 0 1px 2px rgba(255, 255, 255, .16);
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 800;
+}
+/* Rotate just the outer facing indicator, never the shirt number. */
+.first-team-marker-facing {
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  pointer-events: none;
+  transform-origin: center;
+}
+.first-team-marker-facing::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  border-left: 6px solid #ffe39a;
+  filter: drop-shadow(0 0 1px rgba(10, 19, 15, .9));
 }
 .first-team-marker--selected .first-team-marker-disc {
   background: #FFFFFF;
@@ -93,7 +115,7 @@
 }
 .first-team-marker-name {
   padding: 2px 4px;
-  max-width: 62px;
+  max-width: 54px;
   border-radius: 4px;
   background: rgba(8, 28, 28, .7);
   font-size: 9px;
@@ -164,12 +186,12 @@
 .first-team-detail-note { margin-top: 10px; color: #a9bbc3; font-size: 9px; }
 @media (max-height: 450px) {
   .first-team-identity { padding: 5px 8px; }
-  .first-team-marker-disc { width: 27px; height: 27px; font-size: 11px; }
+  .first-team-marker-disc { width: 21px; height: 21px; font-size: 9px; }
   .first-team-marker-name { font-size: 8px; padding: 1px 3px; }
   .first-team-detail { padding: 9px; }
 }
 @media (orientation: portrait) {
   .first-team-marker-name { display: none; }
-  .first-team-marker-disc { width: 25px; height: 25px; font-size: 10px; }
+  .first-team-marker-disc { width: 19px; height: 19px; font-size: 8px; }
   .first-team-hint { display: none; }
 }

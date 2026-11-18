@@ -5,7 +5,7 @@ import {
   FIRST_TEAM_4231_ASSIGNMENTS, FIRST_TEAM_PREVIEW_FORMATION,
 } from '../data/first-team-lineup'
 import { DEFAULT_PITCH } from '../game/model/pitch'
-import { projectPitch, projectPoint } from '../game/viewer/geometry'
+import { facingAngleDegrees, projectPitch, projectPoint } from '../game/viewer/geometry'
 import PlayerStatsPanel from './PlayerStatsPanel'
 import StadiumOnly from './StadiumOnly'
 import './FirstTeamPreview.css'
@@ -58,6 +58,15 @@ export default function FirstTeamPreview() {
         if (!player) return null
         const point = projectPoint(starter.position, projection)
         const positionStyle: CSSProperties = { left: point.x, top: point.y }
+        // Only a lineup-preview orientation: face the opposing goal.
+        // Future live-match headings must be supplied by simulated player state.
+        const facingAngle = facingAngleDegrees(starter.position, {
+          xM: DEFAULT_PITCH.lengthM,
+          yM: DEFAULT_PITCH.widthM / 2,
+        })
+        const directionStyle: CSSProperties = {
+          transform: `rotate(${facingAngle}deg)`,
+        }
         const surname = player.profile.fullName.split(' ').at(-1)
         return (
           <button
@@ -68,15 +77,19 @@ export default function FirstTeamPreview() {
             onClick={() => setSelectedId(selectedId === player.id ? null : player.id)}
             aria-pressed={selectedId === player.id}
             aria-label={'Number ' + starter.shirtNumber + ', ' + player.profile.fullName +
-              ', ' + starter.slot + '. Show player attributes'}
+              ', ' + starter.slot +
+              '. Facing approximately towards the opposing goal. Show player attributes'}
           >
-            <span className="first-team-marker-disc" aria-hidden="true">{starter.shirtNumber}</span>
+            <span className="first-team-marker-disc" aria-hidden="true">
+              {starter.shirtNumber}
+              <span className="first-team-marker-facing" style={directionStyle} />
+            </span>
             <span className="first-team-marker-name">{surname}</span>
           </button>
         )
       })}
 
-      <div className="first-team-hint">4-2-3-1 · Tap a player to inspect</div>
+      <div className="first-team-hint">4-2-3-1 · Gold pointer = preview facing · Tap player</div>
       {selectedPlayer && selectedAssignment && (
         <PlayerStatsPanel key={selectedPlayer.id} player={selectedPlayer}
           assignment={selectedAssignment} onClose={() => setSelectedId(null)} />

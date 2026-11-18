@@ -56,6 +56,19 @@ export function interpolatePosition(
     yM: from.yM + (to.yM - from.yM) * a }
 }
 
+/**
+ * Screen-space facing angle of a player towards a world-space target.
+ * Pitch X increases to the right and Y increases downwards, matching CSS
+ * rotation. A point exactly at its target is treated as facing right.
+ * Preview/UI only; this does NOT simulate a match-engine player's decisions.
+ */
+export function facingAngleDegrees(position: Point2, target: Point2): number {
+  const dx = target.xM - position.xM
+  const dy = target.yM - position.yM
+  if (dx === 0 && dy === 0) return 0
+  return Math.atan2(dy, dx) * 180 / Math.PI
+}
+
 /** Hit-testing uses the same projection and canonical state as rendering. */
 export function findPlayerAt(
   point: { x: number; y: number }, state: MatchState,
