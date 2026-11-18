@@ -201,28 +201,32 @@ function drawPitch(
   ctx.fillStyle = '#2a6a42'
   ctx.fillRect(outerX, outerY, outerWidth, outerHeight)
 
-  // Extend the pitch's exact checkerboard colours and grid alignment
-  // across the run-off. Continuing the same tiles (including negative
-  // indices) removes the unnatural flat-green border at the goal lines.
-  const columns = 12
-  const rows = 8
-  const cellW = projection.width / columns
-  const cellH = projection.height / rows
-  for (let c = -Math.ceil(goalRunoff / cellW);
-    c < columns + Math.ceil(goalRunoff / cellW); c += 1) {
-    for (let row = -Math.ceil(sideRunoff / cellH);
-      row < rows + Math.ceil(sideRunoff / cellH); row += 1) {
-      if ((c + row) % 2 !== 0) continue
-      const tileX = x + c * cellW
-      const tileY = y + row * cellH
-      // Keep the extended mowing tiles inside the green turf rectangle.
-      const left = Math.max(outerX, tileX)
-      const top = Math.max(outerY, tileY)
-      const right = Math.min(outerX + outerWidth, tileX + cellW + 0.3)
-      const bottom = Math.min(outerY + outerHeight, tileY + cellH + 0.3)
-      if (right <= left || bottom <= top) continue
-      ctx.fillStyle = '#317449'
-      ctx.fillRect(left, top, right - left, bottom - top)
+  // Twelve broad, alternating mowing stripes across the LEGAL pitch.
+  // The run-off stays a single unpatterned green (#2a6a42), as requested.
+  const stripeCount = 12
+  const stripeWidth = projection.width / stripeCount
+  for (let stripe = 0; stripe < stripeCount; stripe += 1) {
+    ctx.fillStyle = stripe % 2 === 0 ? '#32774a' : '#2d6d43'
+    const left = x + stripe * stripeWidth
+    const right = stripe === stripeCount - 1 ? x + projection.width : left + stripeWidth
+    ctx.fillRect(left, y, right - left, height)
+  }
+
+  // A few deterministic grass flecks, restricted to the playable field.
+  // No image assets, generated noise, animation or random values per frame:
+  // the texture is subtle and inexpensive on iPhone Safari.
+  const grainCols = Math.max(12, Math.min(28, Math.round(projection.width / 27)))
+  const grainRows = Math.max(8, Math.min(16, Math.round(height / 27)))
+  const fleckWidth = Math.max(0.65, Math.min(1.1, scale * 0.15))
+  const fleckHeight = Math.max(1.1, Math.min(2.3, scale * 0.36))
+  for (let row = 0; row < grainRows; row += 1) {
+    for (let col = 0; col < grainCols; col += 1) {
+      const hash = (col * 37 + row * 73 + col * row * 13) % 101
+      const px = x + (col + 0.18 + (hash % 51) / 100) * projection.width / grainCols
+      const py = y + (row + 0.18 + (hash % 47) / 100) * height / grainRows
+      ctx.fillStyle = hash % 2 === 0
+        ? 'rgba(218, 242, 221, 0.060)' : 'rgba(11, 49, 28, 0.075)'
+      ctx.fillRect(px, py, fleckWidth, fleckHeight)
     }
   }
   // Markings and player coordinates still use the SAME physical projection

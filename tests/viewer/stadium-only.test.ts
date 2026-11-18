@@ -82,23 +82,19 @@ describe('stadium-only entry screen', () => {
     })
   })
 
-  it('uses the same checkerboard turf across the larger goal and touchline run-offs', () => {
+  it('draws twelve alternating pitch stripes, light turf grain, and plain outer run-off', () => {
     expect(GOAL_END_RUNOFF_M).toBeGreaterThanOrEqual(8)
     expect(TOUCHLINE_RUNOFF_M).toBeGreaterThanOrEqual(3)
-
     const width = 844
     const height = 390
     const pitch = projectPitch(width, height, DEFAULT_PITCH)
-    const turf: Array<{ x: number; y: number; w: number; h: number }> = []
-    const tiles: Array<{ x: number; y: number; w: number; h: number }> = []
-    let paint: unknown
-
+    const rectangles: Array<{ x: number; y: number; w: number; h: number; style: unknown }> = []
+    let style: unknown
     const ctx = {
       clearRect: () => {},
       createLinearGradient: () => ({ addColorStop: () => {} }),
       fillRect: (x: number, y: number, w: number, h: number) => {
-        if (paint === '#2a6a42') turf.push({ x, y, w, h })
-        if (paint === '#317449') tiles.push({ x, y, w, h })
+        rectangles.push({ x, y, w, h, style })
       },
       beginPath: () => {},
       moveTo: () => {},
@@ -109,27 +105,42 @@ describe('stadium-only entry screen', () => {
       fill: () => {},
     } as unknown as CanvasRenderingContext2D
     Object.defineProperty(ctx, 'fillStyle', {
-      get: () => paint,
-      set: (value: unknown) => { paint = value },
+      get: () => style,
+      set: (value: unknown) => { style = value },
     })
 
     renderStadiumOnly(ctx, DEFAULT_PITCH, width, height)
-    expect(turf).toHaveLength(1)
-    const grass = turf[0]
-    const right = grass.x + grass.w
-    const bottom = grass.y + grass.h
-    const tolerance = 1e-8
-    // Both sides of the legal pitch and both touchlines have the same
-    // alternating mowing pattern, rather than a flat differently shaded strip.
-    expect(tiles.some(tile => tile.x < pitch.x)).toBe(true)
-    expect(tiles.some(tile => tile.x + tile.w > pitch.x + pitch.width)).toBe(true)
-    expect(tiles.some(tile => tile.y < pitch.y)).toBe(true)
-    expect(tiles.some(tile => tile.y + tile.h > pitch.y + pitch.height)).toBe(true)
-    expect(tiles.some(tile => tile.x >= pitch.x && tile.y >= pitch.y)).toBe(true)
-    expect(tiles.every(tile =>
-      tile.x >= grass.x - tolerance && tile.y >= grass.y - tolerance &&
-      tile.x + tile.w <= right + tolerance &&
-      tile.y + tile.h <= bottom + tolerance)).toBe(true)
+    const outer = rectangles.filter(r => r.style === '#2a6a42')
+    const stripes = rectangles.filter(r => r.style === '#32774a' || r.style === '#2d6d43')
+    const grain = rectangles.filter(r => r.style === 'rgba(218, 242, 221, 0.060)' ||
+      r.style === 'rgba(11, 49, 28, 0.075)')
+    expect(outer).toHaveLength(1)
+    expect(stripes).toHaveLength(12)
+    expect(grain.length).toBeGreaterThan(80)
+    expect(grain.length).toBeLessThanOrEqual(448)
+
+    const goalRunoff = GOAL_END_RUNOFF_M * pitch.scale
+    const touchlineRunoff = TOUCHLINE_RUNOFF_M * pitch.scale
+    expect(outer[0].x).toBeCloseTo(pitch.x - goalRunoff)
+    expect(outer[0].y).toBeCloseTo(pitch.y - touchlineRunoff)
+    expect(outer[0].w).toBeCloseTo(pitch.width + 2 * goalRunoff)
+    expect(outer[0].h).toBeCloseTo(pitch.height + 2 * touchlineRunoff)
+
+    // No stripes or grain on the outer run-off, including behind the nets.
+    const inside = (r: { x: number; y: number; w: number; h: number }) =>
+      r.x >= pitch.x - 1e-8 && r.y >= pitch.y - 1e-8 &&
+      r.x + r.w <= pitch.x + pitch.width + 1e-8 &&
+      r.y + r.h <= pitch.y + pitch.height + 1e-8
+    expect(stripes.every(inside)).toBe(true)
+    expect(grain.every(inside)).toBe(true)
+    expect(stripes.map(r => r.style)).toEqual(Array.from({ length: 12 },
+      (_, i) => i % 2 === 0 ? '#32774a' : '#2d6d43'))
+    for (let i = 0; i < 12; i += 1) {
+      expect(stripes[i].x).toBeCloseTo(pitch.x + i * pitch.width / 12)
+      expect(stripes[i].w).toBeCloseTo(pitch.width / 12)
+      expect(stripes[i].y).toBeCloseTo(pitch.y)
+      expect(stripes[i].h).toBeCloseTo(pitch.height)
+    }
   })
 
   it('renders three evenly spaced mirrored beams above the pitch edges', () => {
