@@ -121,6 +121,99 @@ function drawStadiumBackdrop(
   }
 }
 
+
+/**
+ * Lightweight, stationary pearl-white tensile roof planes above the two
+ * goal-end stands. Every point stays outside the projected touchline/goal
+ * rectangle, so the roof cannot obscure the pitch or match interactions.
+ * The long side stands deliberately remain uncovered.
+ */
+function drawGoalEndCanopies(
+  ctx: CanvasRenderingContext2D, projection: PitchProjection,
+  viewportWidth: number, viewportHeight: number,
+): void {
+  const ends = [
+    { edgeX: projection.x, breadth: projection.x, direction: -1 },
+    {
+      edgeX: projection.x + projection.width,
+      breadth: viewportWidth - projection.x - projection.width,
+      direction: 1,
+    },
+  ]
+
+  for (const { edgeX, breadth, direction } of ends) {
+    // Portrait layouts have no useful goal-end apron: never cover the pitch.
+    if (breadth < 32 || viewportHeight < 90) continue
+
+    const padY = Math.max(9, Math.min(18, viewportHeight * 0.045))
+    const frontX = edgeX + direction * Math.min(8, breadth * 0.16)
+    const rearX = edgeX + direction * (breadth - Math.min(10, breadth * 0.14))
+    const cornerInset = Math.min(11, breadth * 0.12)
+    const curveInsetY = Math.min(35, viewportHeight * 0.11)
+
+    // A recessed membrane casts a discreet shade on the seating beneath.
+    ctx.fillStyle = 'rgba(5, 16, 18, 0.28)'
+    ctx.fillRect(
+      Math.min(frontX, rearX) + 2, padY + 5,
+      Math.max(0, Math.abs(rearX - frontX) - 4), viewportHeight - 2 * padY - 10,
+    )
+
+    const fabric = ctx.createLinearGradient(rearX, 0, frontX, 0)
+    fabric.addColorStop(0, '#d8e1de')
+    fabric.addColorStop(0.38, '#f5f8f6')
+    fabric.addColorStop(0.76, '#e9f0ed')
+    fabric.addColorStop(1, '#bccdca')
+    ctx.fillStyle = fabric
+    ctx.beginPath()
+    ctx.moveTo(rearX, padY + 11)
+    ctx.lineTo(frontX + direction * cornerInset, padY)
+    ctx.lineTo(frontX, padY + curveInsetY)
+    ctx.lineTo(frontX, viewportHeight - padY - curveInsetY)
+    ctx.lineTo(frontX + direction * cornerInset, viewportHeight - padY)
+    ctx.lineTo(rearX, viewportHeight - padY - 11)
+    ctx.lineTo(rearX, padY + 11)
+    ctx.fill()
+
+    // Seam pairs suggest individual stretched fabric bays, not a flat slab.
+    const baySpacing = Math.max(28, Math.min(44, viewportHeight / 9))
+    for (let y = padY + curveInsetY + 8;
+      y < viewportHeight - padY - curveInsetY - 6; y += baySpacing) {
+      const slope = (y - viewportHeight / 2) * 0.025
+      ctx.strokeStyle = 'rgba(92, 119, 119, 0.38)'
+      ctx.lineWidth = 1.1
+      ctx.beginPath()
+      ctx.moveTo(rearX, y)
+      ctx.lineTo(frontX, y + slope)
+      ctx.stroke()
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.74)'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(rearX, y + 2.5)
+      ctx.lineTo(frontX, y + slope + 2.5)
+      ctx.stroke()
+    }
+
+    // Silver support spine and a bright, softly faceted pitch-facing lip.
+    const spineX = rearX + (frontX - rearX) * 0.74
+    ctx.strokeStyle = 'rgba(105, 129, 132, 0.46)'
+    ctx.lineWidth = Math.max(1, Math.min(2, breadth * 0.012))
+    ctx.beginPath()
+    ctx.moveTo(spineX, padY + 24)
+    ctx.lineTo(spineX, viewportHeight - padY - 24)
+    ctx.stroke()
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.94)'
+    ctx.lineWidth = Math.max(1.5, Math.min(3, breadth * 0.022))
+    ctx.beginPath()
+    ctx.moveTo(frontX + direction * cornerInset, padY)
+    ctx.lineTo(frontX, padY + curveInsetY)
+    ctx.lineTo(frontX, viewportHeight - padY - curveInsetY)
+    ctx.lineTo(frontX + direction * cornerInset, viewportHeight - padY)
+    ctx.stroke()
+  }
+}
+
 function drawPitch(
   ctx: CanvasRenderingContext2D, projection: PitchProjection,
   length: number, width: number,
@@ -165,6 +258,7 @@ export function renderStadiumOnly(
   ctx.clearRect(0, 0, width, height)
   const projection = projectPitch(width, height, pitch)
   drawStadiumBackdrop(ctx, projection, width, height)
+  drawGoalEndCanopies(ctx, projection, width, height)
   if (projection.scale <= 0) return
   drawPitch(ctx, projection, pitch.lengthM, pitch.widthM)
 }
@@ -200,6 +294,7 @@ export function renderMatchFrame(ctx: CanvasRenderingContext2D, scene: FrameScen
   ctx.clearRect(0, 0, width, height)
   const projection = projectPitch(width, height, setup.pitch)
   drawStadiumBackdrop(ctx, projection, width, height)
+  drawGoalEndCanopies(ctx, projection, width, height)
   if (projection.scale <= 0) return
   drawPitch(ctx, projection, setup.pitch.lengthM, setup.pitch.widthM)
 
