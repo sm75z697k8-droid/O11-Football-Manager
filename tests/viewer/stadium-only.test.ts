@@ -158,17 +158,28 @@ describe('stadium-only entry screen', () => {
     }
   })
 
-  it('keeps a straight pitch-facing roof edge with small symmetrical convex corners', () => {
+  it('rounds the green stadium opening at all four corners as sketched', () => {
     const width = 844
     const height = 390
-    const roofPaths: Array<Array<{ op: string; coords: number[] }>> = []
+    const pitch = projectPitch(width, height, DEFAULT_PITCH)
+    const outlines: Array<Array<{ op: string; coords: number[] }>> = []
+    const roofPanels: Array<{ x: number; y: number; w: number; h: number }> = []
     let path: Array<{ op: string; coords: number[] }> = []
-    let saves = 0
-    let restores = 0
+    let paint: unknown
+    let saved = 0
+    let restored = 0
     const ctx = {
       clearRect: () => {},
-      createLinearGradient: () => ({ addColorStop: () => {} }),
-      fillRect: () => {},
+      createLinearGradient: () => {
+        const stops: string[] = []
+        return { stops, addColorStop: (_offset: number, color: string) => { stops.push(color) } }
+      },
+      fillRect: (x: number, y: number, w: number, h: number) => {
+        if (paint && typeof paint === 'object' && 'stops' in paint &&
+          (paint as { stops: string[] }).stops.includes('#eeeeed')) {
+          roofPanels.push({ x, y, w, h })
+        }
+      },
       beginPath: () => { path = [] },
       moveTo: (x: number, y: number) => { path.push({ op: 'M', coords: [x, y] }) },
       lineTo: (x: number, y: number) => { path.push({ op: 'L', coords: [x, y] }) },
@@ -176,54 +187,65 @@ describe('stadium-only entry screen', () => {
         path.push({ op: 'Q', coords: [cx, cy, x, y] })
       },
       closePath: () => { path.push({ op: 'Z', coords: [] }) },
-      clip: () => { roofPaths.push([...path]) },
-      save: () => { saves += 1 },
-      restore: () => { restores += 1 },
+      clip: () => { outlines.push([...path]) },
+      save: () => { saved++ },
+      restore: () => { restored++ },
       stroke: () => {},
       strokeRect: () => {},
       arc: () => {},
       fill: () => {},
     } as unknown as CanvasRenderingContext2D
+    Object.defineProperty(ctx, 'fillStyle', {
+      get: () => paint,
+      set: (next: unknown) => { paint = next },
+    })
 
     renderStadiumOnly(ctx, DEFAULT_PITCH, width, height)
-    expect(saves).toBe(2)
-    expect(restores).toBe(2)
-    expect(roofPaths).toHaveLength(2)
-    const [left, right] = roofPaths
-    for (const outline of roofPaths) {
-      expect(outline.at(-1)?.op).toBe('Z')
-      const curves = outline.filter(command => command.op === 'Q')
+    expect(saved).toBe(2)
+    expect(restored).toBe(2)
+    expect(outlines).toHaveLength(2)
+    expect(roofPanels).toHaveLength(8)
+    const [left, right] = outlines
+    for (const shape of outlines) {
+      expect(shape.at(-1)?.op).toBe('Z')
+      const curves = shape.filter(p => p.op === 'Q')
       expect(curves).toHaveLength(2)
-      // Both end curves bend OUTWARD into a straight vertical lip, rather
-      // than creating the former large concave cutout.
-      const radius = curves[0].coords[3]
-      expect(radius).toBeGreaterThanOrEqual(4)
-      expect(radius).toBeLessThanOrEqual(14)
+      const tip = shape.find(p => p.op === 'L' && p.coords[1] === 0)
+      expect(tip).toBeDefined()
+      const innerX = curves[0].coords[2]
+      const cornerHeight = curves[0].coords[3]
+      expect(cornerHeight).toBeGreaterThan(height * 0.15)
+      expect(cornerHeight).toBeLessThan(height * 0.21)
       expect(curves[0].coords[1]).toBe(0)
       expect(curves[1].coords[1]).toBe(height)
       expect(curves[1].coords[3]).toBe(height)
-      const innerX = curves[0].coords[2]
-      expect(curves[0].coords[0]).toBeCloseTo(innerX)
-      expect(curves[1].coords[0]).toBeCloseTo(innerX)
-      expect(outline.some(command => command.op === 'L' &&
-        command.coords[0] === innerX &&
-        command.coords[1] === height - radius)).toBe(true)
-      // The white roof covers more horizontal space in the middle than at
-      // the top/bottom corner, and never folds back toward its outer wall.
-      const top = outline.find(command => command.op === 'L' && command.coords[1] === 0)
-      expect(top).toBeDefined()
-      const isLeft = outline === roofPaths[0]
-      expect(isLeft ? top!.coords[0] < innerX : top!.coords[0] > innerX).toBe(true)
-      expect(Math.abs(top!.coords[0] - innerX)).toBeCloseTo(radius)
+      expect(shape.some(p => p.op === 'L' && p.coords[0] === innerX &&
+        p.coords[1] === height - cornerHeight)).toBe(true)
+      // The top and bottom roof tips project FURTHER inward than the
+      // straight middle edge, giving the GREEN area large rounded corners.
+      const reach = Math.abs(tip!.coords[0] - innerX)
+      expect(reach).toBeGreaterThan(width * 0.045)
+      expect(reach).toBeLessThan(width * 0.08)
+      const isLeft = shape === left
+      expect(isLeft ? tip!.coords[0] > innerX : tip!.coords[0] < innerX).toBe(true)
+      // Both roof-edge positions remain behind the actual goal line at
+      // pitch height, leaving grass and net space intact.
+      expect(isLeft ? innerX < pitch.x : innerX > pitch.x + pitch.width).toBe(true)
     }
-    const curvesLeft = left.filter(command => command.op === 'Q')
-    const curvesRight = right.filter(command => command.op === 'Q')
+    const leftCurve = left.filter(p => p.op === 'Q')
+    const rightCurve = right.filter(p => p.op === 'Q')
     for (let i = 0; i < 2; i++) {
-      expect(curvesLeft[i].coords[0] + curvesRight[i].coords[0]).toBeCloseTo(width)
-      expect(curvesLeft[i].coords[2] + curvesRight[i].coords[2]).toBeCloseTo(width)
-      expect(curvesLeft[i].coords[1]).toBe(curvesRight[i].coords[1])
-      expect(curvesLeft[i].coords[3]).toBe(curvesRight[i].coords[3])
+      expect(leftCurve[i].coords[0] + rightCurve[i].coords[0]).toBeCloseTo(width)
+      expect(leftCurve[i].coords[2] + rightCurve[i].coords[2]).toBeCloseTo(width)
+      expect(leftCurve[i].coords[1]).toBe(rightCurve[i].coords[1])
+      expect(leftCurve[i].coords[3]).toBe(rightCurve[i].coords[3])
     }
+    // The white surface must be wide enough to FILL the newly extended
+    // curved corners, rather than exposing a dark triangular void.
+    const leftTip = left.find(p => p.op === 'L' && p.coords[1] === 0)!.coords[0]
+    const rightTip = right.find(p => p.op === 'L' && p.coords[1] === 0)!.coords[0]
+    expect(roofPanels[0].x + roofPanels[0].w).toBeCloseTo(leftTip)
+    expect(roofPanels[4].x).toBeCloseTo(rightTip)
   })
 
   it('renders three evenly spaced mirrored beams above the pitch edges', () => {

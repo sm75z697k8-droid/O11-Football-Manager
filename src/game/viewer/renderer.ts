@@ -117,31 +117,40 @@ function drawGoalEndRoofs(
     const lipInset = Math.max(0, grassRunoff - roofOverlap)
     const innerEdge = rightSide ? x + lipInset : x + width - lipInset
     const outerEdge = rightSide ? x + width : x
-    const roofX = rightSide ? innerEdge : outerEdge
     const roofWidth = width - lipInset
-    // Conventional convex rounding on the two PITCH-FACING corners only.
-    // A small radius keeps the white roof continuous, with no large dark
-    // notches. The entire long pitch-facing edge stays perfectly straight.
-    const cornerRadius = Math.max(4, Math.min(14, viewportHeight * 0.035, roofWidth * 0.18))
-    const cornerX = innerEdge + (rightSide ? cornerRadius : -cornerRadius)
+    // The user's sketch rounds the GREEN OPENING, not the white panel:
+    // each roof reaches further towards the pitch at the top/bottom, then
+    // smoothly retreats to its straight middle edge.
+    const cornerReach = Math.min(roofWidth * 0.44, viewportWidth * 0.061)
+    const cornerHeight = Math.min(viewportHeight * 0.19, viewportHeight / 4)
+    const topTipX = innerEdge + (rightSide ? -cornerReach : cornerReach)
+    const fillX = Math.min(outerEdge, topTipX)
+    const fillWidth = Math.abs(outerEdge - topTipX)
 
-    // Shadow falls onto the outer grass behind each goal. The goal line
-    // and the 2m net depth remain uncovered by the roof panels themselves.
-    const shadowWidth = Math.min(11, projection.scale * 1.3)
-    ctx.fillStyle = 'rgba(3, 17, 19, 0.28)'
-    ctx.fillRect(rightSide ? innerEdge - shadowWidth : innerEdge,
-      projection.y - TOUCHLINE_RUNOFF_M * projection.scale,
-      shadowWidth, projection.height + 2 * TOUCHLINE_RUNOFF_M * projection.scale)
+    // Follow the entire curved silhouette with a subdued cast shadow,
+    // instead of a rectangular dark block that would leave cutouts.
+    const traceLip = () => {
+      ctx.beginPath()
+      ctx.moveTo(topTipX, 0)
+      ctx.quadraticCurveTo(innerEdge, 0, innerEdge, cornerHeight)
+      ctx.lineTo(innerEdge, viewportHeight - cornerHeight)
+      ctx.quadraticCurveTo(innerEdge, viewportHeight, topTipX, viewportHeight)
+    }
+    traceLip()
+    ctx.strokeStyle = 'rgba(3, 17, 19, 0.28)'
+    ctx.lineWidth = Math.max(3, Math.min(7, projection.scale))
+    ctx.stroke()
 
-    // Clip ribbed panels and beams to the same clean rounded-rectangle
-    // edge. Only the two inner corners turn; no middle-edge recession.
+    // Clip all the white ribs and beams to the wide rounded opening.
+    // The original grass can remain square underneath: the roof is drawn
+    // after the grass and masks precisely the four requested corners.
     ctx.save()
     ctx.beginPath()
     ctx.moveTo(outerEdge, 0)
-    ctx.lineTo(cornerX, 0)
-    ctx.quadraticCurveTo(innerEdge, 0, innerEdge, cornerRadius)
-    ctx.lineTo(innerEdge, viewportHeight - cornerRadius)
-    ctx.quadraticCurveTo(innerEdge, viewportHeight, cornerX, viewportHeight)
+    ctx.lineTo(topTipX, 0)
+    ctx.quadraticCurveTo(innerEdge, 0, innerEdge, cornerHeight)
+    ctx.lineTo(innerEdge, viewportHeight - cornerHeight)
+    ctx.quadraticCurveTo(innerEdge, viewportHeight, topTipX, viewportHeight)
     ctx.lineTo(outerEdge, viewportHeight)
     ctx.closePath()
     ctx.clip()
@@ -151,22 +160,22 @@ function drawGoalEndRoofs(
     for (let bay = 0; bay < sections.length - 1; bay += 1) {
       const top = viewportHeight * sections[bay]
       const bottom = viewportHeight * sections[bay + 1]
-      const panel = ctx.createLinearGradient(roofX, top, roofX, bottom)
+      const panel = ctx.createLinearGradient(fillX, top, fillX, bottom)
       panel.addColorStop(0, '#eeeeed')
       panel.addColorStop(0.22, '#e3e4e2')
       panel.addColorStop(0.72, '#d1d3d2')
       panel.addColorStop(1, '#c4c7c6')
       ctx.fillStyle = panel
-      ctx.fillRect(roofX, top, roofWidth, bottom - top)
+      ctx.fillRect(fillX, top, fillWidth, bottom - top)
 
       // Fine horizontal corrugations, not stadium seat rows. Static Canvas
       // shapes avoid texture downloads and remain inexpensive on iPhone.
       const ribSpacing = Math.max(5.5, Math.min(9, viewportHeight * 0.011))
       for (let y = top + 3; y < bottom - 2; y += ribSpacing) {
         ctx.fillStyle = 'rgba(106, 114, 113, 0.14)'
-        ctx.fillRect(roofX + 2, y, Math.max(0, roofWidth - 4), 0.85)
+        ctx.fillRect(fillX + 2, y, Math.max(0, fillWidth - 4), 0.85)
         ctx.fillStyle = 'rgba(255, 255, 255, 0.45)'
-        ctx.fillRect(roofX + 2, y + 1.25, Math.max(0, roofWidth - 4), 0.9)
+        ctx.fillRect(fillX + 2, y + 1.25, Math.max(0, fillWidth - 4), 0.9)
       }
     }
 
@@ -177,7 +186,7 @@ function drawGoalEndRoofs(
       const y = viewportHeight * fraction
       const beamThickness = Math.max(4, Math.min(10, viewportHeight * 0.017))
       ctx.fillStyle = 'rgba(86, 91, 91, 0.18)'
-      ctx.fillRect(roofX, y + beamThickness * 0.55, roofWidth, beamThickness * 0.62)
+      ctx.fillRect(fillX, y + beamThickness * 0.55, fillWidth, beamThickness * 0.62)
 
       const beam = ctx.createLinearGradient(outerEdge, y, innerEdge, y)
       beam.addColorStop(0, '#e2e3e1')
@@ -194,13 +203,8 @@ function drawGoalEndRoofs(
 
     ctx.restore()
 
-    // The silver lip follows the matching convex contour without
-    // extending the shadow or exposing a second square-ended edge.
-    ctx.beginPath()
-    ctx.moveTo(cornerX, 0)
-    ctx.quadraticCurveTo(innerEdge, 0, innerEdge, cornerRadius)
-    ctx.lineTo(innerEdge, viewportHeight - cornerRadius)
-    ctx.quadraticCurveTo(innerEdge, viewportHeight, cornerX, viewportHeight)
+    // The silver fascia follows the same four broad green-opening arcs.
+    traceLip()
     ctx.strokeStyle = 'rgba(100, 116, 115, 0.60)'
     ctx.lineWidth = 2.2
     ctx.stroke()
