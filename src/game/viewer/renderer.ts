@@ -119,11 +119,11 @@ function drawGoalEndRoofs(
     const outerEdge = rightSide ? x + width : x
     const roofX = rightSide ? innerEdge : outerEdge
     const roofWidth = width - lipInset
-    // Reversed (concave) curves: the roof reaches the grass at each top/
-    // bottom corner, then sweeps back away from the pitch along its side.
-    // The outer wall remains square and all geometry stays behind goal lines.
-    const cornerRadius = Math.max(5, Math.min(36, viewportHeight * 0.075, roofWidth * 0.34))
-    const recessedX = innerEdge + (rightSide ? cornerRadius : -cornerRadius)
+    // Conventional convex rounding on the two PITCH-FACING corners only.
+    // A small radius keeps the white roof continuous, with no large dark
+    // notches. The entire long pitch-facing edge stays perfectly straight.
+    const cornerRadius = Math.max(4, Math.min(14, viewportHeight * 0.035, roofWidth * 0.18))
+    const cornerX = innerEdge + (rightSide ? cornerRadius : -cornerRadius)
 
     // Shadow falls onto the outer grass behind each goal. The goal line
     // and the 2m net depth remain uncovered by the roof panels themselves.
@@ -133,16 +133,15 @@ function drawGoalEndRoofs(
       projection.y - TOUCHLINE_RUNOFF_M * projection.scale,
       shadowWidth, projection.height + 2 * TOUCHLINE_RUNOFF_M * projection.scale)
 
-    // Inverted edge rounding: unlike a conventional convex radius,
-    // the roof's upper/lower tips extend toward the pitch and the long
-    // middle edge sits further back. Clip panels and beams together.
+    // Clip ribbed panels and beams to the same clean rounded-rectangle
+    // edge. Only the two inner corners turn; no middle-edge recession.
     ctx.save()
     ctx.beginPath()
     ctx.moveTo(outerEdge, 0)
-    ctx.lineTo(innerEdge, 0)
-    ctx.quadraticCurveTo(innerEdge, cornerRadius, recessedX, cornerRadius)
-    ctx.lineTo(recessedX, viewportHeight - cornerRadius)
-    ctx.quadraticCurveTo(innerEdge, viewportHeight - cornerRadius, innerEdge, viewportHeight)
+    ctx.lineTo(cornerX, 0)
+    ctx.quadraticCurveTo(innerEdge, 0, innerEdge, cornerRadius)
+    ctx.lineTo(innerEdge, viewportHeight - cornerRadius)
+    ctx.quadraticCurveTo(innerEdge, viewportHeight, cornerX, viewportHeight)
     ctx.lineTo(outerEdge, viewportHeight)
     ctx.closePath()
     ctx.clip()
@@ -195,13 +194,13 @@ function drawGoalEndRoofs(
 
     ctx.restore()
 
-    // The silver fascia follows the same reversed contour without adding
-    // a straight line that would recreate the old square corner.
+    // The silver lip follows the matching convex contour without
+    // extending the shadow or exposing a second square-ended edge.
     ctx.beginPath()
-    ctx.moveTo(innerEdge, 0)
-    ctx.quadraticCurveTo(innerEdge, cornerRadius, recessedX, cornerRadius)
-    ctx.lineTo(recessedX, viewportHeight - cornerRadius)
-    ctx.quadraticCurveTo(innerEdge, viewportHeight - cornerRadius, innerEdge, viewportHeight)
+    ctx.moveTo(cornerX, 0)
+    ctx.quadraticCurveTo(innerEdge, 0, innerEdge, cornerRadius)
+    ctx.lineTo(innerEdge, viewportHeight - cornerRadius)
+    ctx.quadraticCurveTo(innerEdge, viewportHeight, cornerX, viewportHeight)
     ctx.strokeStyle = 'rgba(100, 116, 115, 0.60)'
     ctx.lineWidth = 2.2
     ctx.stroke()

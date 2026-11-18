@@ -158,7 +158,7 @@ describe('stadium-only entry screen', () => {
     }
   })
 
-  it('reverses all four roof corners into symmetric inward-sweeping curves', () => {
+  it('keeps a straight pitch-facing roof edge with small symmetrical convex corners', () => {
     const width = 844
     const height = 390
     const roofPaths: Array<Array<{ op: string; coords: number[] }>> = []
@@ -194,21 +194,27 @@ describe('stadium-only entry screen', () => {
       expect(outline.at(-1)?.op).toBe('Z')
       const curves = outline.filter(command => command.op === 'Q')
       expect(curves).toHaveLength(2)
-      // The top curve initially travels DOWN from the roof tip, rather
-      // than sliding sideways across the top as in the previous shape.
-      const radius = curves[0].coords[1]
-      expect(radius).toBeGreaterThan(5)
-      expect(curves[0].coords[3]).toBe(radius)
-      expect(curves[1].coords[1]).toBe(height - radius)
+      // Both end curves bend OUTWARD into a straight vertical lip, rather
+      // than creating the former large concave cutout.
+      const radius = curves[0].coords[3]
+      expect(radius).toBeGreaterThanOrEqual(4)
+      expect(radius).toBeLessThanOrEqual(14)
+      expect(curves[0].coords[1]).toBe(0)
+      expect(curves[1].coords[1]).toBe(height)
       expect(curves[1].coords[3]).toBe(height)
+      const innerX = curves[0].coords[2]
+      expect(curves[0].coords[0]).toBeCloseTo(innerX)
+      expect(curves[1].coords[0]).toBeCloseTo(innerX)
       expect(outline.some(command => command.op === 'L' &&
+        command.coords[0] === innerX &&
         command.coords[1] === height - radius)).toBe(true)
-      const tip = outline.find(command => command.op === 'L' && command.coords[1] === 0)
-      expect(tip).toBeDefined()
-      // Both tips reach toward the pitch; the central roof edge retreats.
-      const receded = curves[0].coords[2]
-      const isLeftRoof = outline === roofPaths[0]
-      expect(isLeftRoof ? tip!.coords[0] > receded : tip!.coords[0] < receded).toBe(true)
+      // The white roof covers more horizontal space in the middle than at
+      // the top/bottom corner, and never folds back toward its outer wall.
+      const top = outline.find(command => command.op === 'L' && command.coords[1] === 0)
+      expect(top).toBeDefined()
+      const isLeft = outline === roofPaths[0]
+      expect(isLeft ? top!.coords[0] < innerX : top!.coords[0] > innerX).toBe(true)
+      expect(Math.abs(top!.coords[0] - innerX)).toBeCloseTo(radius)
     }
     const curvesLeft = left.filter(command => command.op === 'Q')
     const curvesRight = right.filter(command => command.op === 'Q')
