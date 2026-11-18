@@ -1,6 +1,6 @@
 import type { MatchSetup } from '../model/match'
 import type { MatchState } from '../match/state'
-import type { Point2 } from '../model/pitch'
+import type { Point2, PitchDefinition } from '../model/pitch'
 import { BALL_RADIUS_M } from '../physics/ball'
 import {
   projectPitch, projectPoint, interpolatePosition,
@@ -149,6 +149,24 @@ function drawPitch(
   // use the SAME geometry as the hit-testing system.
   void scale
   drawMarkings(ctx, projection, length, width)
+}
+
+/**
+ * A static, non-interactive stadium scene.
+ *
+ * Draws only the existing stands, empty turf and accurate field markings.
+ * Deliberately requires no MatchState, players, ball, or simulation clock.
+ */
+export function renderStadiumOnly(
+  ctx: CanvasRenderingContext2D,
+  pitch: PitchDefinition, width: number, height: number,
+): void {
+  if (width <= 0 || height <= 0) return
+  ctx.clearRect(0, 0, width, height)
+  const projection = projectPitch(width, height, pitch)
+  drawStadiumBackdrop(ctx, projection, width, height)
+  if (projection.scale <= 0) return
+  drawPitch(ctx, projection, pitch.lengthM, pitch.widthM)
 }
 
 function drawSelection(

@@ -1,0 +1,18 @@
+/* Temporary empty-stadium entry point.
+   Keep this isolated from the preserved match viewer styles. */
+.stadium-only-screen {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  margin: 0;
+  overflow: hidden;
+  background: #101f1b;
+}
+
+.stadium-only-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
