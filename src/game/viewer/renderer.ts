@@ -88,46 +88,75 @@ function drawStadiumBackdrop(
   ctx.fillStyle = surface
   ctx.fillRect(0, 0, viewportWidth, viewportHeight)
 
-  // Two muted spectator aprons behind the goals. The repeated seat rows
-  // have no gameplay significance and consume no image/network resources.
-  const wings: [number, number, boolean][] = [
-    [0, projection.x, false],
-    [right, Math.max(0, viewportWidth - right), true],
+  // The reference shows three long, horizontally ribbed silver-white roof
+  // bays on EACH goal end, joined by tapered transverse white beams.
+  // Keep all geometry strictly inside the goal-end aprons: the existing field,
+  // pitch projection, markings and match engine are never affected.
+  const endStands = [
+    { x: 0, width: projection.x, rightSide: false },
+    { x: right, width: viewportWidth - right, rightSide: true },
   ]
-  for (const [origin, breadth, rightSide] of wings) {
-    if (breadth < 3) continue
-    const grad = ctx.createLinearGradient(origin, 0, origin + breadth, 0)
-    // Keep the original full-width terraces and their seat-row geometry.
-    // Only the goal-end stand finish changes: pearl-white concrete/seating.
-    if (rightSide) {
-      grad.addColorStop(0, '#c8d4d1')
-      grad.addColorStop(0.16, '#edf2ef')
-      grad.addColorStop(0.72, '#f6f8f5')
-      grad.addColorStop(1, '#cbd6d3')
-    } else {
-      grad.addColorStop(0, '#cbd6d3')
-      grad.addColorStop(0.28, '#f6f8f5')
-      grad.addColorStop(0.84, '#edf2ef')
-      grad.addColorStop(1, '#c8d4d1')
+  const sections = [0, 0.28, 0.72, 1]
+
+  for (const { x, width, rightSide } of endStands) {
+    if (width < 4) continue
+    const innerEdge = rightSide ? x : x + width
+    const outerEdge = rightSide ? x + width : x
+
+    // Ribbed roof panels. Each bay shades from light silver to muted grey,
+    // following the horizontal, stepped appearance of the supplied image.
+    for (let bay = 0; bay < sections.length - 1; bay += 1) {
+      const top = viewportHeight * sections[bay]
+      const bottom = viewportHeight * sections[bay + 1]
+      const panel = ctx.createLinearGradient(x, top, x, bottom)
+      panel.addColorStop(0, '#eeeeed')
+      panel.addColorStop(0.22, '#e3e4e2')
+      panel.addColorStop(0.72, '#d1d3d2')
+      panel.addColorStop(1, '#c4c7c6')
+      ctx.fillStyle = panel
+      ctx.fillRect(x, top, width, bottom - top)
+
+      // Fine horizontal corrugations, not stadium seat rows. Static Canvas
+      // shapes avoid texture downloads and remain inexpensive on iPhone.
+      const ribSpacing = Math.max(5.5, Math.min(9, viewportHeight * 0.011))
+      for (let y = top + 3; y < bottom - 2; y += ribSpacing) {
+        ctx.fillStyle = 'rgba(106, 114, 113, 0.14)'
+        ctx.fillRect(x + 2, y, Math.max(0, width - 4), 0.85)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.45)'
+        ctx.fillRect(x + 2, y + 1.25, Math.max(0, width - 4), 0.9)
+      }
     }
-    ctx.fillStyle = grad
-    ctx.fillRect(origin, 0, breadth, viewportHeight)
-    const tierWidth = Math.max(0, breadth - 17)
-    const tierX = rightSide ? origin + 17 : origin
-    // Original seat lines, made visible on the pale surface without
-    // adding new roof slabs, struts, silhouettes, or perspective changes.
-    ctx.fillStyle = 'rgba(82, 105, 104, 0.23)'
-    for (let row = 9; row < viewportHeight; row += 10) {
-      ctx.fillRect(tierX, row, tierWidth, 2)
+
+    // In the reference, three bright projecting cross beams divide the
+    // panels. Their tips are thicker at the pitch-facing edge and taper
+    // towards the outside wall; mirror the geometry at the opposite goal.
+    for (const fraction of [0.28, 0.72, 0.955]) {
+      const y = viewportHeight * fraction
+      const beamThickness = Math.max(4, Math.min(10, viewportHeight * 0.017))
+      ctx.fillStyle = 'rgba(86, 91, 91, 0.18)'
+      ctx.fillRect(x, y + beamThickness * 0.55, width, beamThickness * 0.62)
+
+      const beam = ctx.createLinearGradient(outerEdge, y, innerEdge, y)
+      beam.addColorStop(0, '#e2e3e1')
+      beam.addColorStop(0.48, '#f5f5f4')
+      beam.addColorStop(1, '#ffffff')
+      ctx.fillStyle = beam
+      ctx.beginPath()
+      ctx.moveTo(outerEdge, y - beamThickness * 0.22)
+      ctx.lineTo(innerEdge, y - beamThickness * 0.58)
+      ctx.lineTo(innerEdge, y + beamThickness * 0.52)
+      ctx.lineTo(outerEdge, y + beamThickness * 0.12)
+      ctx.fill()
     }
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.62)'
-    for (let row = 12; row < viewportHeight; row += 10) {
-      ctx.fillRect(tierX, row, tierWidth, 1)
-    }
-    ctx.fillStyle = 'rgba(52, 74, 76, 0.17)'
-    for (let row = 4; row < viewportHeight; row += 41) {
-      ctx.fillRect(tierX, row, tierWidth, 1)
-    }
+
+    // Slim silver fascia between the white roof and the dark pitch apron.
+    // Drawn inside each end stand, never over the field.
+    ctx.fillStyle = 'rgba(103, 112, 112, 0.30)'
+    ctx.fillRect(rightSide ? innerEdge : innerEdge - 3, 0,
+      Math.min(3, width), viewportHeight)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.54)'
+    ctx.fillRect(rightSide ? innerEdge + 3 : innerEdge - 4, 0,
+      Math.min(1, width), viewportHeight)
   }
 }
 

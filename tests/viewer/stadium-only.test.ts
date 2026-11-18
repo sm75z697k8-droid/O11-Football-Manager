@@ -39,50 +39,66 @@ describe('stadium-only entry screen', () => {
     expect(operations.filter(op => op === 'arc')).toHaveLength(4)
   })
 
-  it('recolors the original two goal-end terraces white without adding canopy polygons', () => {
-    const viewportWidth = 844
-    const viewportHeight = 390
-    const pitch = projectPitch(viewportWidth, viewportHeight, DEFAULT_PITCH)
-    const gradients: Array<{ stops: string[] }> = []
-    const terraceRects: Array<{ x: number; y: number; w: number; h: number; stops: string[] }> = []
-    let paint: unknown
-    let outlinedSegments = 0
-    let filledPolygonCount = 0
+  it('matches the reference: three white horizontal roof bays behind each goal', () => {
+    const width = 844
+    const height = 390
+    const pitch = projectPitch(width, height, DEFAULT_PITCH)
+    const whitePanels: Array<{ x: number; y: number; w: number; h: number }> = []
+    const beams: Array<Array<{ x: number; y: number }>> = []
+    let fillPaint: unknown
+    let path: Array<{ x: number; y: number }> = []
 
     const ctx = {
       clearRect: () => {},
       createLinearGradient: () => {
-        const gradient = { stops: [] as string[],
-          addColorStop: (_offset: number, color: string) => { gradient.stops.push(color) } }
-        gradients.push(gradient)
-        return gradient
+        const stops: string[] = []
+        return { stops, addColorStop: (_offset: number, color: string) => { stops.push(color) } }
       },
       fillRect: (x: number, y: number, w: number, h: number) => {
-        if (paint && typeof paint === 'object' && 'stops' in paint) {
-          terraceRects.push({ x, y, w, h, stops: (paint as { stops: string[] }).stops })
+        if (fillPaint && typeof fillPaint === 'object' && 'stops' in fillPaint &&
+          (fillPaint as { stops: string[] }).stops.includes('#eeeeed')) {
+          whitePanels.push({ x, y, w, h })
         }
       },
-      beginPath: () => { outlinedSegments = 0 },
-      moveTo: () => { outlinedSegments += 1 },
-      lineTo: () => { outlinedSegments += 1 },
+      beginPath: () => { path = [] },
+      moveTo: (x: number, y: number) => { path.push({ x, y }) },
+      lineTo: (x: number, y: number) => { path.push({ x, y }) },
       stroke: () => {},
       strokeRect: () => {},
       arc: () => {},
-      fill: () => { if (outlinedSegments > 0) filledPolygonCount += 1 },
+      fill: () => {
+        if (fillPaint && typeof fillPaint === 'object' && 'stops' in fillPaint &&
+          (fillPaint as { stops: string[] }).stops.includes('#ffffff')) {
+          beams.push([...path])
+        }
+      },
     } as unknown as CanvasRenderingContext2D
     Object.defineProperty(ctx, 'fillStyle', {
-      get: () => paint,
-      set: (value: unknown) => { paint = value },
+      get: () => fillPaint,
+      set: (value: unknown) => { fillPaint = value },
     })
 
-    renderStadiumOnly(ctx, DEFAULT_PITCH, viewportWidth, viewportHeight)
-    expect(gradients).toHaveLength(3) // backdrop and original two stands
-    const whiteTerraces = terraceRects.filter(rect => rect.stops.includes('#f6f8f5'))
-    expect(whiteTerraces).toHaveLength(2)
-    expect(whiteTerraces[0]).toMatchObject({ x: 0, y: 0, w: pitch.x, h: viewportHeight })
-    expect(whiteTerraces[1].x).toBeCloseTo(pitch.x + pitch.width)
-    expect(whiteTerraces[1].w).toBeCloseTo(pitch.x)
-    expect(whiteTerraces[1].h).toBe(viewportHeight)
-    expect(filledPolygonCount).toBe(0) // no canopy sheets
+    renderStadiumOnly(ctx, DEFAULT_PITCH, width, height)
+    expect(whitePanels).toHaveLength(6)
+    expect(beams).toHaveLength(6)
+    const leftPanels = whitePanels.slice(0, 3)
+    const rightPanels = whitePanels.slice(3)
+    expect(leftPanels.every(panel => panel.x === 0 && panel.w === pitch.x)).toBe(true)
+    expect(rightPanels.every(panel => panel.x >= pitch.x + pitch.width)).toBe(true)
+    expect(whitePanels.every(panel => panel.y >= 0 && panel.y + panel.h <= height)).toBe(true)
+
+    // Beam polygons must stay entirely behind the goals on either side.
+    for (const beam of beams.slice(0, 3)) {
+      expect(beam.length).toBe(4)
+      expect(beam.every(({ x }) => x <= pitch.x)).toBe(true)
+    }
+    for (const beam of beams.slice(3)) {
+      expect(beam.length).toBe(4)
+      expect(beam.every(({ x }) => x >= pitch.x + pitch.width)).toBe(true)
+    }
+    // Main tier divisions follow the supplied screenshot's proportions.
+    expect(leftPanels[0].h).toBeCloseTo(height * 0.28)
+    expect(leftPanels[1].h).toBeCloseTo(height * 0.44)
+    expect(leftPanels[2].h).toBeCloseTo(height * 0.28)
   })
 })
