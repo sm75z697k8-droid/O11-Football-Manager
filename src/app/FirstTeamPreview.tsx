@@ -4,6 +4,7 @@ import { FIRST_TEAM } from '../data/first-team'
 import { DEFAULT_PITCH } from '../game/model/pitch'
 import { projectPitch, projectPoint } from '../game/viewer/geometry'
 import type { Formation433Slot } from '../game/model/team'
+import PlayerStatsPanel from './PlayerStatsPanel'
 import StadiumOnly from './StadiumOnly'
 import './FirstTeamPreview.css'
 
@@ -75,36 +76,8 @@ export default function FirstTeamPreview() {
 
       <div className="first-team-hint">Tap a player to inspect</div>
       {selectedPlayer && selectedAssignment && (
-        <aside className="first-team-detail" aria-label="Selected first-team player">
-          <div className="first-team-detail-head">
-            <span className="first-team-detail-number">{selectedAssignment.shirtNumber}</span>
-            <span>
-              <strong>{selectedPlayer.profile.fullName}</strong>
-              <small>{selectedAssignment.slot} · {selectedAssignment.role} · {selectedAssignment.duty}</small>
-            </span>
-            <button className="first-team-detail-close" type="button"
-              aria-label="Close player details" onClick={() => setSelectedId(null)}>×</button>
-          </div>
-          <div className="first-team-detail-attributes">
-            {(selectedAssignment.slot === 'GK'
-              ? [
-                  ['Reflexes', selectedPlayer.abilities.goalkeeping?.reflexes ?? 0],
-                  ['Handling', selectedPlayer.abilities.goalkeeping?.handling ?? 0],
-                  ['Positioning', selectedPlayer.abilities.goalkeeping?.positioning ?? 0],
-                ]
-              : [
-                  ['Passing', selectedPlayer.abilities.technical.passing],
-                  ['Decisions', selectedPlayer.abilities.mental.decisions],
-                  ['Stamina', selectedPlayer.abilities.physical.stamina],
-                ]
-            ).map(([label, value]) => (
-              <span key={label} className="first-team-attribute">
-                <small>{label}</small><strong>{value}</strong>
-              </span>
-            ))}
-          </div>
-          <div className="first-team-detail-note">Fictional estimated ratings · No match running</div>
-        </aside>
+        <PlayerStatsPanel key={selectedPlayer.id} player={selectedPlayer}
+          assignment={selectedAssignment} onClose={() => setSelectedId(null)} />
       )}
     </div>
   )
