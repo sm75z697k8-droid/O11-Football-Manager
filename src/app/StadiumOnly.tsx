@@ -8,7 +8,9 @@ import './StadiumOnly.css'
  * The original match viewer and simulation remain preserved in the repo,
  * but are neither mounted nor advanced by this screen.
  */
-export default function StadiumOnly() {
+export default function StadiumOnly({ canvasLabel = 'Empty football stadium with a marked green pitch. No players or match are active.' }: {
+  readonly canvasLabel?: string
+} = {}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
@@ -56,7 +58,7 @@ export default function StadiumOnly() {
         ref={canvasRef}
         className="stadium-only-canvas"
         role="img"
-        aria-label="Empty football stadium with a marked green pitch. No players or match are active."
+        aria-label={canvasLabel}
       />
     </main>
   )

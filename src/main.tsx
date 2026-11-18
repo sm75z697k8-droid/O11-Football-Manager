@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import StadiumOnly from './app/StadiumOnly'
+import FirstTeamPreview from './app/FirstTeamPreview'
 import './styles/global.css'
 
 const root = document.getElementById('root')
@@ -11,6 +11,6 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <StadiumOnly />
+    <FirstTeamPreview />
   </StrictMode>,
 )

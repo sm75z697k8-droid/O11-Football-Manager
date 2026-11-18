@@ -1,0 +1,165 @@
+.first-team-preview {
+  position: fixed;
+  inset: 0;
+  isolation: isolate;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+}
+.first-team-identity {
+  position: absolute;
+  z-index: 3;
+  top: max(8px, env(safe-area-inset-top, 0px));
+  left: max(9px, env(safe-area-inset-left, 0px));
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: min(330px, 82vw);
+  padding: 7px 10px;
+  border: 1px solid rgba(220, 240, 246, .19);
+  border-radius: 11px;
+  background: rgba(12, 29, 35, .89);
+  box-shadow: 0 7px 28px rgba(3, 11, 11, .22);
+  backdrop-filter: blur(11px);
+  color: #f5faff;
+}
+.first-team-crest {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: #337dbe;
+  border: 1px solid #a1d5fa;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 900;
+}
+.first-team-identity-copy { display: grid; gap: 2px; min-width: 0; }
+.first-team-identity-copy strong { font-size: 12px; letter-spacing: .005em; white-space: nowrap; }
+.first-team-identity-copy span { color: #aebfc8; font-size: 9px; white-space: nowrap; }
+.first-team-formation {
+  font-size: 10px;
+  font-weight: 800;
+  color: #d6f0fe;
+  margin-left: 7px;
+}
+.first-team-marker {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -49%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 39px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: #fff;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.first-team-marker-disc {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #2673b0;
+  border: 2px solid #e6f5ff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .38), inset 0 1px 2px rgba(255,255,255,.19);
+  font-size: 12px;
+  font-weight: 800;
+}
+.first-team-marker--selected .first-team-marker-disc {
+  background: #eafaff;
+  color: #164974;
+  border-color: #164974;
+  box-shadow: 0 0 0 3px rgba(169, 221, 255, .55);
+}
+.first-team-marker-name {
+  padding: 2px 4px;
+  max-width: 86px;
+  border-radius: 4px;
+  background: rgba(8, 28, 28, .7);
+  font-size: 9px;
+  letter-spacing: .01em;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px #071a1a;
+}
+.first-team-hint {
+  position: absolute;
+  bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  right: max(9px, env(safe-area-inset-right, 0px));
+  z-index: 2;
+  background: rgba(7, 20, 18, .64);
+  border-radius: 7px;
+  padding: 5px 8px;
+  color: #d9e9e9;
+  font-size: 10px;
+  pointer-events: none;
+}
+.first-team-detail {
+  position: absolute;
+  z-index: 4;
+  left: max(9px, env(safe-area-inset-left, 0px));
+  bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  width: min(278px, calc(100vw - 32px));
+  padding: 12px;
+  background: rgba(10, 26, 33, .94);
+  border: 1px solid rgba(160, 205, 232, .3);
+  border-radius: 12px;
+  box-shadow: 0 7px 35px rgba(0,0,0,.32);
+  backdrop-filter: blur(13px);
+}
+.first-team-detail-head { display: flex; align-items: center; gap: 9px; }
+.first-team-detail-head > span:nth-child(2) { display: grid; gap: 3px; flex: 1; }
+.first-team-detail-head strong { font-size: 12px; }
+.first-team-detail-head small { color: #bed1da; font-size: 9px; }
+.first-team-detail-number {
+  border-radius: 8px;
+  background: #2b80c2;
+  color: #fff;
+  padding: 8px 10px;
+  font-size: 15px;
+  font-weight: 900;
+}
+.first-team-detail-close {
+  align-self: start;
+  background: transparent;
+  color: #d5e5ed;
+  border: 0;
+  padding: 3px 7px;
+  font-size: 20px;
+  cursor: pointer;
+}
+.first-team-detail-attributes { display: flex; gap: 6px; margin-top: 12px; }
+.first-team-attribute {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  padding: 7px;
+  border-radius: 7px;
+  background: rgba(255,255,255,.08);
+}
+.first-team-attribute small { font-size: 9px; color: #c5d4d8; }
+.first-team-attribute strong { font-size: 15px; color: #fff; }
+.first-team-detail-note { margin-top: 10px; color: #a9bbc3; font-size: 9px; }
+@media (max-height: 450px) {
+  .first-team-identity { padding: 5px 8px; }
+  .first-team-marker-disc { width: 27px; height: 27px; }
+  .first-team-marker-name { font-size: 8px; padding: 1px 3px; }
+  .first-team-detail { padding: 9px; }
+}
+@media (orientation: portrait) {
+  .first-team-marker-name { display: none; }
+  .first-team-marker-disc { width: 25px; height: 25px; font-size: 10px; }
+  .first-team-hint { display: none; }
+}
