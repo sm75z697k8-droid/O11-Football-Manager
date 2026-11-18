@@ -82,6 +82,56 @@ describe('stadium-only entry screen', () => {
     })
   })
 
+  it('uses the same checkerboard turf across the larger goal and touchline run-offs', () => {
+    expect(GOAL_END_RUNOFF_M).toBeGreaterThanOrEqual(8)
+    expect(TOUCHLINE_RUNOFF_M).toBeGreaterThanOrEqual(3)
+
+    const width = 844
+    const height = 390
+    const pitch = projectPitch(width, height, DEFAULT_PITCH)
+    const turf: Array<{ x: number; y: number; w: number; h: number }> = []
+    const tiles: Array<{ x: number; y: number; w: number; h: number }> = []
+    let paint: unknown
+
+    const ctx = {
+      clearRect: () => {},
+      createLinearGradient: () => ({ addColorStop: () => {} }),
+      fillRect: (x: number, y: number, w: number, h: number) => {
+        if (paint === '#2a6a42') turf.push({ x, y, w, h })
+        if (paint === '#317449') tiles.push({ x, y, w, h })
+      },
+      beginPath: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      stroke: () => {},
+      strokeRect: () => {},
+      arc: () => {},
+      fill: () => {},
+    } as unknown as CanvasRenderingContext2D
+    Object.defineProperty(ctx, 'fillStyle', {
+      get: () => paint,
+      set: (value: unknown) => { paint = value },
+    })
+
+    renderStadiumOnly(ctx, DEFAULT_PITCH, width, height)
+    expect(turf).toHaveLength(1)
+    const grass = turf[0]
+    const right = grass.x + grass.w
+    const bottom = grass.y + grass.h
+    const tolerance = 1e-8
+    // Both sides of the legal pitch and both touchlines have the same
+    // alternating mowing pattern, rather than a flat differently shaded strip.
+    expect(tiles.some(tile => tile.x < pitch.x)).toBe(true)
+    expect(tiles.some(tile => tile.x + tile.w > pitch.x + pitch.width)).toBe(true)
+    expect(tiles.some(tile => tile.y < pitch.y)).toBe(true)
+    expect(tiles.some(tile => tile.y + tile.h > pitch.y + pitch.height)).toBe(true)
+    expect(tiles.some(tile => tile.x >= pitch.x && tile.y >= pitch.y)).toBe(true)
+    expect(tiles.every(tile =>
+      tile.x >= grass.x - tolerance && tile.y >= grass.y - tolerance &&
+      tile.x + tile.w <= right + tolerance &&
+      tile.y + tile.h <= bottom + tolerance)).toBe(true)
+  })
+
   it('renders three evenly spaced mirrored beams above the pitch edges', () => {
     const width = 844
     const height = 390

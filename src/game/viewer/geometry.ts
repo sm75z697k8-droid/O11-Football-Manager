@@ -6,8 +6,8 @@ import type { MatchState } from '../match/state'
  * VISUAL ONLY: MatchState and every field coordinate remain 105 × 68 metres.
  * The goal-end strip accommodates 2m-deep nets and separation from the roof.
  */
-export const GOAL_END_RUNOFF_M = 3.5
-export const TOUCHLINE_RUNOFF_M = 2
+export const GOAL_END_RUNOFF_M = 10
+export const TOUCHLINE_RUNOFF_M = 4
 
 /** Pure world-to-canvas coordinates in CSS pixels, independent of screen DPR. */
 export interface PitchProjection {

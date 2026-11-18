@@ -201,17 +201,28 @@ function drawPitch(
   ctx.fillStyle = '#2a6a42'
   ctx.fillRect(outerX, outerY, outerWidth, outerHeight)
 
-  // Subtle checkerboard mowing pattern similar to professional 2D viewers.
+  // Extend the pitch's exact checkerboard colours and grid alignment
+  // across the run-off. Continuing the same tiles (including negative
+  // indices) removes the unnatural flat-green border at the goal lines.
   const columns = 12
   const rows = 8
   const cellW = projection.width / columns
   const cellH = projection.height / rows
-  for (let c = 0; c < columns; c += 1) {
-    for (let row = 0; row < rows; row += 1) {
-      if ((c + row) % 2 === 0) {
-        ctx.fillStyle = '#317449'
-        ctx.fillRect(x + c * cellW, y + row * cellH, cellW + .3, cellH + .3)
-      }
+  for (let c = -Math.ceil(goalRunoff / cellW);
+    c < columns + Math.ceil(goalRunoff / cellW); c += 1) {
+    for (let row = -Math.ceil(sideRunoff / cellH);
+      row < rows + Math.ceil(sideRunoff / cellH); row += 1) {
+      if ((c + row) % 2 !== 0) continue
+      const tileX = x + c * cellW
+      const tileY = y + row * cellH
+      // Keep the extended mowing tiles inside the green turf rectangle.
+      const left = Math.max(outerX, tileX)
+      const top = Math.max(outerY, tileY)
+      const right = Math.min(outerX + outerWidth, tileX + cellW + 0.3)
+      const bottom = Math.min(outerY + outerHeight, tileY + cellH + 0.3)
+      if (right <= left || bottom <= top) continue
+      ctx.fillStyle = '#317449'
+      ctx.fillRect(left, top, right - left, bottom - top)
     }
   }
   // Markings and player coordinates still use the SAME physical projection
