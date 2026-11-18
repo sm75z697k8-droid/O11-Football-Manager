@@ -3,6 +3,7 @@ import { DEFAULT_PITCH } from '../../src/game/model/pitch'
 import { createFoundationMatch } from '../../src/game/match/engine'
 import { makeFictionalMatchSetup } from '../fixtures/fictional-match'
 import {
+  GOAL_END_RUNOFF_M, TOUCHLINE_RUNOFF_M,
   findPlayerAt, interpolatePosition, projectPitch, projectPoint,
 } from '../../src/game/viewer/geometry'
 
@@ -15,6 +16,11 @@ describe('Phase 6 world-to-canvas projection', () => {
       expect(p.x + p.width).toBeLessThanOrEqual(width)
       expect(p.y + p.height).toBeLessThanOrEqual(height)
       expect(p.width / p.height).toBeCloseTo(105 / 68, 10)
+      // The legal field leaves a visible green run-off within the viewport.
+      expect(p.x - GOAL_END_RUNOFF_M * p.scale).toBeGreaterThanOrEqual(8 - 1e-8)
+      expect(p.y - TOUCHLINE_RUNOFF_M * p.scale).toBeGreaterThanOrEqual(8 - 1e-8)
+      expect(p.x + p.width + GOAL_END_RUNOFF_M * p.scale).toBeLessThanOrEqual(width - 8 + 1e-8)
+      expect(p.y + p.height + TOUCHLINE_RUNOFF_M * p.scale).toBeLessThanOrEqual(height - 8 + 1e-8)
     }
   })
 

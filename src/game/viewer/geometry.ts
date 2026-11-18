@@ -1,6 +1,14 @@
 import type { Point2, PitchDefinition } from '../model/pitch'
 import type { MatchState } from '../match/state'
 
+/**
+ * Physical run-off outside the four legal boundary lines. This space is
+ * VISUAL ONLY: MatchState and every field coordinate remain 105 × 68 metres.
+ * The goal-end strip accommodates 2m-deep nets and separation from the roof.
+ */
+export const GOAL_END_RUNOFF_M = 3.5
+export const TOUCHLINE_RUNOFF_M = 2
+
 /** Pure world-to-canvas coordinates in CSS pixels, independent of screen DPR. */
 export interface PitchProjection {
   readonly x: number
@@ -16,7 +24,12 @@ export function projectPitch(
 ): PitchProjection {
   const width = Math.max(0, viewportWidth - 2 * margin)
   const height = Math.max(0, viewportHeight - 2 * margin)
-  const scale = Math.max(0, Math.min(width / pitch.lengthM, height / pitch.widthM))
+  // Reserve room for the outer green apron inside the viewport. Every user
+  // of this projection (renderer and hit-testing) shares the same transform.
+  const scale = Math.max(0, Math.min(
+    width / (pitch.lengthM + 2 * GOAL_END_RUNOFF_M),
+    height / (pitch.widthM + 2 * TOUCHLINE_RUNOFF_M),
+  ))
   const projectedWidth = pitch.lengthM * scale
   const projectedHeight = pitch.widthM * scale
   return {

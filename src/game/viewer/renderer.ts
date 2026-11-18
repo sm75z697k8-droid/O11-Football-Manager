@@ -4,6 +4,7 @@ import type { Point2, PitchDefinition } from '../model/pitch'
 import { BALL_RADIUS_M } from '../physics/ball'
 import {
   projectPitch, projectPoint, interpolatePosition,
+  GOAL_END_RUNOFF_M, TOUCHLINE_RUNOFF_M,
 } from './geometry'
 import type { PitchProjection } from './geometry'
 
@@ -99,7 +100,7 @@ function drawGoalEndRoofs(
 ): void {
   const right = projection.x + projection.width
   // White roof geometry follows the existing two goal-end stands only.
-  // A small overhang and cast shadow show the pitch underneath the roof.
+  // The inner fascia overlaps the OUTER green run-off, never the goal line.
   const endStands = [
     { x: 0, width: projection.x, rightSide: false },
     { x: right, width: viewportWidth - right, rightSide: true },
@@ -111,16 +112,21 @@ function drawGoalEndRoofs(
   if (endStands.some(stand => stand.width < 20)) return
 
   for (const { x, width, rightSide } of endStands) {
-    const overhang = Math.min(12, projection.width * 0.012, width * 0.16)
-    const innerEdge = rightSide ? x - overhang : x + width + overhang
+    const grassRunoff = GOAL_END_RUNOFF_M * projection.scale
+    const roofOverlap = Math.min(3, projection.scale * 0.4)
+    const lipInset = Math.max(0, grassRunoff - roofOverlap)
+    const innerEdge = rightSide ? x + lipInset : x + width - lipInset
     const outerEdge = rightSide ? x + width : x
     const roofX = rightSide ? innerEdge : outerEdge
-    const roofWidth = width + overhang
+    const roofWidth = width - lipInset
 
-    // Cast shadow extends just beyond the roof lip onto the pitch grass.
-    ctx.fillStyle = 'rgba(3, 17, 19, 0.32)'
-    ctx.fillRect(rightSide ? right - overhang - 7 : projection.x,
-      projection.y, overhang + 7, projection.height)
+    // Shadow falls onto the outer grass behind each goal. The goal line
+    // and the 2m net depth remain uncovered by the roof panels themselves.
+    const shadowWidth = Math.min(11, projection.scale * 1.3)
+    ctx.fillStyle = 'rgba(3, 17, 19, 0.28)'
+    ctx.fillRect(rightSide ? innerEdge - shadowWidth : innerEdge,
+      projection.y - TOUCHLINE_RUNOFF_M * projection.scale,
+      shadowWidth, projection.height + 2 * TOUCHLINE_RUNOFF_M * projection.scale)
 
     // Ribbed roof panels. Each bay shades from light silver to muted grey,
     // following the horizontal, stepped appearance of the supplied image.
@@ -181,11 +187,19 @@ function drawPitch(
   length: number, width: number,
 ): void {
   const { x, y, height, scale } = projection
-  // A slight perimeter strip gives the touchline separation from stands.
+  const goalRunoff = GOAL_END_RUNOFF_M * scale
+  const sideRunoff = TOUCHLINE_RUNOFF_M * scale
+  const outerX = x - goalRunoff
+  const outerY = y - sideRunoff
+  const outerWidth = projection.width + 2 * goalRunoff
+  const outerHeight = height + 2 * sideRunoff
+
+  // The green surface extends BEYOND the legal pitch lines on all sides.
+  // The extra area is never interpreted as playable by match logic.
   ctx.fillStyle = '#0c241d'
-  ctx.fillRect(x - 5, y - 5, projection.width + 10, projection.height + 10)
+  ctx.fillRect(outerX - 2, outerY - 2, outerWidth + 4, outerHeight + 4)
   ctx.fillStyle = '#2a6a42'
-  ctx.fillRect(x, y, projection.width, height)
+  ctx.fillRect(outerX, outerY, outerWidth, outerHeight)
 
   // Subtle checkerboard mowing pattern similar to professional 2D viewers.
   const columns = 12
@@ -200,9 +214,8 @@ function drawPitch(
       }
     }
   }
-  // Width remains pitch width*scale: markings and player coordinates
-  // use the SAME geometry as the hit-testing system.
-  void scale
+  // Markings and player coordinates still use the SAME physical projection
+  // as the hit-testing system. Run-off adds visuals, not playable metres.
   drawMarkings(ctx, projection, length, width)
 }
 

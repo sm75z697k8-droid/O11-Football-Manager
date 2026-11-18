@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import StadiumOnly from '../../src/app/StadiumOnly'
 import { DEFAULT_PITCH } from '../../src/game/model/pitch'
-import { projectPitch } from '../../src/game/viewer/geometry'
+import { GOAL_END_RUNOFF_M, TOUCHLINE_RUNOFF_M, projectPitch } from '../../src/game/viewer/geometry'
 import { renderStadiumOnly } from '../../src/game/viewer/renderer'
 
 describe('stadium-only entry screen', () => {
@@ -37,6 +37,49 @@ describe('stadium-only entry screen', () => {
     // Only four fixed pitch arcs: centre circle and three ground spots.
     // Player and ball rendering is deliberately never invoked.
     expect(operations.filter(op => op === 'arc')).toHaveLength(4)
+  })
+
+  it('keeps white markings inside green grass and reserves 2m net run-off', () => {
+    const width = 844
+    const height = 390
+    const projection = projectPitch(width, height, DEFAULT_PITCH)
+    const grassRects: Array<{ x: number; y: number; w: number; h: number }> = []
+    const markingRects: Array<{ x: number; y: number; w: number; h: number }> = []
+    let style: unknown
+    const ctx = {
+      clearRect: () => {},
+      createLinearGradient: () => ({ addColorStop: () => {} }),
+      fillRect: (x: number, y: number, w: number, h: number) => {
+        if (style === '#2a6a42') grassRects.push({ x, y, w, h })
+      },
+      beginPath: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      stroke: () => {},
+      strokeRect: (x: number, y: number, w: number, h: number) => {
+        if (style === 'rgba(234,255,236,0.76)') markingRects.push({ x, y, w, h })
+      },
+      arc: () => {},
+      fill: () => {},
+    } as unknown as CanvasRenderingContext2D
+    Object.defineProperty(ctx, 'fillStyle', {
+      get: () => style,
+      set: (value: unknown) => { style = value },
+    })
+    renderStadiumOnly(ctx, DEFAULT_PITCH, width, height)
+    expect(grassRects).toHaveLength(1)
+    const grass = grassRects[0]
+    const goalSpace = GOAL_END_RUNOFF_M * projection.scale
+    const sideSpace = TOUCHLINE_RUNOFF_M * projection.scale
+    expect(grass.x).toBeCloseTo(projection.x - goalSpace)
+    expect(grass.w).toBeCloseTo(projection.width + goalSpace * 2)
+    expect(grass.y).toBeCloseTo(projection.y - sideSpace)
+    expect(grass.h).toBeCloseTo(projection.height + sideSpace * 2)
+    expect(goalSpace).toBeGreaterThan(2 * projection.scale)
+    expect(markingRects[0]).toEqual({
+      x: projection.x, y: projection.y,
+      w: projection.width, h: projection.height,
+    })
   })
 
   it('renders three evenly spaced mirrored beams above the pitch edges', () => {
@@ -81,6 +124,8 @@ describe('stadium-only entry screen', () => {
     })
 
     renderStadiumOnly(ctx, DEFAULT_PITCH, width, height)
+    // The painted grass is larger than the legal marked pitch, as in the
+    // reference. Roof fascia stops behind each legal goal line.
     expect(drawOrder[0]).toBe('pitch')
     expect(drawOrder.slice(1)).toEqual(Array(8).fill('roof'))
     expect(panels).toHaveLength(8) // four equal roof panels per end
@@ -95,9 +140,13 @@ describe('stadium-only entry screen', () => {
       expect(left.x).toBe(0)
       expect(right.x + right.w).toBeCloseTo(width)
       expect(right.w).toBeCloseTo(left.w)
-      expect(left.w).toBeGreaterThan(projection.x)
-      expect(left.w - projection.x).toBeLessThanOrEqual(12)
-      expect(right.x).toBeLessThan(projection.x + projection.width)
+      const goalLineLeft = projection.x
+      const goalLineRight = projection.x + projection.width
+      const netDepth = 2 * projection.scale
+      // Roofs are set back behind the marked lines, leaving net space.
+      expect(left.x + left.w).toBeLessThan(goalLineLeft - netDepth)
+      expect(right.x).toBeGreaterThan(goalLineRight + netDepth)
+      expect(right.w).toBeCloseTo(left.w)
     }
     for (let i = 0; i < 3; i++) {
       const left = beams[i]
