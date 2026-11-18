@@ -70,9 +70,7 @@ export default function FirstTeamPreview() {
             aria-label={'Number ' + starter.shirtNumber + ', ' + player.profile.fullName +
               ', ' + starter.slot + '. Show player attributes'}
           >
-            <span className="first-team-marker-shirt" aria-hidden="true">
-              <span className="first-team-marker-shirt-number">{starter.shirtNumber}</span>
-            </span>
+            <span className="first-team-marker-disc" aria-hidden="true">{starter.shirtNumber}</span>
             <span className="first-team-marker-name">{surname}</span>
           </button>
         )

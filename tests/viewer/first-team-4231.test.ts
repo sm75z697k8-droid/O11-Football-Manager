@@ -62,11 +62,18 @@ describe('Man Utd one-half first-team 4-2-3-1', () => {
     }
   })
 
-  it('uses red shirts with white sleeves without fetching an external licensed jersey', () => {
+  it('restores numbered circular red and white player markers, not jerseys', () => {
     const css = readFileSync('src/app/FirstTeamPreview.css','utf8')
-    expect(css).toContain('.first-team-marker-shirt')
-    expect(css).toContain('#cb1729')
-    expect(css).toContain('#f7f9fd')
-    expect(css).not.toContain('.first-team-marker-disc')
+    const component = readFileSync('src/app/FirstTeamPreview.tsx','utf8')
+    expect(css).toContain('.first-team-marker-disc')
+    expect(css).toContain('border-radius: 50%')
+    expect(css).toContain('background: #DA291C')
+    expect(css).toContain('border: 2px solid #FFFFFF')
+    expect(css).toContain('color: #FFFFFF')
+    expect(css).toContain('.first-team-marker--selected .first-team-marker-disc')
+    expect(component).toContain('className="first-team-marker-disc"')
+    expect(component).toContain('{starter.shirtNumber}')
+    expect(component).not.toContain('first-team-marker-shirt')
+    expect(css).not.toContain('clip-path: polygon')
   })
 })
