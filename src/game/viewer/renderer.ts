@@ -80,7 +80,6 @@ function drawStadiumBackdrop(
   ctx: CanvasRenderingContext2D, _projection: PitchProjection,
   viewportWidth: number, viewportHeight: number,
 ): void {
-  const right = projection.x + projection.width
   const surface = ctx.createLinearGradient(0, 0, 0, viewportHeight)
   surface.addColorStop(0, '#253b36')
   surface.addColorStop(0.5, '#263b34')
@@ -98,6 +97,7 @@ function drawGoalEndRoofs(
   ctx: CanvasRenderingContext2D, projection: PitchProjection,
   viewportWidth: number, viewportHeight: number,
 ): void {
+  const right = projection.x + projection.width
   // White roof geometry follows the existing two goal-end stands only.
   // A small overhang and cast shadow show the pitch underneath the roof.
   const endStands = [
