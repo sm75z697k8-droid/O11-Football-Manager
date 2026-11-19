@@ -56,6 +56,12 @@ export interface KnownRosterUpdate {
     readonly from: number
     readonly to: number
   }[]
+  /**
+   * Optional migration guard: apply legacy number changes only if at least
+   * one of these replacement IDs is still missing from the ORIGINAL save.
+   * This prevents a later GK import from undoing user edits to Bruno/Šeško.
+   */
+  readonly numberChangesOnlyIfMissingPlayerIds?: readonly string[]
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
@@ -252,7 +258,10 @@ export function applyKnownRosterUpdate(
     modified = true
   }
 
-  for (const numberChange of update.numberChanges) {
+  const legacyNumbersNeeded = !update.numberChangesOnlyIfMissingPlayerIds ||
+    update.numberChangesOnlyIfMissingPlayerIds.some(id =>
+      !original.players.some(player => player.id === id))
+  for (const numberChange of (legacyNumbersNeeded ? update.numberChanges : [])) {
     const oldEngine = current.engineSheet.starters.find(a => a.playerId === numberChange.playerId)
     const oldPreview = current.lineupPreview.starters.find(a => a.playerId === numberChange.playerId)
     if (!oldEngine || !oldPreview || oldEngine.shirtNumber !== oldPreview.shirtNumber ||

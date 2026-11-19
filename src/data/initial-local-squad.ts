@@ -42,3 +42,23 @@ export const MAN_UTD_SESKO_UPDATE = {
     { playerId: '62246208', from: 9, to: 30 },
   ],
 } satisfies KnownRosterUpdate
+
+/**
+ * Add real goalkeeper #1 while retaining the two earlier player imports.
+ * On existing Bruno+Šeško saves, their shirt numbers are NOT re-migrated,
+ * protecting any intentional later edits. New/older squads get all three.
+ */
+export const MAN_UTD_LAMMENS_UPDATE = {
+  replacements: [
+    ...MAN_UTD_SESKO_UPDATE.replacements,
+    {
+      previousId: 'harbor_senior_01',
+      previousFullName: 'Samir Rahman',
+      replacementId: '18107436',
+      previousShirtNumber: 1,
+      expectedSlot: 'GK',
+    },
+  ],
+  numberChanges: MAN_UTD_SESKO_UPDATE.numberChanges,
+  numberChangesOnlyIfMissingPlayerIds: ['43124203', '62246208'],
+} satisfies KnownRosterUpdate

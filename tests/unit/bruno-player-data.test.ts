@@ -14,8 +14,8 @@ describe('Bruno Fernandes user-supplied FM profile', () => {
   it('retains Bruno at CAM with his original attribute ratings and external identity', () => {
     expect(FIRST_TEAM.players).toHaveLength(11)
     expect(FIRST_TEAM.players[7]).toEqual(BRUNO_FERNANDES)
-    expect(FIRST_TEAM_PLAYERS.filter(p => p.referenceData)).toHaveLength(2)
-    expect(FIRST_TEAM.players.filter(p => !p.referenceData)).toHaveLength(9)
+    expect(FIRST_TEAM_PLAYERS.filter(p => p.referenceData)).toHaveLength(3)
+    expect(FIRST_TEAM.players.filter(p => !p.referenceData)).toHaveLength(8)
     expect(FIRST_TEAM.players.every(p => p.clubId === FIRST_TEAM.club.id)).toBe(true)
     expect(FIRST_TEAM.club.fmUid).toBe(MAN_UTD_FM_CLUB_ID)
     expect(BRUNO_FERNANDES.id).toBe(BRUNO_FM_PLAYER_ID)

@@ -26,7 +26,7 @@ describe('Benjamin Šeško real-player reference', () => {
       attributeSource: 'user-supplied screenshots',
     })
     expect(FIRST_TEAM.players).toHaveLength(11)
-    expect(FIRST_TEAM.players.filter(p => p.referenceData)).toHaveLength(2)
+    expect(FIRST_TEAM.players.filter(p => p.referenceData)).toHaveLength(3)
     expect(FIRST_TEAM.players[9]).toEqual(BENJAMIN_SESKO)
     expect(FIRST_TEAM.players.some(p => p.profile.fullName === 'Karim Haddad')).toBe(false)
     expect(FIRST_TEAM_SHEET.starters[9]).toMatchObject({

@@ -48,5 +48,16 @@ export interface PlayerDefinition {
     readonly attributeSource: 'user-supplied screenshots'
     /** Fields estimated to satisfy O11's more detailed engine contract. */
     readonly provisionalFields: readonly string[]
+    /**
+     * FM screenshot ratings without a matching O11 engine attribute.
+     * These are only displayed as reference information, never fed to AI.
+     */
+    /** Source cells rendered as "—" while the engine retains estimates. */
+    readonly unratedAttributes?: readonly string[]
+    readonly screenshotOnlyRatings?: readonly {
+      readonly category: 'goalkeeping'
+      readonly label: string
+      readonly score: number
+    }[]
   }
 }

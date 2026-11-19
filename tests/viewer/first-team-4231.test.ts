@@ -9,17 +9,20 @@ import { facingAngleDegrees, projectPitch, projectPoint } from '../../src/game/v
 import { readFileSync } from 'node:fs'
 
 describe('Man Utd one-half first-team 4-2-3-1', () => {
-  it('includes Bruno and Šeško, preserving nine fictional players', () => {
+  it('includes Lammens, Bruno and Šeško, preserving eight fictional players', () => {
     expect(FIRST_TEAM_CLUB).toEqual({
       id: 'club_man_utd', name: 'Man Utd', shortName: 'MUN', fmUid: 680,
       colors: { primary: '#DA291C', secondary: '#FFFFFF' },
     })
     expect(FIRST_TEAM_PLAYERS).toHaveLength(11)
     expect(FIRST_TEAM_PLAYERS.map(p => p.profile.fullName)).toEqual([
-      'Samir Rahman','Ethan Brooks','Leo Bennett','Adil Khan','Mateo Silva',
+      'Senne Lammens','Ethan Brooks','Leo Bennett','Adil Khan','Mateo Silva',
       'Noah Fletcher','Daniel Mercer','Bruno Fernandes','Elias Navarro','Benjamin Šeško','Lucas Duarte',
     ])
-    expect(FIRST_TEAM_PLAYERS.filter(p => p.id.startsWith('harbor_senior_'))).toHaveLength(9)
+    expect(FIRST_TEAM_PLAYERS.filter(p => p.id.startsWith('harbor_senior_'))).toHaveLength(8)
+    expect(FIRST_TEAM_PLAYERS[0].id).toBe('18107436')
+    expect(FIRST_TEAM_PLAYERS[0].referenceData?.overallRating).toBe(77)
+    expect(FIRST_TEAM_PLAYERS[0].referenceData?.potentialRating).toBe(83)
     expect(FIRST_TEAM_PLAYERS[7].id).toBe('43124203')
     expect(FIRST_TEAM_PLAYERS[7].referenceData?.overallRating).toBe(89)
     expect(FIRST_TEAM_PLAYERS[7].referenceData?.potentialRating).toBe(89)
@@ -46,6 +49,8 @@ describe('Man Utd one-half first-team 4-2-3-1', () => {
     expect(slotNames.filter(s => ['RDM','LDM'].includes(s))).toHaveLength(2)
     expect(slotNames.filter(s => ['RW','CAM','LW'].includes(s))).toHaveLength(3)
     expect(slotNames.filter(s => s === 'ST')).toHaveLength(1)
+    expect(FIRST_TEAM_4231_ASSIGNMENTS.find(x=>x.slot==='GK')?.shirtNumber).toBe(1)
+    expect(FIRST_TEAM_4231_ASSIGNMENTS.find(x=>x.slot==='GK')?.playerId).toBe('18107436')
     const cam = FIRST_TEAM_4231_ASSIGNMENTS.find(x => x.slot === 'CAM')
     expect(cam?.shirtNumber).toBe(8)
     expect(cam?.role).toBe('attackingMidfielder')

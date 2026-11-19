@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { selectPreviewSquadMembers } from '../../src/data/preview-squad-members'
-import { BRUNO_REPLACEMENT, INITIAL_LOCAL_SQUAD, MAN_UTD_SESKO_UPDATE } from '../../src/data/initial-local-squad'
+import {
+  BRUNO_REPLACEMENT, INITIAL_LOCAL_SQUAD,
+  MAN_UTD_SESKO_UPDATE, MAN_UTD_LAMMENS_UPDATE,
+} from '../../src/data/initial-local-squad'
 import {
   SQUAD_DATA_VERSION, SQUAD_DB_NAME, SQUAD_DB_VERSION, SQUAD_STORE_NAME,
   applyKnownPlayerReplacement, applyKnownRosterUpdate, editStoredSquad,
@@ -225,6 +228,33 @@ function originalReleaseSeed() {
       starters: previous.lineupPreview.starters.map(a => ({
         ...a, playerId: a.playerId === BRUNO_REPLACEMENT.replacementId ? oldId : a.playerId,
       })),
+    },
+  }
+}
+
+
+/** Old #1 on an existing iPhone, without changing the other squad entries. */
+function priorSamirSnapshot<T extends { readonly players: readonly import('../../src/game/model/player').PlayerDefinition[];
+  readonly engineSheet: { readonly starters: readonly import('../../src/game/model/team').StartingAssignment[] };
+  readonly lineupPreview: { readonly starters: readonly import('../../src/data/first-team-lineup').FirstTeamPreviewAssignment[] };
+}>(seed: T) {
+  const oldId = 'harbor_senior_01'
+  const currentId = '18107436'
+  return {
+    ...seed,
+    players: seed.players.map(p => p.id === currentId ? {
+      ...p, id: oldId, referenceData: undefined,
+      profile: { ...p.profile, fullName: 'Samir Rahman' },
+    } : p),
+    engineSheet: {
+      ...seed.engineSheet,
+      starters: seed.engineSheet.starters.map(s => s.playerId === currentId ?
+        { ...s, playerId: oldId } : s),
+    },
+    lineupPreview: {
+      ...seed.lineupPreview,
+      starters: seed.lineupPreview.starters.map(s => s.playerId === currentId ?
+        { ...s, playerId: oldId } : s),
     },
   }
 }
@@ -542,6 +572,89 @@ describe('device-only IndexedDB first-team snapshot', () => {
     const recovered = await readStoredSquad(saved.squad.clubId, fake.factory)
     expect(selectPreviewSquadMembers(recovered!)
       .find(m => m.assignment.slot === 'ST')?.player.profile.fullName).toBe('Custom Local Striker')
+    expect(fake.writes).toBe(1)
+  })
+
+
+  it('migrates Samir #1 to Lammens #1 without touching a customised Bruno and Šeško save', async () => {
+    const fake=memoryIndexedDb()
+    const previous=priorSamirSnapshot(INITIAL_LOCAL_SQUAD)
+    expect(isLocalSquadSeed(previous)).toBe(true)
+    const created=await ensureInitialSquadSaved(previous,fake.factory)
+    const customised={
+      ...created.squad,
+      players: created.squad.players.map(p=>p.id==='43124203'
+        ? { ...p, profile:{...p.profile,fullName:'Locally Customised Bruno'} }
+        : p),
+      engineSheet: {
+        ...created.squad.engineSheet,
+        starters: created.squad.engineSheet.starters.map(p=>p.playerId==='43124203'
+          ? {...p,shirtNumber:12} : p),
+      },
+      lineupPreview: {
+        ...created.squad.lineupPreview,
+        starters: created.squad.lineupPreview.starters.map(p=>p.playerId==='43124203'
+          ? {...p,shirtNumber:12} : p),
+      },
+    }
+    fake.rows.set(customised.clubId,customised)
+    expect(isStoredLocalSquad(customised)).toBe(true)
+    const migrated=await ensureInitialSquadSaved(
+      INITIAL_LOCAL_SQUAD,fake.factory,MAN_UTD_LAMMENS_UPDATE)
+    expect(migrated.kind).toBe('updated')
+    expect(migrated.squad.createdAt).toBe(created.squad.createdAt)
+    expect(migrated.squad.players[0].id).toBe('18107436')
+    expect(migrated.squad.players[0].profile.fullName).toBe('Senne Lammens')
+    expect(migrated.squad.players[0].referenceData?.overallRating).toBe(77)
+    expect(migrated.squad.players[0].referenceData?.potentialRating).toBe(83)
+    expect(migrated.squad.players.slice(1)).toEqual(customised.players.slice(1))
+    expect(migrated.squad.engineSheet.starters[0].shirtNumber).toBe(1)
+    expect(migrated.squad.lineupPreview.starters[0].shirtNumber).toBe(1)
+    expect(migrated.squad.engineSheet.starters[7].shirtNumber).toBe(12)
+    expect(migrated.squad.lineupPreview.starters[7].shirtNumber).toBe(12)
+    expect(selectPreviewSquadMembers(migrated.squad).find(m=>m.assignment.slot==='CAM')
+      ?.player.profile.fullName).toBe('Locally Customised Bruno')
+    expect(fake.writes).toBe(2)
+    const reopened=await ensureInitialSquadSaved(
+      INITIAL_LOCAL_SQUAD,fake.factory,MAN_UTD_LAMMENS_UPDATE)
+    expect(reopened.kind).toBe('existing')
+    expect(reopened.squad).toEqual(migrated.squad)
+    expect(fake.writes).toBe(2)
+  })
+
+  it('upgrades a pre-Bruno/Šeško/Samir save atomically into three real players', async () => {
+    const fake=memoryIndexedDb()
+    const previous=priorSamirSnapshot(originalReleaseSeed())
+    expect(isLocalSquadSeed(previous)).toBe(true)
+    const created=await ensureInitialSquadSaved(previous,fake.factory)
+    const migrated=await ensureInitialSquadSaved(
+      INITIAL_LOCAL_SQUAD,fake.factory,MAN_UTD_LAMMENS_UPDATE)
+    expect(migrated.kind).toBe('updated')
+    expect(migrated.squad.createdAt).toBe(created.squad.createdAt)
+    expect(migrated.squad.players[0].id).toBe('18107436')
+    expect(migrated.squad.players[7].id).toBe('43124203')
+    expect(migrated.squad.players[9].id).toBe('62246208')
+    expect(migrated.squad.engineSheet.starters.map(s=>s.shirtNumber)).toEqual(
+      INITIAL_LOCAL_SQUAD.engineSheet.starters.map(s=>s.shirtNumber))
+    expect(new Set(migrated.squad.engineSheet.starters.map(s=>s.shirtNumber)).size).toBe(11)
+    expect(fake.writes).toBe(2)
+  })
+
+  it('protects an edited Samir record instead of discarding it', async () => {
+    const fake=memoryIndexedDb()
+    const old=priorSamirSnapshot(INITIAL_LOCAL_SQUAD)
+    const created=await ensureInitialSquadSaved(old,fake.factory)
+    const customised={
+      ...created.squad,
+      players: created.squad.players.map(p=>p.id==='harbor_senior_01'
+        ? {...p,profile:{...p.profile,fullName:'My Edited Keeper'}} : p),
+    }
+    fake.rows.set(old.clubId,customised)
+    await expect(ensureInitialSquadSaved(
+      INITIAL_LOCAL_SQUAD,fake.factory,MAN_UTD_LAMMENS_UPDATE))
+      .rejects.toThrow(/preserved without overwriting/)
+    const saved=await readStoredSquad(old.clubId,fake.factory)
+    expect(saved?.players[0].profile.fullName).toBe('My Edited Keeper')
     expect(fake.writes).toBe(1)
   })
 

@@ -126,11 +126,36 @@ export default function PlayerStatsPanel({
               (row.priority ? ' priority-' + row.priority : '')}>
               <span>{row.label}</span>
               <strong className={row.score >= 16 ? 'rating-strong' : row.score >= 11 ? 'rating-mid' : ''}>
-                {row.score}
+                {player.referenceData?.unratedAttributes?.includes(row.path) ? '—' : row.score}
               </strong>
             </div>
           ))}
         </section>
+        {tab === 'goalkeeping' && player.referenceData?.screenshotOnlyRatings && (
+          <section className="o11-radar" aria-label="Additional source goalkeeper ratings">
+            <div className="o11-radar-title">
+              <strong>Additional FM ratings</strong>
+              <span>Screenshot · not engine skills</span>
+            </div>
+            <div className="o11-stats-rows">
+              {player.referenceData.screenshotOnlyRatings
+                .filter(item => item.category === 'goalkeeping')
+                .map(item => (
+                  <div className="o11-attribute-row" key={item.label}>
+                    <span>{item.label}</span>
+                    <strong>{item.score}</strong>
+                  </div>
+                ))}
+            </div>
+          </section>
+        )}
+        {player.referenceData?.unratedAttributes &&
+          (tab === 'mental' || tab === 'setPieces') && (
+          <p className="o11-stats-note">
+            — = no numeric value in the supplied screenshot. A provisional O11
+            engine value is stored but is not presented as a sourced rating.
+          </p>
+        )}
         {tab === 'physical' && (
           <p className="o11-stats-note">
             Natural Fitness is read from the existing player characteristic.
@@ -141,7 +166,8 @@ export default function PlayerStatsPanel({
         {player.referenceData && (
           <p className="o11-stats-note">
             Supplied 1–20 ratings · FM club ID {player.referenceData.externalClubId}.
-            Unspecified Recovery, hidden characteristics and supporting profile
+            Attributes not visible as numbers in the screenshots (including
+            unscored traits), hidden characteristics and supporting profile
             values are provisional O11 estimates.
           </p>
         )}
