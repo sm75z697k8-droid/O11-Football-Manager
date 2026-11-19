@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { FIRST_TEAM } from '../data/first-team'
+import { INITIAL_LOCAL_SQUAD } from '../data/initial-local-squad'
+import { ensureInitialSquadSaved } from '../storage/local-squad'
 import {
   FIRST_TEAM_4231_ASSIGNMENTS, FIRST_TEAM_PREVIEW_FORMATION,
 } from '../data/first-team-lineup'
@@ -19,6 +21,17 @@ export default function FirstTeamPreview() {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [localSave, setLocalSave] = useState<'saving' | 'saved' | 'unavailable'>('saving')
+
+  useEffect(() => {
+    let active = true
+    // IndexedDB is optional: if Safari blocks it, the existing preview
+    // remains playable and communicates the failure rather than lying.
+    void ensureInitialSquadSaved(INITIAL_LOCAL_SQUAD)
+      .then(() => { if (active) setLocalSave('saved') })
+      .catch(() => { if (active) setLocalSave('unavailable') })
+    return () => { active = false }
+  }, [])
 
   useEffect(() => {
     const root = rootRef.current
@@ -49,6 +62,10 @@ export default function FirstTeamPreview() {
         <span className="first-team-identity-copy">
           <strong>{FIRST_TEAM.club.name}</strong>
           <span>Fictional players · Left-half preview</span>
+          <span className="first-team-local-save" role="status" aria-live="polite">
+            {localSave === 'saved' ? 'Stored on this iPhone'
+              : localSave === 'saving' ? 'Saving team locally…' : 'Local storage unavailable'}
+          </span>
         </span>
         <span className="first-team-formation">{FIRST_TEAM_PREVIEW_FORMATION}</span>
       </header>
