@@ -56,12 +56,12 @@ export default function FirstTeamPreview() {
 
   return (
     <div className="first-team-preview" ref={rootRef}>
-      <StadiumOnly canvasLabel="Football stadium and pitch beneath a fictional starting eleven" />
+      <StadiumOnly canvasLabel="Football stadium and first-team lineup preview" />
       <header className="first-team-identity">
         <span className="first-team-crest" aria-hidden="true">MU</span>
         <span className="first-team-identity-copy">
           <strong>{FIRST_TEAM.club.name}</strong>
-          <span>Fictional players · Left-half preview</span>
+          <span>Bruno + 10 fictional players · Left-half preview</span>
           <span className="first-team-local-save" role="status" aria-live="polite">
             {localSave === 'saved' ? 'Stored on this iPhone'
               : localSave === 'saving' ? 'Saving team locally…' : 'Local storage unavailable'}
