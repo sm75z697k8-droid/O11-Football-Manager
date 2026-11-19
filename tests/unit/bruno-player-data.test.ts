@@ -11,11 +11,11 @@ import { categoryRows, readAttribute, toTwenty } from '../../src/game/model/attr
 import PlayerStatsPanel from '../../src/app/PlayerStatsPanel'
 
 describe('Bruno Fernandes user-supplied FM profile', () => {
-  it('replaces one fictional CAM and preserves the remaining ten player identities', () => {
+  it('retains Bruno at CAM with his original attribute ratings and external identity', () => {
     expect(FIRST_TEAM.players).toHaveLength(11)
     expect(FIRST_TEAM.players[7]).toEqual(BRUNO_FERNANDES)
-    expect(FIRST_TEAM_PLAYERS.filter(p => p.referenceData)).toHaveLength(1)
-    expect(FIRST_TEAM.players.filter(p => p.profile.fullName !== 'Bruno Fernandes')).toHaveLength(10)
+    expect(FIRST_TEAM_PLAYERS.filter(p => p.referenceData)).toHaveLength(2)
+    expect(FIRST_TEAM.players.filter(p => !p.referenceData)).toHaveLength(9)
     expect(FIRST_TEAM.players.every(p => p.clubId === FIRST_TEAM.club.id)).toBe(true)
     expect(FIRST_TEAM.club.fmUid).toBe(MAN_UTD_FM_CLUB_ID)
     expect(BRUNO_FERNANDES.id).toBe(BRUNO_FM_PLAYER_ID)
@@ -31,7 +31,7 @@ describe('Bruno Fernandes user-supplied FM profile', () => {
     expect(BRUNO_POTENTIAL).toBe(89)
     const cam = FIRST_TEAM_4231_ASSIGNMENTS.find(p => p.slot === 'CAM')
     expect(cam?.playerId).toBe('43124203')
-    expect(cam?.shirtNumber).toBe(10)
+    expect(cam?.shirtNumber).toBe(8)
   })
 
   it('reproduces all 36 supplied 1–20 ratings via the canonical 0–100 values', () => {

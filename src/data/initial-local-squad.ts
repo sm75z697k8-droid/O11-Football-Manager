@@ -2,7 +2,7 @@ import { FIRST_TEAM } from './first-team'
 import {
   FIRST_TEAM_4231_ASSIGNMENTS, FIRST_TEAM_PREVIEW_FORMATION,
 } from './first-team-lineup'
-import type { LocalSquadSeed, KnownPlayerReplacement } from '../storage/local-squad'
+import type { LocalSquadSeed, KnownPlayerReplacement, KnownRosterUpdate } from '../storage/local-squad'
 
 /** GitHub-bundled test-data baseline. IndexedDB inserts it ONCE per device. */
 export const INITIAL_LOCAL_SQUAD = {
@@ -23,3 +23,22 @@ export const BRUNO_REPLACEMENT: KnownPlayerReplacement = {
   previousFullName: 'Rafiq Idris',
   replacementId: '43124203',
 }
+
+/** Upgrade existing saved XI without touching other nine players or their edits. */
+export const MAN_UTD_SESKO_UPDATE = {
+  replacements: [
+    { ...BRUNO_REPLACEMENT, previousShirtNumber: 10, expectedSlot: 'LCM' },
+    {
+      previousId: 'harbor_senior_09',
+      previousFullName: 'Karim Haddad',
+      replacementId: '62246208',
+      previousShirtNumber: 9,
+      expectedSlot: 'ST',
+    },
+  ],
+  numberChanges: [
+    { playerId: 'harbor_senior_08', from: 8, to: 10 },
+    { playerId: '43124203', from: 10, to: 8 },
+    { playerId: '62246208', from: 9, to: 30 },
+  ],
+} satisfies KnownRosterUpdate

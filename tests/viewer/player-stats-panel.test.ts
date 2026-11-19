@@ -13,7 +13,7 @@ describe('first-team attribute categories on iPhone', () => {
     const html = renderToStaticMarkup(createElement(PlayerStatsPanel, {
       player, assignment, onClose: noOp,
     }))
-    expect(html).toContain('Karim Haddad')
+    expect(html).toContain('Benjamin Šeško')
     expect(html).toContain('Technical')
     expect(html).toContain('Mental')
     expect(html).toContain('Physical')

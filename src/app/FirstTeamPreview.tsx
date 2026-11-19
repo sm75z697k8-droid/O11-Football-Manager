@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { FIRST_TEAM } from '../data/first-team'
-import { BRUNO_REPLACEMENT, INITIAL_LOCAL_SQUAD } from '../data/initial-local-squad'
+import { MAN_UTD_SESKO_UPDATE, INITIAL_LOCAL_SQUAD } from '../data/initial-local-squad'
 import { ensureInitialSquadSaved } from '../storage/local-squad'
 import {
   FIRST_TEAM_4231_ASSIGNMENTS, FIRST_TEAM_PREVIEW_FORMATION,
@@ -27,7 +27,7 @@ export default function FirstTeamPreview() {
     let active = true
     // IndexedDB is optional: if Safari blocks it, the existing preview
     // remains playable and communicates the failure rather than lying.
-    void ensureInitialSquadSaved(INITIAL_LOCAL_SQUAD, undefined, BRUNO_REPLACEMENT)
+    void ensureInitialSquadSaved(INITIAL_LOCAL_SQUAD, undefined, MAN_UTD_SESKO_UPDATE)
       .then(() => { if (active) setLocalSave('saved') })
       .catch(() => { if (active) setLocalSave('unavailable') })
     return () => { active = false }
@@ -61,7 +61,7 @@ export default function FirstTeamPreview() {
         <span className="first-team-crest" aria-hidden="true">MU</span>
         <span className="first-team-identity-copy">
           <strong>{FIRST_TEAM.club.name}</strong>
-          <span>Bruno + 10 fictional players · Left-half preview</span>
+          <span>Bruno + Šeško + 9 fictional · Left-half preview</span>
           <span className="first-team-local-save" role="status" aria-live="polite">
             {localSave === 'saved' ? 'Stored on this iPhone'
               : localSave === 'saving' ? 'Saving team locally…' : 'Local storage unavailable'}

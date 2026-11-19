@@ -9,7 +9,7 @@ import { facingAngleDegrees, projectPitch, projectPoint } from '../../src/game/v
 import { readFileSync } from 'node:fs'
 
 describe('Man Utd one-half first-team 4-2-3-1', () => {
-  it('replaces only the CAM with Bruno, preserving ten other fictional player profiles', () => {
+  it('includes Bruno and Šeško, preserving nine fictional players', () => {
     expect(FIRST_TEAM_CLUB).toEqual({
       id: 'club_man_utd', name: 'Man Utd', shortName: 'MUN', fmUid: 680,
       colors: { primary: '#DA291C', secondary: '#FFFFFF' },
@@ -17,12 +17,16 @@ describe('Man Utd one-half first-team 4-2-3-1', () => {
     expect(FIRST_TEAM_PLAYERS).toHaveLength(11)
     expect(FIRST_TEAM_PLAYERS.map(p => p.profile.fullName)).toEqual([
       'Samir Rahman','Ethan Brooks','Leo Bennett','Adil Khan','Mateo Silva',
-      'Noah Fletcher','Daniel Mercer','Bruno Fernandes','Elias Navarro','Karim Haddad','Lucas Duarte',
+      'Noah Fletcher','Daniel Mercer','Bruno Fernandes','Elias Navarro','Benjamin Šeško','Lucas Duarte',
     ])
-    expect(FIRST_TEAM_PLAYERS.filter(p => p.id.startsWith('harbor_senior_'))).toHaveLength(10)
+    expect(FIRST_TEAM_PLAYERS.filter(p => p.id.startsWith('harbor_senior_'))).toHaveLength(9)
     expect(FIRST_TEAM_PLAYERS[7].id).toBe('43124203')
     expect(FIRST_TEAM_PLAYERS[7].referenceData?.overallRating).toBe(89)
     expect(FIRST_TEAM_PLAYERS[7].referenceData?.potentialRating).toBe(89)
+    expect(FIRST_TEAM_PLAYERS[9].id).toBe('62246208')
+    expect(FIRST_TEAM_PLAYERS[9].referenceData?.overallRating).toBe(75)
+    expect(FIRST_TEAM_PLAYERS[9].referenceData?.potentialRating).toBe(85)
+    expect(FIRST_TEAM_PLAYERS[6].id).toBe('harbor_senior_08')
     expect(FIRST_TEAM_PLAYERS.every(p => p.clubId === FIRST_TEAM_CLUB.id)).toBe(true)
     expect(new Set(FIRST_TEAM_PLAYERS.map(p => p.id)).size).toBe(11)
   })
@@ -43,10 +47,12 @@ describe('Man Utd one-half first-team 4-2-3-1', () => {
     expect(slotNames.filter(s => ['RW','CAM','LW'].includes(s))).toHaveLength(3)
     expect(slotNames.filter(s => s === 'ST')).toHaveLength(1)
     const cam = FIRST_TEAM_4231_ASSIGNMENTS.find(x => x.slot === 'CAM')
-    expect(cam?.shirtNumber).toBe(10)
+    expect(cam?.shirtNumber).toBe(8)
     expect(cam?.role).toBe('attackingMidfielder')
     expect(FIRST_TEAM_4231_ASSIGNMENTS.find(x=>x.slot==='RDM')?.shirtNumber).toBe(6)
-    expect(FIRST_TEAM_4231_ASSIGNMENTS.find(x=>x.slot==='LDM')?.shirtNumber).toBe(8)
+    expect(FIRST_TEAM_4231_ASSIGNMENTS.find(x=>x.slot==='LDM')?.shirtNumber).toBe(10)
+    expect(FIRST_TEAM_4231_ASSIGNMENTS.find(x=>x.slot==='ST')?.shirtNumber).toBe(30)
+    expect(new Set(FIRST_TEAM_4231_ASSIGNMENTS.map(a=>a.shirtNumber)).size).toBe(11)
   })
 
   it('keeps all 11 markers to the left of the halfway line at iPhone and desktop sizes', () => {

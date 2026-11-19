@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { BRUNO_REPLACEMENT, INITIAL_LOCAL_SQUAD } from '../../src/data/initial-local-squad'
+import { BRUNO_REPLACEMENT, INITIAL_LOCAL_SQUAD, MAN_UTD_SESKO_UPDATE } from '../../src/data/initial-local-squad'
 import {
   SQUAD_DATA_VERSION, SQUAD_DB_NAME, SQUAD_DB_VERSION, SQUAD_STORE_NAME,
-  applyKnownPlayerReplacement, ensureInitialSquadSaved, isLocalSquadSeed, isStoredLocalSquad,
+  applyKnownPlayerReplacement, applyKnownRosterUpdate, ensureInitialSquadSaved, isLocalSquadSeed, isStoredLocalSquad,
 } from '../../src/storage/local-squad'
 
 /**
@@ -159,6 +159,72 @@ function legacySeed() {
   }
 }
 
+
+/** Build the actual previous-release shirt numbers and fictional striker,
+ * retaining all other player records for migration regression testing. */
+function previousBrunoReleaseSeed() {
+  const oldId = 'harbor_senior_09'
+  const convert = (id: string) => id === '62246208' ? oldId : id
+  return {
+    ...INITIAL_LOCAL_SQUAD,
+    players: INITIAL_LOCAL_SQUAD.players.map(p => p.id === '62246208'
+      ? {
+          ...p,
+          id: oldId,
+          profile: { ...p.profile, fullName: 'Karim Haddad' },
+          referenceData: undefined,
+          abilities: { ...p.abilities, technical: { ...p.abilities.technical, finishing: 82 } },
+        }
+      : p),
+    engineSheet: {
+      ...INITIAL_LOCAL_SQUAD.engineSheet,
+      starters: INITIAL_LOCAL_SQUAD.engineSheet.starters.map(a => ({
+        ...a,
+        playerId: convert(a.playerId),
+        shirtNumber: a.playerId === '43124203' ? 10 :
+          a.playerId === 'harbor_senior_08' ? 8 :
+          a.playerId === '62246208' ? 9 : a.shirtNumber,
+      })),
+    },
+    lineupPreview: {
+      ...INITIAL_LOCAL_SQUAD.lineupPreview,
+      starters: INITIAL_LOCAL_SQUAD.lineupPreview.starters.map(a => ({
+        ...a,
+        playerId: convert(a.playerId),
+        shirtNumber: a.playerId === '43124203' ? 10 :
+          a.playerId === 'harbor_senior_08' ? 8 :
+          a.playerId === '62246208' ? 9 : a.shirtNumber,
+      })),
+    },
+  }
+}
+
+function originalReleaseSeed() {
+  const previous = previousBrunoReleaseSeed()
+  const oldId = BRUNO_REPLACEMENT.previousId
+  return {
+    ...previous,
+    players: previous.players.map(p => p.id === BRUNO_REPLACEMENT.replacementId
+      ? {
+          ...p, id: oldId,
+          profile: { ...p.profile, fullName: BRUNO_REPLACEMENT.previousFullName },
+          referenceData: undefined,
+        } : p),
+    engineSheet: {
+      ...previous.engineSheet,
+      starters: previous.engineSheet.starters.map(a => ({
+        ...a, playerId: a.playerId === BRUNO_REPLACEMENT.replacementId ? oldId : a.playerId,
+      })),
+    },
+    lineupPreview: {
+      ...previous.lineupPreview,
+      starters: previous.lineupPreview.starters.map(a => ({
+        ...a, playerId: a.playerId === BRUNO_REPLACEMENT.replacementId ? oldId : a.playerId,
+      })),
+    },
+  }
+}
+
 describe('device-only IndexedDB first-team snapshot', () => {
   it('captures Man Utd and all existing players with both distinct formation contracts', () => {
     const data = INITIAL_LOCAL_SQUAD
@@ -171,8 +237,8 @@ describe('device-only IndexedDB first-team snapshot', () => {
     expect(data.engineSheet.formation).toBe('4-3-3')
     expect(data.lineupPreview.formation).toBe('4-2-3-1')
     expect(data.lineupPreview.starters).toHaveLength(11)
-    expect(data.players.find(p => p.profile.fullName === 'Karim Haddad')
-      ?.abilities.technical.finishing).toBe(82)
+    expect(data.players.find(p => p.profile.fullName === 'Benjamin Šeško')
+      ?.abilities.technical.finishing).toBe(70)
   })
 
   it('creates a complete snapshot once and confirms transaction completion', async () => {
@@ -267,6 +333,89 @@ describe('device-only IndexedDB first-team snapshot', () => {
     }
     expect(isStoredLocalSquad(saved)).toBe(true)
     expect(() => applyKnownPlayerReplacement(saved, INITIAL_LOCAL_SQUAD, BRUNO_REPLACEMENT))
+      .toThrow(/preserved without overwriting/)
+  })
+
+
+  it('updates an existing Bruno save atomically, keeping other saved player edits intact', async () => {
+    const fake = memoryIndexedDb()
+    const previous = previousBrunoReleaseSeed()
+    expect(isLocalSquadSeed(previous)).toBe(true)
+    const original = await ensureInitialSquadSaved(previous, fake.factory)
+    expect(original.kind).toBe('created')
+    const changedKeeper = {
+      ...original.squad.players[0],
+      profile: { ...original.squad.players[0].profile, fullName: 'My Edited Keeper' },
+    }
+    fake.rows.set(previous.clubId, {
+      ...original.squad,
+      players: original.squad.players.map((p, i) => i === 0 ? changedKeeper : p),
+    })
+    const updated = await ensureInitialSquadSaved(INITIAL_LOCAL_SQUAD, fake.factory, MAN_UTD_SESKO_UPDATE)
+    expect(updated.kind).toBe('updated')
+    expect(updated.squad.createdAt).toBe(original.squad.createdAt)
+    expect(updated.squad.players[0].profile.fullName).toBe('My Edited Keeper')
+    expect(updated.squad.players[7]).toEqual(original.squad.players[7])
+    expect(updated.squad.players[9].id).toBe('62246208')
+    expect(updated.squad.players[9].referenceData?.overallRating).toBe(75)
+    expect(updated.squad.players[9].referenceData?.potentialRating).toBe(85)
+    expect(updated.squad.engineSheet.starters.map(a => a.shirtNumber)).toEqual(
+      INITIAL_LOCAL_SQUAD.engineSheet.starters.map(a => a.shirtNumber))
+    expect(updated.squad.lineupPreview.starters.map(a => a.shirtNumber)).toEqual(
+      INITIAL_LOCAL_SQUAD.lineupPreview.starters.map(a => a.shirtNumber))
+    expect(new Set(updated.squad.engineSheet.starters.map(a => a.shirtNumber)).size).toBe(11)
+    expect(fake.writes).toBe(2)
+    const unchanged = await ensureInitialSquadSaved(INITIAL_LOCAL_SQUAD, fake.factory, MAN_UTD_SESKO_UPDATE)
+    expect(unchanged.kind).toBe('existing')
+    expect(unchanged.squad).toEqual(updated.squad)
+    expect(fake.writes).toBe(2)
+  })
+
+  it('also updates an older fictional squad with Rafiq and Karim in one save transaction', async () => {
+    const fake = memoryIndexedDb()
+    const old = originalReleaseSeed()
+    expect(isLocalSquadSeed(old)).toBe(true)
+    const first = await ensureInitialSquadSaved(old, fake.factory)
+    expect(first.kind).toBe('created')
+    const next = await ensureInitialSquadSaved(INITIAL_LOCAL_SQUAD, fake.factory, MAN_UTD_SESKO_UPDATE)
+    expect(next.kind).toBe('updated')
+    expect(next.squad.players[7].profile.fullName).toBe('Bruno Fernandes')
+    expect(next.squad.players[9].profile.fullName).toBe('Benjamin Šeško')
+    expect(next.squad.engineSheet.starters[6].playerId).toBe('harbor_senior_08')
+    expect(next.squad.engineSheet.starters[6].shirtNumber).toBe(10)
+    expect(next.squad.engineSheet.starters[7].shirtNumber).toBe(8)
+    expect(next.squad.engineSheet.starters[9].shirtNumber).toBe(30)
+    expect(next.squad.createdAt).toBe(first.squad.createdAt)
+    expect(fake.writes).toBe(2)
+  })
+
+  it('refuses to overwrite edited striker or custom jersey number in IndexedDB', async () => {
+    const saved = {
+      ...previousBrunoReleaseSeed(),
+      createdAt: '2026-11-19T00:00:00.000Z',
+    }
+    expect(isStoredLocalSquad(saved)).toBe(true)
+    const changedStriker = {
+      ...saved,
+      players: saved.players.map(p => p.id === 'harbor_senior_09'
+        ? { ...p, profile: { ...p.profile, fullName: 'Custom Striker' } } : p),
+    }
+    expect(() => applyKnownRosterUpdate(changedStriker, INITIAL_LOCAL_SQUAD, MAN_UTD_SESKO_UPDATE))
+      .toThrow(/preserved without overwriting/)
+    const customNumber = {
+      ...saved,
+      engineSheet: {
+        ...saved.engineSheet,
+        starters: saved.engineSheet.starters.map(a => a.playerId === 'harbor_senior_08'
+          ? { ...a, shirtNumber: 22 } : a),
+      },
+      lineupPreview: {
+        ...saved.lineupPreview,
+        starters: saved.lineupPreview.starters.map(a => a.playerId === 'harbor_senior_08'
+          ? { ...a, shirtNumber: 22 } : a),
+      },
+    }
+    expect(() => applyKnownRosterUpdate(customNumber, INITIAL_LOCAL_SQUAD, MAN_UTD_SESKO_UPDATE))
       .toThrow(/preserved without overwriting/)
   })
 

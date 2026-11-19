@@ -8,11 +8,12 @@ import type {
 import type { PlayerDefinition, PlayerTendency, PreferredFoot } from '../game/model/player'
 import type { Point2 } from '../game/model/pitch'
 import { BRUNO_FERNANDES } from './real-players/bruno-fernandes'
+import { BENJAMIN_SESKO } from './real-players/benjamin-sesko'
 import { AVAILABLE_ROLES_BY_SLOT, FORMATION_433_SLOTS } from '../game/model/team'
 import type { ClubDefinition, Formation433Slot, PlayerDuty, TeamSheet } from '../game/model/team'
 
 /**
- * Test squad: one imported Bruno Fernandes reference profile and ten fictional
+ * Test squad: two imported real-player reference profiles and nine fictional
  * players. The source screenshots contain attributes but no complete engine
  * data, so missing ratings remain explicitly marked as provisional.
  * This roster is independent of the
@@ -129,7 +130,7 @@ export const FIRST_TEAM_PLAYERS: readonly PlayerDefinition[] = SENIOR_XI.map((se
   hidden: attributeSet(HIDDEN_CHARACTERISTICS, 55 + (index * 7) % 19),
   positionFamiliarity: { [seed.slot]: 85 + (index % 4) * 3 },
   tendencies: seed.tendencies,
-})).map((player, index) => index === 7 ? BRUNO_FERNANDES : player)
+})).map((player, index) => index === 7 ? BRUNO_FERNANDES : index === 9 ? BENJAMIN_SESKO : player)
 
 const dutyFor = (slot: Formation433Slot): PlayerDuty =>
   slot === 'RW' || slot === 'LW' || slot === 'ST' ? 'attack'
@@ -143,7 +144,9 @@ export const FIRST_TEAM_SHEET: TeamSheet = {
     slot: seed.slot,
     role: AVAILABLE_ROLES_BY_SLOT[seed.slot][0],
     duty: dutyFor(seed.slot),
-    shirtNumber: seed.number,
+    // Shirt number must not determine player identity: Daniel's player ID
+    // remains harbor_senior_08 even when he changes to shirt #10.
+    shirtNumber: index === 6 ? 10 : index === 7 ? 8 : index === 9 ? 30 : seed.number,
   })),
 }
 
@@ -170,8 +173,8 @@ export const FIRST_TEAM = {
 } as const
 
 // Preserve the 4-3-3 engine contract while the preview uses 4-2-3-1.
-// Index 7 was fictional CAM Rafiq Idris. The other 10 players are unchanged.
-// Bruno temporarily wears #10 to avoid duplicate #8 until squads are updated.
+// Bruno replaces Rafiq at CAM (#8), Šeško replaces Karim at ST (#30).
+// Daniel keeps his player ID and original attributes but takes shirt #10.
 // Protect the full 4-3-3 contract in case the senior roster is edited.
 if (FIRST_TEAM_SHEET.starters.some((starter, i) => starter.slot !== FORMATION_433_SLOTS[i])) {
   throw new Error('First-team roster must follow the canonical 4-3-3 formation slots')

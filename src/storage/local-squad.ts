@@ -42,6 +42,22 @@ export interface KnownPlayerReplacement {
   readonly replacementId: string
 }
 
+/**
+ * Explicit, versioned club update; used only for the user-requested
+ * player replacements and number changes, never a blanket seed overwrite.
+ */
+export interface KnownRosterUpdate {
+  readonly replacements: readonly (KnownPlayerReplacement & {
+    readonly previousShirtNumber: number
+    readonly expectedSlot: string
+  })[]
+  readonly numberChanges: readonly {
+    readonly playerId: string
+    readonly from: number
+    readonly to: number
+  }[]
+}
+
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 const nonempty = (v: unknown): v is string =>
@@ -173,6 +189,105 @@ export function applyKnownPlayerReplacement(
   return updated
 }
 
+/**
+ * Apply an explicit list of expected changes to an existing persisted team.
+ * Works from either the original fictional eleven or the Bruno release,
+ * and is idempotent after completion. Never deletes unknown edits or resets
+ * the other players. All changes are assembled BEFORE the IndexedDB put.
+ */
+export function applyKnownRosterUpdate(
+  original: StoredLocalSquad,
+  seed: LocalSquadSeed,
+  update: KnownRosterUpdate,
+): StoredLocalSquad | null {
+  if (original.clubId !== seed.clubId) throw new Error('Different club in local storage')
+  let current = original
+  let modified = false
+
+  for (const replacement of update.replacements) {
+    const existing = current.players.find(p => p.id === replacement.previousId)
+    const already = current.players.find(p => p.id === replacement.replacementId)
+    if (already && existing) throw new Error('Conflicting old and new players; local squad preserved')
+    if (already) {
+      // A previous release inserted Bruno or Šeško, including any local edits.
+      if (current.engineSheet.starters.filter(a => a.playerId === already.id).length !== 1 ||
+        current.lineupPreview.starters.filter(a => a.playerId === already.id).length !== 1) {
+        throw new Error('Existing player lineup differs; local squad preserved')
+      }
+      continue
+    }
+    const target = seed.players.find(p => p.id === replacement.replacementId)
+    const oldSheet = current.engineSheet.starters.find(a => a.playerId === replacement.previousId)
+    const oldPreview = current.lineupPreview.starters.find(a => a.playerId === replacement.previousId)
+    const newSheet = seed.engineSheet.starters.find(a => a.playerId === replacement.replacementId)
+    if (!existing || !target || existing.profile.fullName !== replacement.previousFullName ||
+      target.clubId !== original.clubId ||
+      !oldSheet || !oldPreview || !newSheet ||
+      oldSheet.slot !== replacement.expectedSlot || newSheet.slot !== replacement.expectedSlot ||
+      oldPreview.engineSlot !== replacement.expectedSlot ||
+      oldSheet.shirtNumber !== replacement.previousShirtNumber ||
+      oldPreview.shirtNumber !== replacement.previousShirtNumber) {
+      throw new Error('Previous player or shirt number changed; local squad preserved without overwriting')
+    }
+    current = {
+      ...current,
+      players: current.players.map(p => p.id === replacement.previousId ? target : p),
+      engineSheet: {
+        ...current.engineSheet,
+        starters: current.engineSheet.starters.map(a => a.playerId === replacement.previousId
+          ? { ...a, playerId: replacement.replacementId } : a),
+      },
+      lineupPreview: {
+        ...current.lineupPreview,
+        starters: current.lineupPreview.starters.map(a => a.playerId === replacement.previousId
+          ? { ...a, playerId: replacement.replacementId } : a),
+      },
+    }
+    modified = true
+  }
+
+  for (const numberChange of update.numberChanges) {
+    const oldEngine = current.engineSheet.starters.find(a => a.playerId === numberChange.playerId)
+    const oldPreview = current.lineupPreview.starters.find(a => a.playerId === numberChange.playerId)
+    if (!oldEngine || !oldPreview || oldEngine.shirtNumber !== oldPreview.shirtNumber ||
+      (oldEngine.shirtNumber !== numberChange.from &&
+        oldEngine.shirtNumber !== numberChange.to)) {
+      throw new Error('Custom shirt number differs; local squad preserved without overwriting')
+    }
+    if (oldEngine.shirtNumber === numberChange.to) continue
+    const newNumber = numberChange.to
+    current = {
+      ...current,
+      engineSheet: {
+        ...current.engineSheet,
+        starters: current.engineSheet.starters.map(a => a.playerId === numberChange.playerId
+          ? { ...a, shirtNumber: newNumber } : a),
+      },
+      lineupPreview: {
+        ...current.lineupPreview,
+        starters: current.lineupPreview.starters.map(a => a.playerId === numberChange.playerId
+          ? { ...a, shirtNumber: newNumber } : a),
+      },
+    }
+    modified = true
+  }
+
+  if (!modified) return null
+  current = {
+    ...current,
+    club: { ...current.club, ...(seed.club.fmUid === undefined ? {} : { fmUid: seed.club.fmUid }) },
+  }
+  const engineNumbers = current.engineSheet.starters.map(a => a.shirtNumber)
+  const previewNumbers = current.lineupPreview.starters.map(a => a.shirtNumber)
+  if (!isStoredLocalSquad(current) ||
+      new Set(engineNumbers).size !== engineNumbers.length ||
+      new Set(previewNumbers).size !== previewNumbers.length ||
+      current.players.some(p => p.clubId !== current.clubId)) {
+    throw new Error('Roster update failed validation; local squad preserved without overwriting')
+  }
+  return current
+}
+
 function openSquadDatabase(factory: IDBFactory): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     let request: IDBOpenDBRequest
@@ -209,7 +324,7 @@ function openSquadDatabase(factory: IDBFactory): Promise<IDBDatabase> {
 export async function ensureInitialSquadSaved(
   seed: LocalSquadSeed,
   factory: IDBFactory | undefined = typeof indexedDB === 'undefined' ? undefined : indexedDB,
-  replacement?: KnownPlayerReplacement,
+  replacement?: KnownPlayerReplacement | KnownRosterUpdate,
 ): Promise<SeedResult> {
   if (!isLocalSquadSeed(seed)) throw new Error('Invalid first-team data; not writing to storage')
   if (!factory) throw new Error('IndexedDB is unavailable in this browser')
@@ -243,7 +358,9 @@ export async function ensureInitialSquadSaved(
               return
             }
             if (replacement) {
-              const patched = applyKnownPlayerReplacement(existing.result, seed, replacement)
+              const patched = 'replacements' in replacement
+                ? applyKnownRosterUpdate(existing.result, seed, replacement)
+                : applyKnownPlayerReplacement(existing.result, seed, replacement)
               if (patched) {
                 store.put(patched)
                 result = { kind: 'updated', squad: patched }
