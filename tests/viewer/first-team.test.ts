@@ -67,7 +67,8 @@ describe('first senior team', () => {
     }
     const html = renderToStaticMarkup(createElement(FirstTeamPreview))
     expect(html).toContain('Man Utd')
-    expect(html).toContain('Bruno + Šeško + 9 fictional')
+    expect(html).toContain('First team · Left-half lineup preview')
+    expect(html).toContain('Loading saved squad')
     expect(html).toContain('4-2-3-1')
     expect(html).toContain('Football stadium and first-team lineup preview')
     expect(html).not.toContain('match-scoreboard')

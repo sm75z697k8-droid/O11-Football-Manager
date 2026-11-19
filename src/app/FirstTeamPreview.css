@@ -46,6 +46,9 @@
   color: #b4dcca;
   font-size: 9px;
 }
+.first-team-local-save--warning {
+  color: #f8c478;
+}
 .first-team-formation {
   font-size: 10px;
   font-weight: 800;

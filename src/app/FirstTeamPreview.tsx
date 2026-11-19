@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { FIRST_TEAM } from '../data/first-team'
+import { selectPreviewSquadMembers } from '../data/preview-squad-members'
 import { MAN_UTD_SESKO_UPDATE, INITIAL_LOCAL_SQUAD } from '../data/initial-local-squad'
-import { ensureInitialSquadSaved } from '../storage/local-squad'
-import {
-  FIRST_TEAM_4231_ASSIGNMENTS, FIRST_TEAM_PREVIEW_FORMATION,
-} from '../data/first-team-lineup'
+import { ensureInitialSquadSaved, isConsistentStoredSquad, readStoredSquad } from '../storage/local-squad'
+import type { StoredLocalSquad } from '../storage/local-squad'
 import { DEFAULT_PITCH } from '../game/model/pitch'
 import { facingAngleDegrees, projectPitch, projectPoint } from '../game/viewer/geometry'
 import PlayerStatsPanel from './PlayerStatsPanel'
@@ -21,15 +19,46 @@ export default function FirstTeamPreview() {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [localSave, setLocalSave] = useState<'saving' | 'saved' | 'unavailable'>('saving')
+  const [loadedSquad, setLoadedSquad] = useState<StoredLocalSquad | null>(null)
+  const [storageStatus, setStorageStatus] =
+    useState<'loading' | 'loaded' | 'review' | 'demo'>('loading')
 
   useEffect(() => {
     let active = true
-    // IndexedDB is optional: if Safari blocks it, the existing preview
-    // remains playable and communicates the failure rather than lying.
-    void ensureInitialSquadSaved(INITIAL_LOCAL_SQUAD, undefined, MAN_UTD_SESKO_UPDATE)
-      .then(() => { if (active) setLocalSave('saved') })
-      .catch(() => { if (active) setLocalSave('unavailable') })
+    const loadSquad = async () => {
+      try {
+        // Returns the actual IndexedDB record AFTER first-write or a safe
+        // one-time Bruno/Šeško migration commits. Never render the defaults
+        // instead of a successfully loaded local record.
+        const result = await ensureInitialSquadSaved(
+          INITIAL_LOCAL_SQUAD, undefined, MAN_UTD_SESKO_UPDATE,
+        )
+        if (!isConsistentStoredSquad(result.squad)) {
+          throw new Error('Stored first-team data is inconsistent')
+        }
+        if (active) {
+          setLoadedSquad(result.squad)
+          setStorageStatus('loaded')
+        }
+      } catch {
+        // A guarded migration may refuse an edited legacy shirt/player.
+        // Try READ-ONLY access to that save, rather than concealing it behind
+        // bundled players or overwriting it with a fresh test squad.
+        try {
+          const saved = await readStoredSquad(INITIAL_LOCAL_SQUAD.clubId)
+          if (!active) return
+          if (saved) {
+            setLoadedSquad(saved)
+            setStorageStatus('review')
+          } else {
+            setStorageStatus('demo')
+          }
+        } catch {
+          if (active) setStorageStatus('demo')
+        }
+      }
+    }
+    void loadSquad()
     return () => { active = false }
   }, [])
 
@@ -51,8 +80,14 @@ export default function FirstTeamPreview() {
   }, [])
 
   const projection = projectPitch(size.width, size.height, DEFAULT_PITCH)
-  const selectedPlayer = FIRST_TEAM.players.find(player => player.id === selectedId)
-  const selectedAssignment = FIRST_TEAM_4231_ASSIGNMENTS.find(item => item.playerId === selectedId)
+  // No saved player data is shown until loading has completed. If IndexedDB
+  // cannot be read, the GitHub seed is shown explicitly as a demo fallback.
+  const displayedSquad = loadedSquad ?? (storageStatus === 'demo' ? INITIAL_LOCAL_SQUAD : null)
+  const members = displayedSquad ? selectPreviewSquadMembers(displayedSquad) : []
+  const selectedMember = members.find(item => item.player.id === selectedId)
+  const club = displayedSquad?.club ?? INITIAL_LOCAL_SQUAD.club
+  const formation = displayedSquad?.lineupPreview.formation ??
+    INITIAL_LOCAL_SQUAD.lineupPreview.formation
 
   return (
     <div className="first-team-preview" ref={rootRef}>
@@ -60,19 +95,21 @@ export default function FirstTeamPreview() {
       <header className="first-team-identity">
         <span className="first-team-crest" aria-hidden="true">MU</span>
         <span className="first-team-identity-copy">
-          <strong>{FIRST_TEAM.club.name}</strong>
-          <span>Bruno + Šeško + 9 fictional · Left-half preview</span>
-          <span className="first-team-local-save" role="status" aria-live="polite">
-            {localSave === 'saved' ? 'Stored on this iPhone'
-              : localSave === 'saving' ? 'Saving team locally…' : 'Local storage unavailable'}
+          <strong>{club.name}</strong>
+          <span>First team · Left-half lineup preview</span>
+          <span className={'first-team-local-save' +
+            (storageStatus === 'loaded' ? '' : ' first-team-local-save--warning')}
+            role="status" aria-live="polite">
+            {storageStatus === 'loaded' ? 'Saved squad loaded from this iPhone'
+              : storageStatus === 'loading' ? 'Loading saved squad…'
+                : storageStatus === 'review' ? 'Local save loaded · update needs review'
+                  : 'Demo preview · local save unavailable'}
           </span>
         </span>
-        <span className="first-team-formation">{FIRST_TEAM_PREVIEW_FORMATION}</span>
+        <span className="first-team-formation">{formation}</span>
       </header>
 
-      {projection.scale > 0 && FIRST_TEAM_4231_ASSIGNMENTS.map(starter => {
-        const player = FIRST_TEAM.players.find(item => item.id === starter.playerId)
-        if (!player) return null
+      {projection.scale > 0 && members.map(({ player, assignment: starter }) => {
         const point = projectPoint(starter.position, projection)
         const positionStyle: CSSProperties = { left: point.x, top: point.y }
         // Only a lineup-preview orientation: face the opposing goal.
@@ -106,10 +143,13 @@ export default function FirstTeamPreview() {
         )
       })}
 
-      <div className="first-team-hint">4-2-3-1 · Gold pointer = preview facing · Tap player</div>
-      {selectedPlayer && selectedAssignment && (
-        <PlayerStatsPanel key={selectedPlayer.id} player={selectedPlayer}
-          assignment={selectedAssignment} onClose={() => setSelectedId(null)} />
+      <div className="first-team-hint">
+        {storageStatus === 'loading' ? 'Loading saved lineup…'
+          : formation + ' · Gold pointer = preview facing · Tap player'}
+      </div>
+      {selectedMember && (
+        <PlayerStatsPanel key={selectedMember.player.id} player={selectedMember.player}
+          assignment={selectedMember.assignment} onClose={() => setSelectedId(null)} />
       )}
     </div>
   )

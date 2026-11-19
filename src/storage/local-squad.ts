@@ -201,6 +201,12 @@ export function applyKnownRosterUpdate(
   update: KnownRosterUpdate,
 ): StoredLocalSquad | null {
   if (original.clubId !== seed.clubId) throw new Error('Different club in local storage')
+  // Once both imports exist, migration is FINISHED. Never reinterpret later
+  // user-edited shirt numbers as an incomplete old-format migration.
+  const allReplacementsPresent = update.replacements.every(replacement =>
+    original.players.some(p => p.id === replacement.replacementId) &&
+    !original.players.some(p => p.id === replacement.previousId))
+  if (allReplacementsPresent) return null
   let current = original
   let modified = false
 
@@ -314,12 +320,10 @@ function openSquadDatabase(factory: IDBFactory): Promise<IDBDatabase> {
 }
 
 /**
- * Idempotent first-write-wins bootstrap. A single readwrite transaction
- * serializes simultaneous mounts/tabs. EXISTING records remain untouched
- * unless an explicit, guarded player replacement is requested.
- *
- * For now the UI keeps using its current static preview; this method stores
- * and verifies the squad only, without introducing a team-loading feature.
+ * Idempotent load-or-seed operation. It returns the COMMITTED active squad for
+ * rendering, including a guarded import migration if one was necessary.
+ * A readwrite transaction protects first-write-wins across open tabs.
+ * Never silently replace a valid, edited local save with GitHub defaults.
  */
 export async function ensureInitialSquadSaved(
   seed: LocalSquadSeed,
@@ -380,6 +384,137 @@ export async function ensureInitialSquadSaved(
       }
       // Request errors automatically abort this transaction; only oncomplete
       // signals that the newly written squad has actually been committed.
+    })
+  } finally {
+    db.close()
+  }
+}
+
+
+/**
+ * Stronger checks at the UI/write boundary. Keep the v1 storage envelope
+ * backwards compatible while rejecting duplicate kit numbers, unpaired
+ * team-sheet assignments, or invalid numerical attributes before rendering.
+ */
+export function isConsistentStoredSquad(squad: unknown): squad is StoredLocalSquad {
+  if (!isStoredLocalSquad(squad)) return false
+  const preview = new Map(squad.lineupPreview.starters.map(s => [s.playerId, s]))
+  const shirtNumbers = new Set<number>()
+  for (const starter of squad.engineSheet.starters) {
+    const matching = preview.get(starter.playerId)
+    if (!matching || matching.shirtNumber !== starter.shirtNumber ||
+      matching.engineSlot !== starter.slot ||
+      !Number.isInteger(starter.shirtNumber) ||
+      starter.shirtNumber < 1 || starter.shirtNumber > 99 ||
+      shirtNumbers.has(starter.shirtNumber)) return false
+    shirtNumbers.add(starter.shirtNumber)
+  }
+  for (const player of squad.players) {
+    for (const values of [
+      player.abilities.technical, player.abilities.mental, player.abilities.physical,
+      player.hidden, player.positionFamiliarity,
+      ...(player.abilities.goalkeeping ? [player.abilities.goalkeeping] : []),
+    ]) {
+      if (Object.values(values).some(v => typeof v !== 'number' ||
+        !Number.isFinite(v) || v < 0 || v > 100)) return false
+    }
+  }
+  return preview.size === 11 && shirtNumbers.size === 11
+}
+
+/**
+ * Retrieve an existing local save, without seeding, updating or modifying it.
+ * Null means no record. Unsupported/corrupt records produce an error, and are
+ * left untouched for recovery rather than replaced with a blank squad.
+ */
+export async function readStoredSquad(
+  clubId: string,
+  factory: IDBFactory | undefined = typeof indexedDB === 'undefined' ? undefined : indexedDB,
+): Promise<StoredLocalSquad | null> {
+  if (!nonempty(clubId)) throw new Error('Missing club ID')
+  if (!factory) throw new Error('IndexedDB is unavailable in this browser')
+  const db = await openSquadDatabase(factory)
+  try {
+    return await new Promise<StoredLocalSquad | null>((resolve, reject) => {
+      let stored: StoredLocalSquad | null = null
+      let tx: IDBTransaction
+      try {
+        tx = db.transaction(SQUAD_STORE_NAME, 'readonly')
+      } catch (error) {
+        reject(error)
+        return
+      }
+      tx.oncomplete = () => resolve(stored)
+      tx.onabort = () => reject(tx.error ?? new Error('Local squad read failed'))
+      const request = tx.objectStore(SQUAD_STORE_NAME).get(clubId)
+      request.onsuccess = () => {
+        if (request.result === undefined) return
+        if (!isConsistentStoredSquad(request.result) ||
+          request.result.clubId !== clubId) {
+          tx.abort()
+          return
+        }
+        stored = request.result
+      }
+    })
+  } finally {
+    db.close()
+  }
+}
+
+/**
+ * Future player edits must use this synchronous updater, which performs
+ * read -> validate -> write inside one IndexedDB readwrite transaction.
+ * No 'await' is permitted inside edit(): an async callback lets the
+ * browser close its transaction and risks lost changes.
+ *
+ * This is persistence infrastructure, not a player-editing UI.
+ */
+export async function editStoredSquad(
+  clubId: string,
+  edit: (current: StoredLocalSquad) => StoredLocalSquad,
+  factory: IDBFactory | undefined = typeof indexedDB === 'undefined' ? undefined : indexedDB,
+): Promise<StoredLocalSquad> {
+  if (!nonempty(clubId)) throw new Error('Missing club ID')
+  if (!factory) throw new Error('IndexedDB is unavailable in this browser')
+  const db = await openSquadDatabase(factory)
+  try {
+    return await new Promise<StoredLocalSquad>((resolve, reject) => {
+      let updated: StoredLocalSquad | null = null
+      let abortReason: Error | null = null
+      let tx: IDBTransaction
+      try {
+        tx = db.transaction(SQUAD_STORE_NAME, 'readwrite')
+      } catch (error) {
+        reject(error)
+        return
+      }
+      tx.oncomplete = () => {
+        if (updated) resolve(updated)
+        else reject(new Error('Squad edit was not committed'))
+      }
+      tx.onabort = () => reject(abortReason ?? tx.error ??
+        new Error('Squad edit transaction was aborted'))
+      const store = tx.objectStore(SQUAD_STORE_NAME)
+      const request = store.get(clubId)
+      request.onsuccess = () => {
+        try {
+          const current: unknown = request.result
+          if (!isConsistentStoredSquad(current)) {
+            throw new Error('No valid stored squad found; local data was not changed')
+          }
+          const next = edit(current)
+          if (!isConsistentStoredSquad(next) || next.clubId !== clubId ||
+            next.createdAt !== current.createdAt) {
+            throw new Error('Invalid squad edit; existing local data was preserved')
+          }
+          store.put(next)
+          updated = next
+        } catch (error) {
+          abortReason = error instanceof Error ? error : new Error(String(error))
+          tx.abort()
+        }
+      }
     })
   } finally {
     db.close()
