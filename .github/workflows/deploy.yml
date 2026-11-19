@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -56,6 +57,26 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+      # GitHub sometimes accepts upload before making it discoverable to
+      # deploy-pages. Poll for exactly one artifact in THIS fresh workflow run
+      # rather than repeatedly rerunning an old run (which duplicates it).
+      - name: Wait for Pages artifact registration
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in {1..12}; do
+            count="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" --jq '[.artifacts[] | select(.name == "github-pages")] | length')"
+            if [ "${count}" = "1" ]; then
+              echo "Exactly one Pages artifact registered"
+              sleep 8
+              exit 0
+            fi
+            echo "Waiting for Pages artifact registration (attempt ${attempt}/12; found ${count})"
+            sleep 5
+          done
+          echo "::error::Expected exactly one registered GitHub Pages artifact"
+          exit 1
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
