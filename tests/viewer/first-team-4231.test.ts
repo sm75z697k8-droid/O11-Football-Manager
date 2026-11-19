@@ -9,17 +9,20 @@ import { facingAngleDegrees, projectPitch, projectPoint } from '../../src/game/v
 import { readFileSync } from 'node:fs'
 
 describe('Man Utd one-half first-team 4-2-3-1', () => {
-  it('changes only identity and kit colours, preserving all 11 fictional player records', () => {
+  it('replaces only the CAM with Bruno, preserving ten other fictional player profiles', () => {
     expect(FIRST_TEAM_CLUB).toEqual({
-      id: 'club_man_utd', name: 'Man Utd', shortName: 'MUN',
+      id: 'club_man_utd', name: 'Man Utd', shortName: 'MUN', fmUid: 680,
       colors: { primary: '#DA291C', secondary: '#FFFFFF' },
     })
     expect(FIRST_TEAM_PLAYERS).toHaveLength(11)
     expect(FIRST_TEAM_PLAYERS.map(p => p.profile.fullName)).toEqual([
       'Samir Rahman','Ethan Brooks','Leo Bennett','Adil Khan','Mateo Silva',
-      'Noah Fletcher','Daniel Mercer','Rafiq Idris','Elias Navarro','Karim Haddad','Lucas Duarte',
+      'Noah Fletcher','Daniel Mercer','Bruno Fernandes','Elias Navarro','Karim Haddad','Lucas Duarte',
     ])
-    expect(FIRST_TEAM_PLAYERS.map(p => p.id).every(id => id.startsWith('harbor_senior_'))).toBe(true)
+    expect(FIRST_TEAM_PLAYERS.filter(p => p.id.startsWith('harbor_senior_'))).toHaveLength(10)
+    expect(FIRST_TEAM_PLAYERS[7].id).toBe('43124203')
+    expect(FIRST_TEAM_PLAYERS[7].referenceData?.overallRating).toBe(89)
+    expect(FIRST_TEAM_PLAYERS[7].referenceData?.potentialRating).toBe(89)
     expect(FIRST_TEAM_PLAYERS.every(p => p.clubId === FIRST_TEAM_CLUB.id)).toBe(true)
     expect(new Set(FIRST_TEAM_PLAYERS.map(p => p.id)).size).toBe(11)
   })

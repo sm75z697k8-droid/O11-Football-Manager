@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { INITIAL_LOCAL_SQUAD } from '../../src/data/initial-local-squad'
+import { BRUNO_REPLACEMENT, INITIAL_LOCAL_SQUAD } from '../../src/data/initial-local-squad'
 import {
   SQUAD_DATA_VERSION, SQUAD_DB_NAME, SQUAD_DB_VERSION, SQUAD_STORE_NAME,
-  ensureInitialSquadSaved, isLocalSquadSeed, isStoredLocalSquad,
+  applyKnownPlayerReplacement, ensureInitialSquadSaved, isLocalSquadSeed, isStoredLocalSquad,
 } from '../../src/storage/local-squad'
 
 /**
@@ -90,6 +90,16 @@ function memoryIndexedDb() {
               })
               return request as unknown as IDBRequest
             },
+            put: (record: { clubId: string }) => {
+              const request = makeRequest()
+              schedule(() => {
+                rows.set(record.clubId, structuredClone(record))
+                writes++
+                request.result = record.clubId
+                request.onsuccess?.()
+              })
+              return request as unknown as IDBRequest
+            },
           } as unknown as IDBObjectStore
         },
       }
@@ -115,6 +125,38 @@ function memoryIndexedDb() {
   } as unknown as IDBFactory
 
   return { factory, rows, get upgrades() { return upgrades }, get writes() { return writes } }
+}
+
+
+/** Snapshot of the previous release, containing the fictional #10 player. */
+function legacySeed() {
+  const previousId = BRUNO_REPLACEMENT.previousId
+  const changedPlayer = INITIAL_LOCAL_SQUAD.players.map(player =>
+    player.id === BRUNO_REPLACEMENT.replacementId
+      ? {
+          ...player, id: previousId,
+          profile: { ...player.profile, fullName: BRUNO_REPLACEMENT.previousFullName },
+          referenceData: undefined,
+        }
+      : player)
+  const former = (id: string) => id === BRUNO_REPLACEMENT.replacementId ? previousId : id
+  return {
+    ...INITIAL_LOCAL_SQUAD,
+    club: { ...INITIAL_LOCAL_SQUAD.club, fmUid: undefined },
+    players: changedPlayer,
+    engineSheet: {
+      ...INITIAL_LOCAL_SQUAD.engineSheet,
+      starters: INITIAL_LOCAL_SQUAD.engineSheet.starters.map(s => ({
+        ...s, playerId: former(s.playerId),
+      })),
+    },
+    lineupPreview: {
+      ...INITIAL_LOCAL_SQUAD.lineupPreview,
+      starters: INITIAL_LOCAL_SQUAD.lineupPreview.starters.map(s => ({
+        ...s, playerId: former(s.playerId),
+      })),
+    },
+  }
 }
 
 describe('device-only IndexedDB first-team snapshot', () => {
@@ -175,6 +217,57 @@ describe('device-only IndexedDB first-team snapshot', () => {
       .rejects.toThrow(/preserved without overwriting/)
     expect(fake.rows.get(first.squad.clubId)).toEqual(unsupported)
     expect(fake.writes).toBe(1)
+  })
+
+
+  it('updates only Rafiq to Bruno on an existing iPhone without resetting other players', async () => {
+    const fake = memoryIndexedDb()
+    const old = legacySeed()
+    expect(isLocalSquadSeed(old)).toBe(true)
+    const saved = await ensureInitialSquadSaved(old, fake.factory)
+    expect(saved.kind).toBe('created')
+    const priorKeeper = {
+      ...saved.squad.players[0],
+      profile: { ...saved.squad.players[0].profile, fullName: 'Edited Keeper' },
+    }
+    fake.rows.set(old.clubId, {
+      ...saved.squad,
+      players: saved.squad.players.map((p, i) => i === 0 ? priorKeeper : p),
+    })
+    const result = await ensureInitialSquadSaved(INITIAL_LOCAL_SQUAD, fake.factory, BRUNO_REPLACEMENT)
+    expect(result.kind).toBe('updated')
+    expect(result.squad.createdAt).toBe(saved.squad.createdAt)
+    expect(result.squad.club.fmUid).toBe(680)
+    expect(result.squad.players.map(p=>p.id)).toContain('43124203')
+    expect(result.squad.players.some(p=>p.id === BRUNO_REPLACEMENT.previousId)).toBe(false)
+    expect(result.squad.players[0].profile.fullName).toBe('Edited Keeper')
+    expect(result.squad.players[7].profile.fullName).toBe('Bruno Fernandes')
+    expect(result.squad.players[7].referenceData?.overallRating).toBe(89)
+    expect(result.squad.players[7].referenceData?.potentialRating).toBe(89)
+    expect(result.squad.players[7].abilities.technical.passing).toBe(90)
+    expect(result.squad.players[7].hidden.naturalFitness).toBe(100)
+    expect(result.squad.engineSheet.starters[7].playerId).toBe('43124203')
+    expect(result.squad.lineupPreview.starters[7].playerId).toBe('43124203')
+    expect(result.squad.lineupPreview.starters[7].slot).toBe('CAM')
+    expect(fake.writes).toBe(2)
+    const again = await ensureInitialSquadSaved(INITIAL_LOCAL_SQUAD, fake.factory, BRUNO_REPLACEMENT)
+    expect(again.kind).toBe('existing')
+    expect(again.squad).toEqual(result.squad)
+    expect(fake.writes).toBe(2)
+  })
+
+  it('preserves edited/unknown previous CAM instead of overwriting player data', async () => {
+    const old = legacySeed()
+    const saved = {
+      ...old,
+      createdAt: '2026-11-19T00:00:00.000Z',
+      players: old.players.map(p => p.id === BRUNO_REPLACEMENT.previousId
+        ? { ...p, profile: { ...p.profile, fullName: 'Edited Custom Midfielder' } }
+        : p),
+    }
+    expect(isStoredLocalSquad(saved)).toBe(true)
+    expect(() => applyKnownPlayerReplacement(saved, INITIAL_LOCAL_SQUAD, BRUNO_REPLACEMENT))
+      .toThrow(/preserved without overwriting/)
   })
 
   it('does not write malformed seed data or pretend IndexedDB always exists', async () => {

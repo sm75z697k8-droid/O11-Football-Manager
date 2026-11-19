@@ -91,7 +91,16 @@ export default function PlayerStatsPanel({
         <div className="o11-stats-identity">
           <strong>{player.profile.fullName}</strong>
           <span>{assignment.slot} · {assignment.role.replace(/([A-Z])/g, ' $1')} · {assignment.duty}</span>
-          <small>{player.profile.preferredFoot} foot · {player.profile.heightCm} cm · Fictional</small>
+          <small>
+            {player.profile.preferredFoot} foot · {player.profile.heightCm} cm ·
+            {player.referenceData ? 'FM profile' : 'Fictional'}
+          </small>
+          {player.referenceData && (
+            <small>
+              {player.referenceData.overallRating} OVR · {player.referenceData.potentialRating} POT ·
+              FM ID {player.referenceData.externalPlayerId}
+            </small>
+          )}
         </div>
         <button type="button" className="o11-stats-close" onClick={onClose}
           aria-label="Close player attributes">×</button>
@@ -129,6 +138,13 @@ export default function PlayerStatsPanel({
           </p>
         )}
         <AttributeRadar axes={attributeProfile(player)} />
+        {player.referenceData && (
+          <p className="o11-stats-note">
+            Supplied 1–20 ratings · FM club ID {player.referenceData.externalClubId}.
+            Unspecified Recovery, hidden characteristics and supporting profile
+            values are provisional O11 estimates.
+          </p>
+        )}
         <p className="o11-stats-note">
           Display ratings are converted from the 0–100 match-engine model.
           Role highlights are scouting guidance. Radar values are derived averages,

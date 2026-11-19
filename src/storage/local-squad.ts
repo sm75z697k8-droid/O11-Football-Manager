@@ -33,6 +33,14 @@ export interface StoredLocalSquad extends LocalSquadSeed {
 export type SeedResult =
   | { readonly kind: 'created'; readonly squad: StoredLocalSquad }
   | { readonly kind: 'existing'; readonly squad: StoredLocalSquad }
+  | { readonly kind: 'updated'; readonly squad: StoredLocalSquad }
+
+/** One explicitly requested fictional-player replacement, not a general reset. */
+export interface KnownPlayerReplacement {
+  readonly previousId: string
+  readonly previousFullName: string
+  readonly replacementId: string
+}
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -106,6 +114,65 @@ export function isStoredLocalSquad(value: unknown): value is StoredLocalSquad {
     !Number.isNaN(Date.parse(value.createdAt))
 }
 
+/**
+ * One targeted, one-time player migration. All other player objects, match
+ * attributes, and save metadata are preserved. Unknown/edited replacements
+ * are rejected instead of overwritten. No formation is changed.
+ */
+export function applyKnownPlayerReplacement(
+  saved: StoredLocalSquad,
+  seed: LocalSquadSeed,
+  update: KnownPlayerReplacement,
+): StoredLocalSquad | null {
+  if (saved.clubId !== seed.clubId) throw new Error('Different club in local storage')
+  const replacement = seed.players.find(p => p.id === update.replacementId)
+  if (!replacement || replacement.clubId !== saved.clubId ||
+    update.previousId === update.replacementId) {
+    throw new Error('Requested replacement player data is invalid')
+  }
+  // Already imported (including a locally edited Bruno record): never reset.
+  if (saved.players.some(p => p.id === update.replacementId)) return null
+
+  const before = saved.players.filter(p => p.id === update.previousId)
+  if (before.length !== 1 || before[0].profile.fullName !== update.previousFullName) {
+    throw new Error('Existing player was changed; local squad preserved without overwriting')
+  }
+  if (saved.engineSheet.starters.filter(s => s.playerId === update.previousId).length !== 1 ||
+      saved.lineupPreview.starters.filter(s => s.playerId === update.previousId).length !== 1) {
+    throw new Error('Existing lineup differs; local squad preserved without overwriting')
+  }
+  const savedPlayer = saved.engineSheet.starters.find(s => s.playerId === update.previousId)
+  const requestedPlayer = seed.engineSheet.starters.find(s => s.playerId === update.replacementId)
+  if (!savedPlayer || !requestedPlayer || savedPlayer.slot !== requestedPlayer.slot ||
+    savedPlayer.shirtNumber !== requestedPlayer.shirtNumber) {
+    throw new Error('Existing shirt number or position changed; local squad preserved')
+  }
+  const updated: StoredLocalSquad = {
+    ...saved,
+    club: {
+      ...saved.club,
+      ...(seed.club.fmUid === undefined ? {} : { fmUid: seed.club.fmUid }),
+    },
+    players: saved.players.map(p => p.id === update.previousId ? replacement : p),
+    engineSheet: {
+      ...saved.engineSheet,
+      starters: saved.engineSheet.starters.map(starter =>
+        starter.playerId === update.previousId
+          ? { ...starter, playerId: update.replacementId } : starter),
+    },
+    lineupPreview: {
+      ...saved.lineupPreview,
+      starters: saved.lineupPreview.starters.map(starter =>
+        starter.playerId === update.previousId
+          ? { ...starter, playerId: update.replacementId } : starter),
+    },
+  }
+  if (!isStoredLocalSquad(updated)) {
+    throw new Error('Replacement failed local roster integrity validation')
+  }
+  return updated
+}
+
 function openSquadDatabase(factory: IDBFactory): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     let request: IDBOpenDBRequest
@@ -133,8 +200,8 @@ function openSquadDatabase(factory: IDBFactory): Promise<IDBDatabase> {
 
 /**
  * Idempotent first-write-wins bootstrap. A single readwrite transaction
- * serializes simultaneous mounts/tabs. EXISTING records are never put,
- * cleared, deleted, or silently migrated from source-code defaults.
+ * serializes simultaneous mounts/tabs. EXISTING records remain untouched
+ * unless an explicit, guarded player replacement is requested.
  *
  * For now the UI keeps using its current static preview; this method stores
  * and verifies the squad only, without introducing a team-loading feature.
@@ -142,6 +209,7 @@ function openSquadDatabase(factory: IDBFactory): Promise<IDBDatabase> {
 export async function ensureInitialSquadSaved(
   seed: LocalSquadSeed,
   factory: IDBFactory | undefined = typeof indexedDB === 'undefined' ? undefined : indexedDB,
+  replacement?: KnownPlayerReplacement,
 ): Promise<SeedResult> {
   if (!isLocalSquadSeed(seed)) throw new Error('Invalid first-team data; not writing to storage')
   if (!factory) throw new Error('IndexedDB is unavailable in this browser')
@@ -173,6 +241,14 @@ export async function ensureInitialSquadSaved(
               abortReason = new Error('Existing local squad has an unsupported or invalid format; preserved without overwriting')
               tx.abort()
               return
+            }
+            if (replacement) {
+              const patched = applyKnownPlayerReplacement(existing.result, seed, replacement)
+              if (patched) {
+                store.put(patched)
+                result = { kind: 'updated', squad: patched }
+                return
+              }
             }
             result = { kind: 'existing', squad: existing.result }
             return

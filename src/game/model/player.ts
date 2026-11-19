@@ -38,4 +38,15 @@ export interface PlayerDefinition {
   readonly hidden: PlayerHiddenCharacteristics
   readonly positionFamiliarity: Readonly<Partial<Record<PositionCode, number>>>
   readonly tendencies: readonly PlayerTendency[]
+  /** Optional imported reference; summary ratings never override engine skills. */
+  readonly referenceData?: {
+    readonly system: 'Football Manager'
+    readonly externalPlayerId: number
+    readonly externalClubId: number
+    readonly overallRating: number
+    readonly potentialRating: number
+    readonly attributeSource: 'user-supplied screenshots'
+    /** Fields estimated to satisfy O11's more detailed engine contract. */
+    readonly provisionalFields: readonly string[]
+  }
 }

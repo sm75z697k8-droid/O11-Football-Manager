@@ -7,12 +7,15 @@ import type {
 } from '../game/model/attributes'
 import type { PlayerDefinition, PlayerTendency, PreferredFoot } from '../game/model/player'
 import type { Point2 } from '../game/model/pitch'
+import { BRUNO_FERNANDES } from './real-players/bruno-fernandes'
 import { AVAILABLE_ROLES_BY_SLOT, FORMATION_433_SLOTS } from '../game/model/team'
 import type { ClubDefinition, Formation433Slot, PlayerDuty, TeamSheet } from '../game/model/team'
 
 /**
- * Fictional senior XI: player identities and ratings are authored test-game
- * content, NOT real-world scouting data. This roster is independent of the
+ * Test squad: one imported Bruno Fernandes reference profile and ten fictional
+ * players. The source screenshots contain attributes but no complete engine
+ * data, so missing ratings remain explicitly marked as provisional.
+ * This roster is independent of the
  * preserved Harbor v Vale diagnostic fixture and does not start a match.
  */
 export const FIRST_TEAM_CLUB: ClubDefinition = {
@@ -20,6 +23,7 @@ export const FIRST_TEAM_CLUB: ClubDefinition = {
   id: 'club_man_utd',
   name: 'Man Utd',
   shortName: 'MUN',
+  fmUid: 680,
   colors: { primary: '#DA291C', secondary: '#FFFFFF' },
 }
 
@@ -125,7 +129,7 @@ export const FIRST_TEAM_PLAYERS: readonly PlayerDefinition[] = SENIOR_XI.map((se
   hidden: attributeSet(HIDDEN_CHARACTERISTICS, 55 + (index * 7) % 19),
   positionFamiliarity: { [seed.slot]: 85 + (index % 4) * 3 },
   tendencies: seed.tendencies,
-}))
+})).map((player, index) => index === 7 ? BRUNO_FERNANDES : player)
 
 const dutyFor = (slot: Formation433Slot): PlayerDuty =>
   slot === 'RW' || slot === 'LW' || slot === 'ST' ? 'attack'
@@ -165,6 +169,9 @@ export const FIRST_TEAM = {
   positions: FIRST_TEAM_POSITIONS,
 } as const
 
+// Preserve the 4-3-3 engine contract while the preview uses 4-2-3-1.
+// Index 7 was fictional CAM Rafiq Idris. The other 10 players are unchanged.
+// Bruno temporarily wears #10 to avoid duplicate #8 until squads are updated.
 // Protect the full 4-3-3 contract in case the senior roster is edited.
 if (FIRST_TEAM_SHEET.starters.some((starter, i) => starter.slot !== FORMATION_433_SLOTS[i])) {
   throw new Error('First-team roster must follow the canonical 4-3-3 formation slots')

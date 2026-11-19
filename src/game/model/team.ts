@@ -4,6 +4,8 @@ export interface ClubDefinition {
   readonly id: ClubId
   readonly name: string
   readonly shortName: string
+  /** FM UID is an external reference, not O11's internal stable club ID. */
+  readonly fmUid?: number
   readonly colors: {
     readonly primary: string
     readonly secondary: string

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { FIRST_TEAM } from '../data/first-team'
-import { INITIAL_LOCAL_SQUAD } from '../data/initial-local-squad'
+import { BRUNO_REPLACEMENT, INITIAL_LOCAL_SQUAD } from '../data/initial-local-squad'
 import { ensureInitialSquadSaved } from '../storage/local-squad'
 import {
   FIRST_TEAM_4231_ASSIGNMENTS, FIRST_TEAM_PREVIEW_FORMATION,
@@ -27,7 +27,7 @@ export default function FirstTeamPreview() {
     let active = true
     // IndexedDB is optional: if Safari blocks it, the existing preview
     // remains playable and communicates the failure rather than lying.
-    void ensureInitialSquadSaved(INITIAL_LOCAL_SQUAD)
+    void ensureInitialSquadSaved(INITIAL_LOCAL_SQUAD, undefined, BRUNO_REPLACEMENT)
       .then(() => { if (active) setLocalSave('saved') })
       .catch(() => { if (active) setLocalSave('unavailable') })
     return () => { active = false }

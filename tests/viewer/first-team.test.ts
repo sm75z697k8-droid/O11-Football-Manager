@@ -12,8 +12,9 @@ import { DEFAULT_PITCH } from '../../src/game/model/pitch'
 import { FORMATION_433_SLOTS } from '../../src/game/model/team'
 
 describe('first senior team', () => {
-  it('creates a complete fictional 4-3-3 with unique players and shirt numbers', () => {
+  it('creates a mixed real-reference and fictional 4-3-3 with unique player IDs and numbers', () => {
     expect(FIRST_TEAM_CLUB.name).toBe('Man Utd')
+    expect(FIRST_TEAM_CLUB.fmUid).toBe(680)
     expect(FIRST_TEAM_SHEET.clubId).toBe(FIRST_TEAM_CLUB.id)
     expect(FIRST_TEAM_SHEET.formation).toBe('4-3-3')
     expect(FIRST_TEAM_PLAYERS).toHaveLength(11)
@@ -23,6 +24,10 @@ describe('first senior team', () => {
     expect(new Set(FIRST_TEAM_SHEET.starters.map(p => p.shirtNumber)).size).toBe(11)
     expect(FIRST_TEAM_PLAYERS.every(p => p.clubId === FIRST_TEAM_CLUB.id)).toBe(true)
     expect(FIRST_TEAM_PLAYERS.every(p => !/Player \d+/.test(p.profile.fullName))).toBe(true)
+    expect(FIRST_TEAM_PLAYERS.filter(p => p.referenceData)).toHaveLength(1)
+    expect(FIRST_TEAM_PLAYERS[7].id).toBe('43124203')
+    expect(FIRST_TEAM_PLAYERS[7].profile.fullName).toBe('Bruno Fernandes')
+    expect(FIRST_TEAM_PLAYERS.some(p => p.profile.fullName === 'Rafiq Idris')).toBe(false)
     const keeper = FIRST_TEAM_PLAYERS.find(p => p.id === FIRST_TEAM_SHEET.starters[0].playerId)
     expect(keeper?.abilities.goalkeeping?.reflexes).toBeGreaterThan(70)
     expect(FIRST_TEAM_PLAYERS.slice(1).every(p => p.abilities.goalkeeping === null)).toBe(true)
@@ -55,9 +60,9 @@ describe('first senior team', () => {
     }
     const html = renderToStaticMarkup(createElement(FirstTeamPreview))
     expect(html).toContain('Man Utd')
-    expect(html).toContain('Fictional players')
+    expect(html).toContain('Bruno + 10 fictional players')
     expect(html).toContain('4-2-3-1')
-    expect(html).toContain('Football stadium and pitch beneath a fictional starting eleven')
+    expect(html).toContain('Football stadium and first-team lineup preview')
     expect(html).not.toContain('match-scoreboard')
   })
 })
