@@ -35,7 +35,10 @@ describe('first senior team', () => {
     const keeper = FIRST_TEAM_PLAYERS.find(p => p.id === FIRST_TEAM_SHEET.starters[0].playerId)
     expect(keeper?.abilities.goalkeeping?.reflexes).toBeGreaterThan(70)
     expect(FIRST_TEAM_PLAYERS.slice(1).every(p => p.abilities.goalkeeping === null)).toBe(true)
-    expect(FIRST_TEAM_PLAYERS.some(p => p.abilities.technical.finishing > 80)).toBe(true)
+    // The previous >80 finishing assertion was specific to the removed
+    // fictional #9. Check the new supplied striker rating instead.
+    expect(FIRST_TEAM_PLAYERS[9].abilities.technical.finishing).toBe(70)
+    expect(FIRST_TEAM_PLAYERS[9].abilities.physical.sprintSpeed).toBe(85)
   })
 
   it('integrates into the existing strictly validated two-team match contract', () => {
