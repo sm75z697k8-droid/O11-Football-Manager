@@ -591,7 +591,10 @@ describe('device-only IndexedDB first-team snapshot', () => {
 
   it('does not overwrite a readable but edited legacy squad when a known migration conflicts', async () => {
     const fake = memoryIndexedDb()
-    const saved = await ensureInitialSquadSaved(previousBrunoReleaseSeed(), fake.factory)
+    // This fixture predates Rashford's #9. Use Lucas #11 so the legacy
+    // save is internally valid (Šeško's predecessor still wore #9).
+    const saved = await ensureInitialSquadSaved(
+      priorLucasSnapshot(previousBrunoReleaseSeed()), fake.factory)
     const edited = {
       ...saved.squad,
       players: saved.squad.players.map(p => p.id === 'harbor_senior_09' ? {
