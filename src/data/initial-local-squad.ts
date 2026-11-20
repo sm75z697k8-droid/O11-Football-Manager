@@ -62,3 +62,31 @@ export const MAN_UTD_LAMMENS_UPDATE = {
   numberChanges: MAN_UTD_SESKO_UPDATE.numberChanges,
   numberChangesOnlyIfMissingPlayerIds: ['43124203', '62246208'],
 } satisfies KnownRosterUpdate
+
+/**
+ * Preserve the three prior imports, and replace only fictional LW Lucas
+ * Duarte with Marcus Rashford #9. Older Bruno/Šeško shirt migrations
+ * run only for genuinely old squads, never over later user-made edits.
+ */
+export const MAN_UTD_RASHFORD_UPDATE = {
+  replacements: [
+    ...MAN_UTD_LAMMENS_UPDATE.replacements,
+    {
+      previousId: 'harbor_senior_11',
+      previousFullName: 'Lucas Duarte',
+      replacementId: '28100266',
+      previousShirtNumber: 11,
+      expectedSlot: 'LW',
+    },
+  ],
+  numberChanges: [
+    ...MAN_UTD_LAMMENS_UPDATE.numberChanges,
+    {
+      playerId: '28100266',
+      from: 11,
+      to: 9,
+      onlyIfMissingPlayerIds: ['28100266'],
+    },
+  ],
+  numberChangesOnlyIfMissingPlayerIds: ['43124203', '62246208'],
+} satisfies KnownRosterUpdate

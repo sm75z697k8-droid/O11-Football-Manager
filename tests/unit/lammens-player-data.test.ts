@@ -30,8 +30,8 @@ describe('Senne Lammens player ID 18107436, number 1', () => {
     })
     expect(FIRST_TEAM.players).toHaveLength(11)
     expect(FIRST_TEAM.players[0]).toEqual(SENNE_LAMMENS)
-    expect(FIRST_TEAM.players.filter(p=>p.referenceData)).toHaveLength(3)
-    expect(FIRST_TEAM.players.filter(p=>!p.referenceData)).toHaveLength(8)
+    expect(FIRST_TEAM.players.filter(p=>p.referenceData)).toHaveLength(4)
+    expect(FIRST_TEAM.players.filter(p=>!p.referenceData)).toHaveLength(7)
     expect(FIRST_TEAM.players.some(p=>p.id === 'harbor_senior_01')).toBe(false)
     expect(FIRST_TEAM_SHEET.starters[0]).toMatchObject({
       slot:'GK', playerId:'18107436', shirtNumber:1,

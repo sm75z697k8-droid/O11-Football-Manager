@@ -9,7 +9,7 @@ import { facingAngleDegrees, projectPitch, projectPoint } from '../../src/game/v
 import { readFileSync } from 'node:fs'
 
 describe('Man Utd one-half first-team 4-2-3-1', () => {
-  it('includes Lammens, Bruno and Šeško, preserving eight fictional players', () => {
+  it('includes four real-player profiles, preserving seven fictional players', () => {
     expect(FIRST_TEAM_CLUB).toEqual({
       id: 'club_man_utd', name: 'Man Utd', shortName: 'MUN', fmUid: 680,
       colors: { primary: '#DA291C', secondary: '#FFFFFF' },
@@ -17,9 +17,12 @@ describe('Man Utd one-half first-team 4-2-3-1', () => {
     expect(FIRST_TEAM_PLAYERS).toHaveLength(11)
     expect(FIRST_TEAM_PLAYERS.map(p => p.profile.fullName)).toEqual([
       'Senne Lammens','Ethan Brooks','Leo Bennett','Adil Khan','Mateo Silva',
-      'Noah Fletcher','Daniel Mercer','Bruno Fernandes','Elias Navarro','Benjamin Šeško','Lucas Duarte',
+      'Noah Fletcher','Daniel Mercer','Bruno Fernandes','Elias Navarro','Benjamin Šeško','Marcus Rashford',
     ])
-    expect(FIRST_TEAM_PLAYERS.filter(p => p.id.startsWith('harbor_senior_'))).toHaveLength(8)
+    expect(FIRST_TEAM_PLAYERS.filter(p => p.id.startsWith('harbor_senior_'))).toHaveLength(7)
+    expect(FIRST_TEAM_PLAYERS[10].id).toBe('28100266')
+    expect(FIRST_TEAM_PLAYERS[10].referenceData?.overallRating).toBe(77)
+    expect(FIRST_TEAM_PLAYERS[10].referenceData?.potentialRating).toBe(87)
     expect(FIRST_TEAM_PLAYERS[0].id).toBe('18107436')
     expect(FIRST_TEAM_PLAYERS[0].referenceData?.overallRating).toBe(77)
     expect(FIRST_TEAM_PLAYERS[0].referenceData?.potentialRating).toBe(83)
@@ -57,6 +60,8 @@ describe('Man Utd one-half first-team 4-2-3-1', () => {
     expect(FIRST_TEAM_4231_ASSIGNMENTS.find(x=>x.slot==='RDM')?.shirtNumber).toBe(6)
     expect(FIRST_TEAM_4231_ASSIGNMENTS.find(x=>x.slot==='LDM')?.shirtNumber).toBe(10)
     expect(FIRST_TEAM_4231_ASSIGNMENTS.find(x=>x.slot==='ST')?.shirtNumber).toBe(30)
+    expect(FIRST_TEAM_4231_ASSIGNMENTS.find(x=>x.slot==='LW')?.shirtNumber).toBe(9)
+    expect(FIRST_TEAM_4231_ASSIGNMENTS.find(x=>x.slot==='LW')?.playerId).toBe('28100266')
     expect(new Set(FIRST_TEAM_4231_ASSIGNMENTS.map(a=>a.shirtNumber)).size).toBe(11)
   })
 

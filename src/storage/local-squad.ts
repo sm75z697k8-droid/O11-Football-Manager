@@ -55,6 +55,11 @@ export interface KnownRosterUpdate {
     readonly playerId: string
     readonly from: number
     readonly to: number
+    /**
+     * An optional per-player migration gate. Required for later signings:
+     * renumber just the new player while preserving previous edited numbers.
+     */
+    readonly onlyIfMissingPlayerIds?: readonly string[]
   }[]
   /**
    * Optional migration guard: apply legacy number changes only if at least
@@ -261,7 +266,12 @@ export function applyKnownRosterUpdate(
   const legacyNumbersNeeded = !update.numberChangesOnlyIfMissingPlayerIds ||
     update.numberChangesOnlyIfMissingPlayerIds.some(id =>
       !original.players.some(player => player.id === id))
-  for (const numberChange of (legacyNumbersNeeded ? update.numberChanges : [])) {
+  for (const numberChange of update.numberChanges) {
+    const shouldRenumber = numberChange.onlyIfMissingPlayerIds
+      ? numberChange.onlyIfMissingPlayerIds.some(id =>
+          !original.players.some(player => player.id === id))
+      : legacyNumbersNeeded
+    if (!shouldRenumber) continue
     const oldEngine = current.engineSheet.starters.find(a => a.playerId === numberChange.playerId)
     const oldPreview = current.lineupPreview.starters.find(a => a.playerId === numberChange.playerId)
     if (!oldEngine || !oldPreview || oldEngine.shirtNumber !== oldPreview.shirtNumber ||

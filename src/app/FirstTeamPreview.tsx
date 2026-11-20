@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { selectPreviewSquadMembers } from '../data/preview-squad-members'
-import { MAN_UTD_LAMMENS_UPDATE, INITIAL_LOCAL_SQUAD } from '../data/initial-local-squad'
+import { MAN_UTD_RASHFORD_UPDATE, INITIAL_LOCAL_SQUAD } from '../data/initial-local-squad'
 import { ensureInitialSquadSaved, isConsistentStoredSquad, readStoredSquad } from '../storage/local-squad'
 import type { StoredLocalSquad } from '../storage/local-squad'
 import { DEFAULT_PITCH } from '../game/model/pitch'
@@ -31,7 +31,7 @@ export default function FirstTeamPreview() {
         // one-time Bruno/Šeško migration commits. Never render the defaults
         // instead of a successfully loaded local record.
         const result = await ensureInitialSquadSaved(
-          INITIAL_LOCAL_SQUAD, undefined, MAN_UTD_LAMMENS_UPDATE,
+          INITIAL_LOCAL_SQUAD, undefined, MAN_UTD_RASHFORD_UPDATE,
         )
         if (!isConsistentStoredSquad(result.squad)) {
           throw new Error('Stored first-team data is inconsistent')
